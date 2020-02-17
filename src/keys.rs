@@ -55,7 +55,7 @@ pub trait EnrPublicKey {
     fn into_peer_id(&self) -> PeerId;
 }
 
-/// A default implementation of the `EnrKey` trait used to sign and modify ENR records. The variants here represent the currently
+/// A standard implementation of the `EnrKey` trait used to sign and modify ENR records. The variants here represent the currently
 /// supported in-built signing schemes.
 pub enum DefaultKey {
     /// An `secp256k1` keypair.
@@ -210,7 +210,8 @@ impl DefaultKey {
     }
 }
 
-/// The `EnrPublicKey` wrapper to allow for custom ENR signature verification.
+/// A standard implementation of `EnrPublicKey` which has support for `Secp256k1`
+/// and `Ed25519` for ENR signature verification.
 #[derive(Clone, Debug)]
 pub enum DefaultPublicKey {
     /// An `Secp256k1` public key.

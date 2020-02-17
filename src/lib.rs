@@ -24,15 +24,15 @@
 //!
 //! This crate supports two features.
 //!
-//! - `serde`: Allows for serde serialization and deserialization for ENRs
+//! - `serde`: Allows for serde serialization and deserialization for ENRs.
 //! - `libp2p`: Provides libp2p integration. Libp2p keypairs can be converted to `DefaultKey`
-//! structs which can be used to sign and modify ENR's. This feature also adds a `peer_id()`
-//! function to an ENR which provides an ENR's associated peer_id.
+//! structs which can be used to sign and modify ENR's. This feature also adds the `peer_id()`
+//! and `multiaddr()` functions to an ENR which provides an ENR's associated `PeerId`.
 //!
 //! These can be enabled via adding the feature flag in your `Cargo.toml`
 //!
 //! ```toml
-//! enr = { version = 0.1.0, features = ["serde", "libp2p"]
+//! enr = { version = 0.1.0, features = ["serde", "libp2p"] }
 //! ```
 //!
 //! # Example
