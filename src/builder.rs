@@ -96,7 +96,7 @@ impl<K: EnrKey> EnrBuilderRaw<K> {
         self
     }
 
-    /// Adds a `udp` field to the `ENRBuilder`.
+    /// Adds a `udp6` field to the `ENRBuilder`.
     pub fn udp6(&mut self, udp: u16) -> &mut Self {
         self.content
             .insert("udp6".into(), udp.to_be_bytes().to_vec());

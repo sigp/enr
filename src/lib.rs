@@ -27,7 +27,8 @@
 //! - `serde`: Allows for serde serialization and deserialization for ENRs.
 //! - `libp2p`: Provides libp2p integration. Libp2p `Keypair`'s can be converted to `DefaultKey`
 //! structs which can be used to sign and modify ENRs. This feature also adds the `peer_id()`
-//! and `multiaddr()` functions to an ENR which provides an ENR's associated `PeerId`.
+//! and `multiaddr()` functions to an ENR which provides an ENR's associated `PeerId` and list of
+//! `MultiAddr`'s respectively.
 //!
 //! These can be enabled via adding the feature flag in your `Cargo.toml`
 //!
@@ -66,7 +67,7 @@
 //! ```
 //!
 //! Enr fields can be added and modified using the getters/setters on [`EnrRaw`]. A custom field
-//! can be added using the [`add_key`].
+//! can be added using [`insert`] and retrieved with [`get`].
 //!
 //! ```rust
 //! use enr::{EnrBuilder, DefaultKey, Enr};
@@ -99,7 +100,8 @@
 //! [`EnrRaw`]: struct.EnrRaw.html
 //! [`EnrBuilder`]: type.EnrBuilder.html
 //! [`NodeId`]: struct.NodeId.html
-//! [`add_key`]: struct.EnrRaw.html#method.add_key
+//! [`insert`]: struct.EnrRaw.html#method.insert
+//! [`get`]: struct.EnrRaw.html#method.get
 
 mod builder;
 mod keys;
