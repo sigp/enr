@@ -33,7 +33,7 @@
 //! These can be enabled via adding the feature flag in your `Cargo.toml`
 //!
 //! ```toml
-//! enr = { version = 0.1.0-alpha-1, features = ["serde", "libp2p"] }
+//! enr = { version = 0.1.0-alpha.1, features = ["serde", "libp2p"] }
 //! ```
 //!
 //! # Example

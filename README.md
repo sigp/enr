@@ -6,7 +6,7 @@ Status]][Crates Link]
 
 [Build Status]: https://github.com/AgeManning/enr/workflows/build/badge.svg?branch=master
 [Build Link]: https://github.com/AgeManning/enr/actions
-[Doc Status]: https://docs.rs/mio/badge.svg
+[Doc Status]: https://docs.rs/enr/badge.svg
 [Doc Link]: https://docs.rs/enr
 [Crates Status]: https://img.shields.io/crates/v/enr.svg
 [Crates Link]: https://crates.io/crates/enr
@@ -45,7 +45,7 @@ and `multiaddr()` functions to an ENR which provides an ENR's associated `PeerId
 These can be enabled via adding the feature flag in your `Cargo.toml`
 
 ```toml
-enr = { version = 0.1.0-alpha-1, features = ["serde", "libp2p"] }
+enr = { version = 0.1.0-alpha.1, features = ["serde", "libp2p"] }
 ```
 
 # Example
