@@ -1,10 +1,6 @@
-use crate::NodeId;
-use crate::{DefaultKey, EnrKey, EnrPublicKey};
-use crate::{EnrError, EnrRaw, MAX_ENR_SIZE};
+use crate::{DefaultKey, EnrError, EnrKey, EnrPublicKey, EnrRaw, NodeId, MAX_ENR_SIZE};
 use rlp::RlpStream;
-use std::collections::BTreeMap;
-use std::marker::PhantomData;
-use std::net::IpAddr;
+use std::{collections::BTreeMap, marker::PhantomData, net::IpAddr};
 
 /// The default builder of ENR records which uses the standard signing algorithms.
 pub type EnrBuilder = EnrBuilderRaw<DefaultKey>;

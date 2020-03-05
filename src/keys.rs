@@ -12,9 +12,7 @@ use ed25519_dalek as ed25519;
 use rand::RngCore;
 use rlp::DecoderError;
 use sha3::{Digest, Keccak256};
-use std::collections::BTreeMap;
-use std::error::Error;
-use std::fmt;
+use std::{collections::BTreeMap, error::Error, fmt};
 
 #[cfg(feature = "libp2p")]
 use libp2p_core::{
