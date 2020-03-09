@@ -114,8 +114,10 @@ use std::collections::BTreeMap;
 
 #[cfg(feature = "serde")]
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-use std::str::FromStr;
+use std::{
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
+    str::FromStr,
+};
 
 #[cfg(feature = "libp2p")]
 use libp2p_core::{
@@ -422,7 +424,7 @@ impl<K: EnrKey> EnrRaw<K> {
             if let Some(prev_value) = previous_value {
                 self.content.insert(key.into(), prev_value);
             } else {
-                self.content.remove(key.into());
+                self.content.remove(key);
             }
             return Err(EnrError::ExceedsMaxSize);
         }
@@ -458,7 +460,6 @@ impl<K: EnrKey> EnrRaw<K> {
                         return Ok(Some(IpAddr::V4(Ipv4Addr::from(ip))));
                     }
                 }
-                return Ok(None);
             }
             IpAddr::V6(addr) => {
                 let prev_value = self.insert("ip6", addr.octets().to_vec(), key)?;
@@ -469,9 +470,10 @@ impl<K: EnrKey> EnrRaw<K> {
                         return Ok(Some(IpAddr::V6(Ipv6Addr::from(ip))));
                     }
                 }
-                return Ok(None);
             }
         }
+
+        Ok(None)
     }
 
     /// Sets the `udp` field of the ENR. Returns any pre-existing UDP port in the record.
@@ -576,7 +578,7 @@ impl<K: EnrKey> EnrRaw<K> {
                         self.content.remove(&String::from("ip"));
                     }
                     if let Some(udp) = prev_port {
-                        self.content.insert(port_string.clone(), udp);
+                        self.content.insert(port_string, udp);
                     } else {
                         self.content.remove(&port_string);
                     }
@@ -588,7 +590,7 @@ impl<K: EnrKey> EnrRaw<K> {
                         self.content.remove(&String::from("ip6"));
                     }
                     if let Some(udp) = prev_port {
-                        self.content.insert(port_v6_string.clone(), udp);
+                        self.content.insert(port_v6_string, udp);
                     } else {
                         self.content.remove(&port_v6_string);
                     }
@@ -925,7 +927,7 @@ mod tests {
         let decoded_enr = rlp::decode::<Enr>(&encoded_enr).unwrap();
 
         assert_eq!(decoded_enr.id(), Some("v4".into()));
-        assert_eq!(decoded_enr.ip(), Some(ip.into()));
+        assert_eq!(decoded_enr.ip(), Some(ip));
         assert_eq!(decoded_enr.tcp(), Some(tcp));
         // Must compare encoding as the public key itself can be different
         assert_eq!(decoded_enr.public_key().encode(), key.public().encode());
@@ -949,7 +951,7 @@ mod tests {
         let decoded_enr = rlp::decode::<Enr>(&encoded_enr).unwrap();
 
         assert_eq!(decoded_enr.id(), Some("v4".into()));
-        assert_eq!(decoded_enr.ip(), Some(ip.into()));
+        assert_eq!(decoded_enr.ip(), Some(ip));
         assert_eq!(decoded_enr.tcp(), Some(tcp));
         assert_eq!(decoded_enr.public_key().encode(), key.public().encode());
         assert!(decoded_enr.verify());
@@ -986,7 +988,7 @@ mod tests {
 
         assert!(enr.set_ip(ip.into(), &key).is_ok());
         assert_eq!(enr.id(), Some("v4".into()));
-        assert_eq!(enr.ip(), Some(ip.into()));
+        assert_eq!(enr.ip(), Some(ip));
         assert_eq!(enr.tcp(), Some(tcp));
         assert!(enr.verify());
 
@@ -1011,11 +1013,8 @@ mod tests {
 
         let node_id = enr.node_id().clone();
 
-        enr.set_udp_socket(
-            "192.168.0.1:800".parse::<SocketAddr>().unwrap().into(),
-            &key,
-        )
-        .unwrap();
+        enr.set_udp_socket("192.168.0.1:800".parse::<SocketAddr>().unwrap(), &key)
+            .unwrap();
         assert_eq!(node_id, *enr.node_id());
         assert_eq!(
             enr.udp_socket(),
