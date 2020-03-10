@@ -18,8 +18,8 @@
 //! User's wishing to implement their own singing algorithms simply need to
 //! implement the [`EnrKey`] trait and apply it to an [`Enr`].
 //!
-//! By default, `libsecp256k1` `SecretKey`'s implement [`EnrKey`] and can be used to sign and
-//! verify ENR records. This library also supports `ed25519_dalek::Keypair` via the `ed25519`
+//! By default, `libsecp256k1::SecretKey` implement [`EnrKey`] and can be used to sign and
+//! verify ENR records. This library also implements [`EnrKey`] for `ed25519_dalek::Keypair` via the `ed25519`
 //! feature flag.
 //!
 //! Furthermore, a [`CombinedKey`] is provided if the `ed25519` feature flag is set, which provides an
@@ -46,11 +46,11 @@
 //! enr = { version = "*", features = ["serde", "libp2p", "ed25519"] }
 //! ```
 //!
-//! # Examples
+//! ## Examples
 //!
 //! To build an ENR, an [`EnrBuilder`] is provided.
 //!
-//! ## Building an ENR with the default `secp256k1` key type
+//! ### Building an ENR with the default `secp256k1` key type
 //!
 //! ```rust
 //! use enr::{EnrBuilder, secp256k1};
@@ -68,7 +68,7 @@
 //! assert_eq!(enr.id(), Some("v4".into()));
 //! ```
 //!
-//! ## Building an ENR with the `CombinedKey` type (support for multiple signing
+//! ### Building an ENR with the `CombinedKey` type (support for multiple signing
 //! algorithms).
 //!
 //! Note the `ed25519` feature flag must be set. This makes use of the
@@ -91,9 +91,9 @@
 //! assert_eq!(enr.id(), Some("v4".into()));
 //! ```
 //!
-//! ## Modifying an [`Enr`]
+//! ### Modifying an [`Enr`]
 //!
-//! Enr fields can be added and modified using the getters/setters on [`Enr`]. A custom field
+//! ENR fields can be added and modified using the getters/setters on [`Enr`]. A custom field
 //! can be added using [`insert`] and retrieved with [`get`].
 //!
 //! ```rust
@@ -124,7 +124,7 @@
 //! assert_eq!(decoded_enr.get("custom_key"), Some(&vec![0,0,1]));
 //! ```
 //!
-//! ## Libp2p key conversion, with the `libp2p` feature flag
+//! ### Libp2p key conversion, with the `libp2p` feature flag
 //!
 //! ```rust
 //! use enr::{EnrBuilder, CombinedKey};
@@ -142,7 +142,7 @@
 //! assert_eq!(enr.id(), Some("v4".into()));
 //! ```
 //!
-//! ## Encoding/Decoding ENR's of various key types
+//! ### Encoding/Decoding ENR's of various key types
 //!
 //! ```rust
 //! use enr::{EnrBuilder, secp256k1::SecretKey, Enr, ed25519_dalek::Keypair, CombinedKey};
@@ -180,9 +180,7 @@
 //!
 //! [`CombinedKey`]: enum.CombinedKey.html
 //! [`EnrKey`]: trait.EnrKey.html
-//! [`Enr`]: type.Enr.html
 //! [`Enr`]: struct.EnrBase.html
-//! [`EnrBuilder`]: type.EnrBuilder.html
 //! [`EnrBuilder`]: struct.EnrBuilderBase.html
 //! [`NodeId`]: struct.NodeId.html
 //! [`insert`]: struct.Enr.html#method.insert
