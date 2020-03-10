@@ -2,7 +2,7 @@
 authors = ["Age Manning <Age@AgeManning.com>"]
 edition = "2018"
 name = "enr"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 description = "Rust implementation of Ethereum Node Record (ENR) EIP778"
 readme = "./README.md"
 keywords = ["ethereum", "ENR", "Record", "EIP778", "Node"]
@@ -22,19 +22,21 @@ path = "src/enr-cli.rs"
 base64 = "0.10.1"
 bs58 = "0.3.0"
 clap = "2.33.0"
-ed25519-dalek = "1.0.0-pre.3"
 hex = "0.4.0"
-libsecp256k1 = "0.3.1"
+libsecp256k1 = "*"
 log = "0.4.8"
-rand = "0.7.2"
+rand = "0.7"
 rlp = "0.4.3"
-serde = { version = "1.0.93", optional = true }
 sha3 = "0.8.2"
-libp2p-core = { version = "0.16.0", optional = true }
+zeroize = "1.1.0"
+serde = { version = "1.0.93", optional = true }
+libp2p-core = { version = "*", optional = true }
+ed25519-dalek = { version = "1.0.0-pre.3", optional = true }
 
 [features]
 default = ["serde"]
 libp2p = ["libp2p-core"]
+ed25519 = ["ed25519-dalek"]
 
 [lib]
 name = "enr"

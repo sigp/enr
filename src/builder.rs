@@ -1,12 +1,9 @@
-use crate::{DefaultKey, EnrError, EnrKey, EnrPublicKey, EnrRaw, NodeId, MAX_ENR_SIZE};
+use crate::{Enr, EnrError, EnrKey, EnrPublicKey, NodeId, MAX_ENR_SIZE};
 use rlp::RlpStream;
 use std::{collections::BTreeMap, marker::PhantomData, net::IpAddr};
 
-/// The default builder of ENR records which uses the standard signing algorithms.
-pub type EnrBuilder = EnrBuilderRaw<DefaultKey>;
-
-///! The raw builder for generating ENR records with arbitrary signing algorithms.
-pub struct EnrBuilderRaw<K: EnrKey> {
+///! The base builder for generating ENR records with arbitrary signing algorithms.
+pub struct EnrBuilder<K: EnrKey = secp256k1::SecretKey> {
     /// The identity scheme used to build the ENR record.
     id: String,
 
@@ -20,12 +17,12 @@ pub struct EnrBuilderRaw<K: EnrKey> {
     phantom: PhantomData<K>,
 }
 
-impl<K: EnrKey> EnrBuilderRaw<K> {
+impl<K: EnrKey> EnrBuilder<K> {
     /// Constructs a minimal `EnrBuilder` providing only a sequence number.
     /// Currently only supports the id v4 scheme and therefore disallows creation of any other
     /// scheme.
     pub fn new(id: impl Into<String>) -> Self {
-        EnrBuilderRaw {
+        EnrBuilder {
             id: id.into(),
             seq: 1,
             content: BTreeMap::new(),
@@ -124,11 +121,11 @@ impl<K: EnrKey> EnrBuilderRaw<K> {
 
     /// Adds a public key to the ENR builder.
     fn add_public_key(&mut self, key: &K::PublicKey) {
-        self.add_value(key.clone().into(), key.encode());
+        self.add_value(key.enr_key(), key.encode());
     }
 
     /// Constructs an ENR from the ENRBuilder struct.
-    pub fn build(&mut self, key: &K) -> Result<EnrRaw<K>, EnrError> {
+    pub fn build(&mut self, key: &K) -> Result<Enr<K>, EnrError> {
         // add the identity scheme to the content
         if self.id != "v4" {
             return Err(EnrError::UnsupportedIdentityScheme);
@@ -147,7 +144,7 @@ impl<K: EnrKey> EnrBuilderRaw<K> {
             return Err(EnrError::ExceedsMaxSize);
         }
 
-        Ok(EnrRaw {
+        Ok(Enr {
             seq: self.seq,
             node_id: NodeId::from(key.public()),
             content: self.content.clone(),

@@ -20,56 +20,59 @@ An ENR is a signed, key-value record which has an associated `NodeId` (a 32-byte
 Updating/modifying an ENR requires an `EnrKey` in order to re-sign the record with the
 associated key-pair.
 
-User's wishing to implement their own singing algorithms simply need to
-implement the `EnrKey` trait and apply it to an `EnrRaw`.
-
-This implementation uses a `DefaultKey` which implements signing for `secp256k1` and
-`ed25519` keys. With the `libp2p` feature enabled, this provides conversions from libp2p
-`Keypair` for libp2p integration.
-
 ENR's are identified by their sequence number. When updating an ENR, the sequence number is
 increased.
 
 Different identity schemes can be used to define the node id and signatures. Currently only the
 "v4" identity is supported and is set by default.
 
+## Signing Algorithms
+
+User's wishing to implement their own singing algorithms simply need to
+implement the `EnrKey` trait and apply it to an `Enr`.
+
+By default, `libsecp256k1` `SecretKey`'s implement `EnrKey` and can be used to sign and
+verify ENR records. This library also supports `ed25519_dalek::Keypair` via the `ed25519`
+feature flag.
+
+Furthermore, a `CombinedKey` is provided if the `ed25519` feature flag is set, which provides an
+ENR type that can support both `secp256k1` and `ed25519` signed ENR records. Examples of the
+use of each of these key types is given below.
+
+Additionally there is support for conversion of `rust-libp2p` `Keypair` to the [`CombinedKey`] type
+via the `libp2p` feature flag.
+
 ## Features
 
-This crate supports two features.
+This crate supports a number of features.
 
 - `serde`: Allows for serde serialization and deserialization for ENRs.
-- `libp2p`: Provides libp2p integration. Libp2p `Keypair`'s can be converted to `DefaultKey`
-structs which can be used to sign and modify ENRs. This feature also adds the `peer_id()`
-and `multiaddr()` functions to an ENR which provides an ENR's associated `PeerId`.
+- `libp2p`: Provides libp2p integration. Libp2p `Keypair`'s can be converted to `CombinedKey`
+types which can be used to sign and modify ENRs. This feature also adds the `peer_id()`
+and `multiaddr()` functions to an ENR which provides an ENR's associated `PeerId` and list of
+`MultiAddr`'s respectively.
+- `ed25519`: Provides support for `ed25519_dalek` keypair types.
 
 These can be enabled via adding the feature flag in your `Cargo.toml`
 
 ```toml
-enr = { version = 0.1.0-alpha.1, features = ["serde", "libp2p"] }
+enr = { version = "*", features = ["serde", "libp2p", "ed25519"] }
 ```
 
-# Example
+# Examples
 
-To build an ENR, an `EnrBuilder` is provided.
+To build an ENR, an [`EnrBuilder`] is provided.
 
-Example (Building an ENR):
+## Building an ENR with the default `secp256k1` key type
 
 ```rust
-use enr::{EnrBuilder, DefaultKey};
+use enr::{EnrBuilder, secp256k1};
 use std::net::Ipv4Addr;
 use rand::thread_rng;
-use std::convert::TryInto;
 
-// generate a new key
-let key = DefaultKey::generate_secp256k1();
-
-// pre-existing keys can also be used
+// generate a random secp256k1 key
 let mut rng = thread_rng();
-let key: DefaultKey = secp256k1::SecretKey::random(&mut rng).into();
-
-// with the `libp2p` feature flag, one can also use a libp2p key
-// let libp2p_key = libp2p_core::identity::Keypair::generate_secp256k1();
-// let key: DefaultKey = libp2p_key.try_into().expect("supports secp256k1");
+let key = secp256k1::SecretKey::random(&mut rng);
 
 let ip = Ipv4Addr::new(192,168,0,1);
 let enr = EnrBuilder::new("v4").ip(ip.into()).tcp(8000).build(&key).unwrap();
@@ -78,14 +81,41 @@ assert_eq!(enr.ip(), Some("192.168.0.1".parse().unwrap()));
 assert_eq!(enr.id(), Some("v4".into()));
 ```
 
-ENR fields can be added and modified using the getters/setters on `EnrRaw`. A custom field
-can be added using the `add_key`.
+## Building an ENR with the `CombinedKey` type (support for multiple signing algorithms).
+
+Note the `ed25519` feature flag must be set. This makes use of the
+[`EnrBuilder`] struct.
 
 ```rust
-use enr::{EnrBuilder, DefaultKey, Enr};
+use enr::{EnrBuilder, CombinedKey};
 use std::net::Ipv4Addr;
 
-let key = DefaultKey::generate_secp256k1();
+// create a new secp256k1 key
+let key = CombinedKey::generate_secp256k1();
+
+// or create a new ed25519 key
+let key = CombinedKey::generate_ed25519();
+
+let ip = Ipv4Addr::new(192,168,0,1);
+let enr = EnrBuilder::new("v4").ip(ip.into()).tcp(8000).build(&key).unwrap();
+
+assert_eq!(enr.ip(), Some("192.168.0.1".parse().unwrap()));
+assert_eq!(enr.id(), Some("v4".into()));
+```
+
+## Modifying an ENR
+
+Enr fields can be added and modified using the getters/setters on [`Enr`]. A custom field
+can be added using [`insert`] and retrieved with [`get`].
+
+```rust
+use enr::{EnrBuilder, secp256k1::SecretKey, Enr};
+use std::net::Ipv4Addr;
+use rand::thread_rng;
+
+// generate a random secp256k1 key
+let mut rng = thread_rng();
+let key = SecretKey::random(&mut rng);
 
 let ip = Ipv4Addr::new(192,168,0,1);
 let mut enr = EnrBuilder::new("v4").ip(ip.into()).tcp(8000).build(&key).unwrap();
@@ -105,3 +135,55 @@ assert_eq!(decoded_enr.id(), Some("v4".into()));
 assert_eq!(decoded_enr.tcp(), Some(8001));
 assert_eq!(decoded_enr.get("custom_key"), Some(&vec![0,0,1]));
 ```
+
+## Libp2p key conversion, with the `libp2p` feature flag
+
+```rust
+use enr::{EnrBuilder, CombinedKey};
+use std::net::Ipv4Addr;
+use std::convert::TryInto;
+
+// with the `libp2p` feature flag, one can also use a libp2p key
+let libp2p_key = libp2p_core::identity::Keypair::generate_secp256k1();
+let key: CombinedKey = libp2p_key.try_into().expect("supports secp256k1");
+
+let ip = Ipv4Addr::new(192,168,0,1);
+let enr = EnrBuilder::new("v4").ip(ip.into()).tcp(8000).build(&key).unwrap();
+
+assert_eq!(enr.ip(), Some("192.168.0.1".parse().unwrap()));
+assert_eq!(enr.id(), Some("v4".into()));
+```
+
+## Encoding/Decoding ENR's of various key types
+
+```rust
+use enr::{EnrBuilder, secp256k1::SecretKey, Enr, ed25519_dalek::Keypair, CombinedKey};
+use std::net::Ipv4Addr;
+use rand::thread_rng;
+use rand::Rng;
+
+// generate a random secp256k1 key
+let mut rng = thread_rng();
+let key = SecretKey::random(&mut rng);
+let ip = Ipv4Addr::new(192,168,0,1);
+let enr_secp256k1 = EnrBuilder::new("v4").ip(ip.into()).tcp(8000).build(&key).unwrap();
+
+// encode to base64
+let base64_string_secp256k1 = enr_secp256k1.to_base64();
+
+// generate a random ed25519 key
+let key = Keypair::generate(&mut rng);
+let enr_ed25519 = EnrBuilder::new("v4").ip(ip.into()).tcp(8000).build(&key).unwrap();
+
+// encode to base64
+let base64_string_ed25519 = enr_ed25519.to_base64();
+
+// decode base64 strings of varying key types
+// decode the secp256k1 with default Enr
+let decoded_enr_secp256k1: Enr = base64_string_secp256k1.parse().unwrap();
+// decode ed25519 ENRs
+let decoded_enr_ed25519: Enr<Keypair> = base64_string_ed25519.parse().unwrap();
+
+// use the combined key to be able to decode either
+let decoded_enr: Enr<CombinedKey> = base64_string_secp256k1.parse().unwrap();
+let decoded_enr: Enr<CombinedKey> = base64_string_ed25519.parse().unwrap();

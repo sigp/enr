@@ -2,7 +2,9 @@
 //! the future.
 
 use clap::{App, Arg};
-use enr::Enr;
+#[cfg(feature = "ed25519")]
+use enr::CombinedKey;
+use enr::{Enr, EnrKey};
 
 fn main() {
     // Parse the CLI parameters.
@@ -20,47 +22,20 @@ fn main() {
                 .help("Reads a base64 ENR and prints common parameters.")
                 .takes_value(true),
         )
-        .arg(
-            Arg::with_name("read")
-                .short("r")
-                .help("Reads a base64 ENR and prints common parameters."),
-        )
-        /*
-        .arg(
-            Arg::with_name("set-ip")
-                .long("set-ip")
-                .value_name("IP-ADDRESS")
-                .help("Sets the IP address of an ENR.")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("set-tcp")
-                .long("set-tcp")
-                .value_name("PORT")
-                .help("Sets the TCP port of an ENR.")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("set-udp")
-                .long("set-udp")
-                .value_name("PORT")
-                .help("Sets the UDP port of an ENR.")
-                .takes_value(true),
-        )
-        */
         .get_matches();
 
-    let enr = matches
-        .value_of("enr")
-        .map(|enr| enr.parse::<Enr>().expect("Invalid ENR"))
-        .expect("Must supply an ENR");
+    let enr_base64 = matches.value_of("enr").expect("Must supply an ENR");
 
-    if matches.is_present("read") {
-        print_enr(enr);
-    }
+    // if the ed25519 key is supported, we can use the combined key to attempt to decode all
+    // types
+    #[cfg(feature = "ed25519")]
+    let enr = enr_base64.parse::<Enr<CombinedKey>>().unwrap();
+    #[cfg(not(feature = "ed25519"))]
+    let enr = enr_base64.parse::<Enr>().unwrap();
+    print_enr(enr);
 }
 
-fn print_enr(enr: Enr) {
+fn print_enr<K: EnrKey>(enr: Enr<K>) {
     println!("ENR Read");
     println!("Sequence No: {}", enr.seq());
     println!("Node ID: {}", enr.node_id());
