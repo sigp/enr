@@ -14,14 +14,9 @@ exclude = [
 	".github/*"
 ]
 
-[[bin]]
-name = "enr-cli"
-path = "src/enr-cli.rs"
-
 [dependencies]
 base64 = "0.10.1"
 bs58 = "0.3.0"
-clap = "2.33.0"
 hex = "0.4.0"
 libsecp256k1 = "*"
 log = "0.4.8"
@@ -41,4 +36,3 @@ ed25519 = ["ed25519-dalek"]
 [lib]
 name = "enr"
 path = "src/lib.rs"
-
