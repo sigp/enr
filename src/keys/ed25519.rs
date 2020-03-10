@@ -5,7 +5,7 @@ use rlp::DecoderError;
 use std::collections::BTreeMap;
 
 /// The ENR key that stores the public key in the ENR record.
-pub const ENR_KEY: &'static str = "ed25519";
+pub const ENR_KEY: &str = "ed25519";
 
 impl EnrKey for ed25519::Keypair {
     type PublicKey = ed25519::PublicKey;

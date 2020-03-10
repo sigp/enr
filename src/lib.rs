@@ -255,8 +255,8 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// The `NodeId` for the record.
-    pub fn node_id(&self) -> &NodeId {
-        &self.node_id
+    pub fn node_id(&self) -> NodeId {
+        self.node_id
     }
 
     /// The current sequence number of the ENR record.
@@ -1107,11 +1107,11 @@ mod tests {
             builder.build(&key).unwrap()
         };
 
-        let node_id = enr.node_id().clone();
+        let node_id = enr.node_id();
 
         enr.set_udp_socket("192.168.0.1:800".parse::<SocketAddr>().unwrap(), &key)
             .unwrap();
-        assert_eq!(node_id, *enr.node_id());
+        assert_eq!(node_id, enr.node_id());
         assert_eq!(
             enr.udp_socket(),
             "192.168.0.1:800".parse::<SocketAddr>().unwrap().into()

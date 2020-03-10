@@ -8,7 +8,7 @@ use sha3::{Digest, Keccak256};
 use std::collections::BTreeMap;
 
 /// The ENR key that stores the public key in the ENR record.
-pub const ENR_KEY: &'static str = "secp256k1";
+pub const ENR_KEY: &str = "secp256k1";
 
 impl EnrKey for secp256k1::SecretKey {
     type PublicKey = secp256k1::PublicKey;

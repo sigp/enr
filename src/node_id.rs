@@ -6,7 +6,7 @@ use sha3::{Digest, Keccak256};
 
 type RawNodeId = [u8; 32];
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 /// The NodeId of an ENR (a 32 byte identifier).
 pub struct NodeId {
     raw: RawNodeId,
