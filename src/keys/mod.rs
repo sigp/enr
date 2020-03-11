@@ -8,20 +8,20 @@
 //! [`EnrPublicKey`]: crate::EnrPublicKey
 //! [`Enr`]: crate::enr::Enr
 
-// the default implementation
-mod libsecp256k1;
-
 #[cfg(any(feature = "ed25519", doc))]
 mod combined;
 #[cfg(any(feature = "ed25519", doc))]
 mod ed25519;
+#[cfg(any(feature = "libsecp256k1", doc))]
+mod libsecp256k1;
+
 #[cfg(any(feature = "ed25519", doc))]
 pub use combined::{CombinedKey, CombinedPublicKey};
-#[cfg(feature = "ed25519")]
+#[cfg(any(feature = "ed25519", doc))]
 pub use ed25519_dalek;
 #[cfg(feature = "libp2p")]
 use libp2p_core::PeerId;
-
+#[cfg(any(feature = "libsecp256k1", doc))]
 pub use secp256k1;
 
 use rlp::DecoderError;
@@ -81,6 +81,7 @@ pub struct SigningError {
 }
 
 /// An error during encoding of key material.
+#[allow(dead_code)]
 impl SigningError {
     pub(crate) fn new<S: Display>(msg: S) -> Self {
         Self {

@@ -1,6 +1,6 @@
 //! An implementation for `EnrKey` for `libsecp256k1::SecretKey`
 
-use super::{EnrKey, EnrPublicKey, SigningError};
+use super::{secp256k1, EnrKey, EnrPublicKey, SigningError};
 #[cfg(feature = "libp2p")]
 use libp2p_core::{PeerId, PublicKey as Libp2pPublicKey};
 use rlp::DecoderError;

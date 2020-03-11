@@ -213,9 +213,11 @@ use libp2p_core::{
 
 pub use builder::EnrBuilder;
 
+#[cfg(feature = "libsecp256k1")]
+pub use keys::secp256k1;
 #[cfg(feature = "ed25519")]
 pub use keys::{ed25519_dalek, CombinedKey, CombinedPublicKey};
-pub use keys::{secp256k1, EnrKey, EnrPublicKey};
+pub use keys::{EnrKey, EnrPublicKey};
 pub use node_id::NodeId;
 use std::marker::PhantomData;
 
@@ -226,7 +228,27 @@ const MAX_ENR_SIZE: usize = 300;
 ///
 /// This struct will always have a valid signature, known public key type, sequence number and `NodeId`. All other parameters are variable/optional.
 #[derive(Eq)]
+#[cfg(any(feature = "libsecp256k1", doc))]
 pub struct Enr<K: EnrKey = secp256k1::SecretKey> {
+    /// ENR sequence number.
+    seq: u64,
+
+    /// The `NodeId` of the ENR record.
+    node_id: NodeId,
+
+    /// Key-value contents of the ENR. A BTreeMap is used to get the keys in sorted order, which is
+    /// important for verifying the signature of the ENR.
+    content: BTreeMap<String, Vec<u8>>,
+
+    /// The signature of the ENR record, stored as bytes.
+    signature: Vec<u8>,
+
+    /// Marker to pin the generic.
+    phantom: PhantomData<K>,
+}
+
+#[cfg(not(feature = "libsecp256k1"))]
+pub struct Enr<K: EnrKey> {
     /// ENR sequence number.
     seq: u64,
 
@@ -947,6 +969,7 @@ pub enum EnrError {
 }
 
 #[cfg(test)]
+#[cfg(feature = "libsecp256k1")]
 mod tests {
     use super::*;
     #[cfg(feature = "libp2p")]
@@ -954,6 +977,7 @@ mod tests {
     use std::net::Ipv4Addr;
 
     #[test]
+    #[cfg(feature = "libsecp256k1")]
     fn check_test_vector() {
         let valid_record = hex::decode("f884b8407098ad865b00a582051940cb9cf36836572411a47278783077011599ed5cd16b76f2635f4e234738f30813a89eb9137e3e3df5266e3a1f11df72ecf1145ccb9c01826964827634826970847f00000189736563703235366b31a103ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd31388375647082765f").unwrap();
         let signature = hex::decode("7098ad865b00a582051940cb9cf36836572411a47278783077011599ed5cd16b76f2635f4e234738f30813a89eb9137e3e3df5266e3a1f11df72ecf1145ccb9c").unwrap();
