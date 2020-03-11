@@ -7,15 +7,16 @@ use sha3::{Digest, Keccak256};
 type RawNodeId = [u8; 32];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-/// The NodeId of an ENR (a 32 byte identifier).
+/// The `NodeId` of an ENR (a 32 byte identifier).
 pub struct NodeId {
     raw: RawNodeId,
 }
 
 impl NodeId {
     /// Creates a new node record from 32 bytes.
-    pub fn new(raw_input: &[u8; 32]) -> Self {
-        NodeId { raw: *raw_input }
+    #[must_use]
+    pub const fn new(raw_input: &[u8; 32]) -> Self {
+        Self { raw: *raw_input }
     }
 
     /// Parses a byte slice to form a node Id. This fails if the slice isn't of length 32.
@@ -24,21 +25,23 @@ impl NodeId {
             return Err("Input too large");
         }
 
-        let mut raw: RawNodeId = [0u8; 32];
+        let mut raw: RawNodeId = [0_u8; 32];
         raw[..std::cmp::min(32, raw_input.len())].copy_from_slice(raw_input);
 
-        Ok(NodeId { raw })
+        Ok(Self { raw })
     }
 
-    /// Generates a random NodeId.
+    /// Generates a random `NodeId`.
+    #[must_use]
     pub fn random() -> Self {
-        NodeId {
+        Self {
             raw: rand::random(),
         }
     }
 
     /// Returns a `RawNodeId` which is a 32 byte list.
-    pub fn raw(&self) -> RawNodeId {
+    #[must_use]
+    pub const fn raw(&self) -> RawNodeId {
         self.raw
     }
 }
@@ -46,7 +49,7 @@ impl NodeId {
 impl<T: EnrPublicKey> From<T> for NodeId {
     fn from(public_key: T) -> Self {
         let pubkey_bytes = public_key.encode_uncompressed();
-        NodeId::parse(&Keccak256::digest(&pubkey_bytes)).expect("must be the correct length")
+        Self::parse(&Keccak256::digest(&pubkey_bytes)).expect("must be the correct length")
     }
 }
 

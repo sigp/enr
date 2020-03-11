@@ -186,6 +186,9 @@
 //! [`insert`]: struct.Enr.html#method.insert
 //! [`get`]: struct.Enr.html#method.get
 
+#![warn(clippy::all, clippy::pedantic, clippy::nursery)]
+#![allow(clippy::missing_errors_doc, clippy::module_name_repetitions)]
+
 mod builder;
 mod keys;
 mod node_id;
@@ -253,11 +256,13 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// The `NodeId` for the record.
+    #[must_use]
     pub fn node_id(&self) -> NodeId {
         self.node_id
     }
 
     /// The current sequence number of the ENR record.
+    #[must_use]
     pub fn seq(&self) -> u64 {
         self.seq
     }
@@ -304,11 +309,12 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Returns the IPv4 address of the ENR record if it is defined.
+    #[must_use]
     pub fn ip(&self) -> Option<Ipv4Addr> {
         if let Some(ip_bytes) = self.content.get("ip") {
             return match ip_bytes.len() {
                 4 => {
-                    let mut ip = [0u8; 4];
+                    let mut ip = [0_u8; 4];
                     ip.copy_from_slice(ip_bytes);
                     Some(Ipv4Addr::from(ip))
                 }
@@ -319,11 +325,12 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Returns the IPv6 address of the ENR record if it is defined.
+    #[must_use]
     pub fn ip6(&self) -> Option<Ipv6Addr> {
         if let Some(ip_bytes) = self.content.get("ip6") {
             return match ip_bytes.len() {
                 16 => {
-                    let mut ip = [0u8; 16];
+                    let mut ip = [0_u8; 16];
                     ip.copy_from_slice(ip_bytes);
                     Some(Ipv6Addr::from(ip))
                 }
@@ -334,6 +341,7 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// The `id` of ENR record if it is defined.
+    #[must_use]
     pub fn id(&self) -> Option<String> {
         if let Some(id_bytes) = self.content.get("id") {
             return Some(String::from_utf8_lossy(id_bytes).to_string());
@@ -342,10 +350,11 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// The TCP port of ENR record if it is defined.
+    #[must_use]
     pub fn tcp(&self) -> Option<u16> {
         if let Some(tcp_bytes) = self.content.get("tcp") {
             if tcp_bytes.len() <= 2 {
-                let mut tcp = [0u8; 2];
+                let mut tcp = [0_u8; 2];
                 tcp[2 - tcp_bytes.len()..].copy_from_slice(tcp_bytes);
                 return Some(u16::from_be_bytes(tcp));
             }
@@ -354,10 +363,11 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// The IPv6-specific TCP port of ENR record if it is defined.
+    #[must_use]
     pub fn tcp6(&self) -> Option<u16> {
         if let Some(tcp_bytes) = self.content.get("tcp6") {
             if tcp_bytes.len() <= 2 {
-                let mut tcp = [0u8; 2];
+                let mut tcp = [0_u8; 2];
                 tcp[2 - tcp_bytes.len()..].copy_from_slice(tcp_bytes);
                 return Some(u16::from_be_bytes(tcp));
             }
@@ -366,10 +376,11 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// The UDP port of ENR record if it is defined.
+    #[must_use]
     pub fn udp(&self) -> Option<u16> {
         if let Some(udp_bytes) = self.content.get("udp") {
             if udp_bytes.len() <= 2 {
-                let mut udp = [0u8; 2];
+                let mut udp = [0_u8; 2];
                 udp[2 - udp_bytes.len()..].copy_from_slice(udp_bytes);
                 return Some(u16::from_be_bytes(udp));
             }
@@ -378,10 +389,11 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// The IPv6-specific UDP port of ENR record if it is defined.
+    #[must_use]
     pub fn udp6(&self) -> Option<u16> {
         if let Some(udp_bytes) = self.content.get("udp6") {
             if udp_bytes.len() <= 2 {
-                let mut udp = [0u8; 2];
+                let mut udp = [0_u8; 2];
                 udp[2 - udp_bytes.len()..].copy_from_slice(udp_bytes);
                 return Some(u16::from_be_bytes(udp));
             }
@@ -390,6 +402,7 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Provides a socket (based on the UDP port), if the IP and UDP fields are specified.
+    #[must_use]
     pub fn udp_socket(&self) -> Option<SocketAddr> {
         if let Some(ip) = self.ip() {
             if let Some(udp) = self.udp() {
@@ -405,6 +418,7 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Provides a socket (based on the TCP port), if the IP and UDP fields are specified.
+    #[must_use]
     pub fn tcp_socket(&self) -> Option<SocketAddr> {
         if let Some(ip) = self.ip() {
             if let Some(tcp) = self.tcp() {
@@ -420,16 +434,19 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// The signature of the ENR record.
+    #[must_use]
     pub fn signature(&self) -> &[u8] {
         &self.signature
     }
 
     /// Returns the public key of the ENR record.
+    #[must_use]
     pub fn public_key(&self) -> K::PublicKey {
         K::enr_to_public(&self.content).expect("ENR's can only be created with supported keys")
     }
 
     /// Verify the signature of the ENR record.
+    #[must_use]
     pub fn verify(&self) -> bool {
         let pubkey = self.public_key();
         match self.id() {
@@ -440,6 +457,7 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// RLP encodes the ENR into a byte array.
+    #[must_use]
     pub fn encode(&self) -> Vec<u8> {
         let mut s = RlpStream::new();
         s.append(self);
@@ -447,12 +465,14 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Provides the URL-safe base64 encoded "text" version of the ENR prefixed by "enr:".
+    #[must_use]
     pub fn to_base64(&self) -> String {
         let hex = base64::encode_config(&self.encode(), base64::URL_SAFE_NO_PAD);
         format!("enr:{}", hex)
     }
 
     /// Returns the current size of the ENR.
+    #[must_use]
     pub fn size(&self) -> usize {
         self.rlp_content().len()
     }
@@ -543,9 +563,9 @@ impl<K: EnrKey> Enr<K> {
                 let prev_value = self.insert("ip", addr.octets().to_vec(), key)?;
                 if let Some(bytes) = prev_value {
                     if bytes.len() == 4 {
-                        let mut ip = [0u8; 4];
-                        ip.copy_from_slice(&bytes);
-                        return Ok(Some(IpAddr::V4(Ipv4Addr::from(ip))));
+                        let mut v = [0_u8; 4];
+                        v.copy_from_slice(&bytes);
+                        return Ok(Some(IpAddr::V4(Ipv4Addr::from(v))));
                     }
                 }
             }
@@ -553,9 +573,9 @@ impl<K: EnrKey> Enr<K> {
                 let prev_value = self.insert("ip6", addr.octets().to_vec(), key)?;
                 if let Some(bytes) = prev_value {
                     if bytes.len() == 16 {
-                        let mut ip = [0u8; 16];
-                        ip.copy_from_slice(&bytes);
-                        return Ok(Some(IpAddr::V6(Ipv6Addr::from(ip))));
+                        let mut v = [0_u8; 16];
+                        v.copy_from_slice(&bytes);
+                        return Ok(Some(IpAddr::V6(Ipv6Addr::from(v))));
                     }
                 }
             }
@@ -568,9 +588,9 @@ impl<K: EnrKey> Enr<K> {
     pub fn set_udp(&mut self, udp: u16, key: &K) -> Result<Option<u16>, EnrError> {
         if let Some(udp_bytes) = self.insert("udp", udp.to_be_bytes().to_vec(), key)? {
             if udp_bytes.len() <= 2 {
-                let mut udp = [0u8; 2];
-                udp[2 - udp_bytes.len()..].copy_from_slice(&udp_bytes);
-                return Ok(Some(u16::from_be_bytes(udp)));
+                let mut v = [0_u8; 2];
+                v[2 - udp_bytes.len()..].copy_from_slice(&udp_bytes);
+                return Ok(Some(u16::from_be_bytes(v)));
             }
         }
         Ok(None)
@@ -580,9 +600,9 @@ impl<K: EnrKey> Enr<K> {
     pub fn set_udp6(&mut self, udp: u16, key: &K) -> Result<Option<u16>, EnrError> {
         if let Some(udp_bytes) = self.insert("udp6", udp.to_be_bytes().to_vec(), key)? {
             if udp_bytes.len() <= 2 {
-                let mut udp = [0u8; 2];
-                udp[2 - udp_bytes.len()..].copy_from_slice(&udp_bytes);
-                return Ok(Some(u16::from_be_bytes(udp)));
+                let mut v = [0_u8; 2];
+                v[2 - udp_bytes.len()..].copy_from_slice(&udp_bytes);
+                return Ok(Some(u16::from_be_bytes(v)));
             }
         }
         Ok(None)
@@ -592,9 +612,9 @@ impl<K: EnrKey> Enr<K> {
     pub fn set_tcp(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, EnrError> {
         if let Some(tcp_bytes) = self.insert("tcp", tcp.to_be_bytes().to_vec(), key)? {
             if tcp_bytes.len() <= 2 {
-                let mut tcp = [0u8; 2];
-                tcp[2 - tcp_bytes.len()..].copy_from_slice(&tcp_bytes);
-                return Ok(Some(u16::from_be_bytes(tcp)));
+                let mut v = [0_u8; 2];
+                v[2 - tcp_bytes.len()..].copy_from_slice(&tcp_bytes);
+                return Ok(Some(u16::from_be_bytes(v)));
             }
         }
         Ok(None)
@@ -604,9 +624,9 @@ impl<K: EnrKey> Enr<K> {
     pub fn set_tcp6(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, EnrError> {
         if let Some(tcp_bytes) = self.insert("tcp6", tcp.to_be_bytes().to_vec(), key)? {
             if tcp_bytes.len() <= 2 {
-                let mut tcp = [0u8; 2];
-                tcp[2 - tcp_bytes.len()..].copy_from_slice(&tcp_bytes);
-                return Ok(Some(u16::from_be_bytes(tcp)));
+                let mut v = [0_u8; 2];
+                v[2 - tcp_bytes.len()..].copy_from_slice(&tcp_bytes);
+                return Ok(Some(u16::from_be_bytes(v)));
             }
         }
         Ok(None)
@@ -715,7 +735,7 @@ impl<K: EnrKey> Enr<K> {
         let mut stream = RlpStream::new();
         stream.begin_list(self.content.len() * 2 + 1);
         stream.append(&self.seq);
-        for (k, v) in self.content.iter() {
+        for (k, v) in &self.content {
             stream.append(k);
             stream.append(v);
         }
@@ -740,10 +760,10 @@ impl<K: EnrKey> Enr<K> {
 // traits //
 
 impl<K: EnrKey> Clone for Enr<K> {
-    fn clone(&self) -> Enr<K> {
-        Enr {
-            seq: self.seq.clone(),
-            node_id: self.node_id.clone(),
+    fn clone(&self) -> Self {
+        Self {
+            seq: self.seq,
+            node_id: self.node_id,
             content: self.content.clone(),
             signature: self.signature.clone(),
             phantom: self.phantom,
@@ -806,7 +826,7 @@ impl<K: EnrKey> FromStr for Enr<K> {
         }
         let bytes = base64::decode_config(decode_string, base64::URL_SAFE_NO_PAD)
             .map_err(|e| format!("Invalid base64 encoding: {:?}", e))?;
-        rlp::decode::<Enr<K>>(&bytes).map_err(|e| format!("Invalid ENR: {:?}", e))
+        rlp::decode(&bytes).map_err(|e| format!("Invalid ENR: {:?}", e))
     }
 }
 
@@ -827,7 +847,7 @@ impl<'de, K: EnrKey> Deserialize<'de> for Enr<K> {
         D: Deserializer<'de>,
     {
         let s: String = Deserialize::deserialize(deserializer)?;
-        Enr::<K>::from_str(&s).map_err(D::Error::custom)
+        Self::from_str(&s).map_err(D::Error::custom)
     }
 }
 
@@ -837,7 +857,7 @@ impl<K: EnrKey> rlp::Encodable for Enr<K> {
         s.append(&self.signature);
         s.append(&self.seq);
         // must use rlp_content to preserve ordering.
-        for (k, v) in self.content.iter() {
+        for (k, v) in &self.content {
             s.append(k);
             s.append(v);
         }
@@ -895,7 +915,7 @@ impl<K: EnrKey> rlp::Decodable for Enr<K> {
         // calculate the node id
         let node_id = NodeId::from(public_key);
 
-        let enr = Enr {
+        let enr = Self {
             seq,
             node_id,
             signature,
