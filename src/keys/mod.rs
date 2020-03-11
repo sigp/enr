@@ -1,12 +1,12 @@
 //! This module provides the [`EnrKey`] and [`EnrPublicKey`] traits. User's wishing to implement their
-//! own signing schemes can implement these traits and apply them to a [`EnrRaw`].
-
+//! own signing schemes can implement these traits and apply them to a [`Enr`].
+//!
 //! This module contains implementations for the `libsecp256k1` and `ed25519_dalek`
 //! secret key libraries, provided the `libsecp256k1` and `ed25519` features are set.
-
+//!
 //! [`EnrKey`]: crate::EnrKey
 //! [`EnrPublicKey`]: crate::EnrPublicKey
-//! [`EnrRaw`]: crate::enr::EnrRaw
+//! [`Enr`]: crate::enr::Enr
 
 // the default implementation
 mod libsecp256k1;
@@ -25,7 +25,11 @@ use libp2p_core::PeerId;
 pub use secp256k1;
 
 use rlp::DecoderError;
-use std::{collections::BTreeMap, error::Error, fmt};
+use std::{
+    collections::BTreeMap,
+    error::Error,
+    fmt::{self, Display},
+};
 
 /// The trait required for a key to sign and modify an ENR record.
 pub trait EnrKey {
@@ -37,10 +41,10 @@ pub trait EnrKey {
     /// Returns the public key associated with current key pair.
     fn public(&self) -> Self::PublicKey;
 
-    /// Provides a method to decode a raw public key from an ENR BTreeMap to a useable public key.
+    /// Provides a method to decode a raw public key from an ENR `BTreeMap` to a useable public key.
     ///
     /// This method allows a key type to decode the raw bytes in an ENR to a useable
-    /// `EnrPublicKey`. It takes the ENR's BTreeMap and returns a public key.
+    /// `EnrPublicKey`. It takes the ENR's `BTreeMap` and returns a public key.
     ///
     /// Note: This specifies the supported key schemes for an ENR.
     fn enr_to_public(content: &BTreeMap<String, Vec<u8>>) -> Result<Self::PublicKey, DecoderError>;
@@ -78,7 +82,7 @@ pub struct SigningError {
 
 /// An error during encoding of key material.
 impl SigningError {
-    pub(crate) fn new<S: ToString>(msg: S) -> Self {
+    pub(crate) fn new<S: Display>(msg: S) -> Self {
         Self {
             msg: msg.to_string(),
             source: None,

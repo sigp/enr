@@ -1,4 +1,4 @@
-//! An implementation for EnrKey for `libsecp256k1::SecretKey`
+//! An implementation for `EnrKey` for `libsecp256k1::SecretKey`
 
 use super::{EnrKey, EnrPublicKey, SigningError};
 #[cfg(feature = "libp2p")]
@@ -23,12 +23,12 @@ impl EnrKey for secp256k1::SecretKey {
         let m = secp256k1::Message::parse_slice(&hash)
             .map_err(|_| SigningError::new("failed to parse secp256k1 digest"))?;
         // serialize to an uncompressed 64 byte vector
-        Ok(secp256k1::sign(&m, &self).0.serialize().to_vec())
+        Ok(secp256k1::sign(&m, self).0.serialize().to_vec())
     }
 
     /// Returns the public key associated with the private key.
     fn public(&self) -> Self::PublicKey {
-        secp256k1::PublicKey::from_secret_key(&self)
+        secp256k1::PublicKey::from_secret_key(self)
     }
 
     /// Decodes the raw bytes of an ENR's content into a public key if possible.
@@ -52,7 +52,7 @@ impl EnrPublicKey for secp256k1::PublicKey {
         let msg = Keccak256::digest(msg);
         secp256k1::Signature::parse_slice(sig)
             .and_then(|sig| {
-                secp256k1::Message::parse_slice(&msg).map(|m| secp256k1::verify(&m, &sig, &self))
+                secp256k1::Message::parse_slice(&msg).map(|m| secp256k1::verify(&m, &sig, self))
             })
             .is_ok()
     }

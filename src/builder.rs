@@ -22,7 +22,7 @@ impl<K: EnrKey> EnrBuilder<K> {
     /// Currently only supports the id v4 scheme and therefore disallows creation of any other
     /// scheme.
     pub fn new(id: impl Into<String>) -> Self {
-        EnrBuilder {
+        Self {
             id: id.into(),
             seq: 1,
             content: BTreeMap::new(),
@@ -101,7 +101,7 @@ impl<K: EnrKey> EnrBuilder<K> {
         let mut stream = RlpStream::new();
         stream.begin_list(self.content.len() * 2 + 1);
         stream.append(&self.seq);
-        for (k, v) in self.content.iter() {
+        for (k, v) in &self.content {
             stream.append(k);
             stream.append(v);
         }
@@ -124,7 +124,10 @@ impl<K: EnrKey> EnrBuilder<K> {
         self.add_value(key.enr_key(), key.encode());
     }
 
-    /// Constructs an ENR from the ENRBuilder struct.
+    /// Constructs an ENR from the `EnrBuilder`.
+    ///
+    /// # Errors
+    /// Fails if the identity scheme is not supported, or the record size exceeds `MAX_ENR_SIZE`.
     pub fn build(&mut self, key: &K) -> Result<Enr<K>, EnrError> {
         // add the identity scheme to the content
         if self.id != "v4" {
