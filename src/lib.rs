@@ -222,7 +222,7 @@ const MAX_ENR_SIZE: usize = 300;
 /// `secp256k1` using the `libsecp256k1` library.
 ///
 /// This struct will always have a valid signature, known public key type, sequence number and `NodeId`. All other parameters are variable/optional.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Eq)]
 pub struct Enr<K: EnrKey = secp256k1::SecretKey> {
     /// ENR sequence number.
     seq: u64,
@@ -738,6 +738,27 @@ impl<K: EnrKey> Enr<K> {
 }
 
 // traits //
+
+impl<K: EnrKey> Clone for Enr<K> {
+    fn clone(&self) -> Enr<K> {
+        Enr {
+            seq: self.seq.clone(),
+            node_id: self.node_id.clone(),
+            content: self.content.clone(),
+            signature: self.signature.clone(),
+            phantom: self.phantom,
+        }
+    }
+}
+
+impl<K: EnrKey> PartialEq for Enr<K> {
+    fn eq(&self, other: &Self) -> bool {
+        self.seq == other.seq
+            && self.node_id == other.node_id
+            && self.content == other.content
+            && self.signature == other.signature
+    }
+}
 
 #[cfg(feature = "libp2p")]
 impl<K: EnrKey> std::fmt::Display for Enr<K> {
