@@ -36,3 +36,6 @@ ed25519 = ["ed25519-dalek"]
 [lib]
 name = "enr"
 path = "src/lib.rs"
+
+[package.metadata.docs.rs]
+all-features = true
