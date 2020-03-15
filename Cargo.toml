@@ -27,11 +27,16 @@ libsecp256k1 = { version = "^0", optional = true }
 serde = { version = "1.0.104", optional = true }
 libp2p-core = { version = "^0", optional = true }
 ed25519-dalek = { version = "1.0.0-pre.3", optional = true }
+c-secp256k1 = { package = "secp256k1", version = "0.17", optional = true }
+
+[dev-dependencies]
+c-secp256k1 = { package = "secp256k1", features = ["rand-std"], version = "0.17" }
 
 [features]
 default = ["serde", "libsecp256k1" ]
 libp2p = ["libp2p-core"]
 ed25519 = ["ed25519-dalek"]
+rust-secp256k1 = ["c-secp256k1"]
 
 [lib]
 name = "enr"
