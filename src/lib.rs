@@ -213,6 +213,8 @@ use libp2p_core::{
 
 pub use builder::EnrBuilder;
 
+#[cfg(feature = "rust-secp256k1")]
+pub use keys::c_secp256k1;
 #[cfg(feature = "libsecp256k1")]
 pub use keys::secp256k1;
 #[cfg(feature = "ed25519")]
@@ -976,8 +978,8 @@ mod tests {
     use std::convert::TryInto;
     use std::net::Ipv4Addr;
 
-    #[test]
     #[cfg(feature = "libsecp256k1")]
+    #[test]
     fn check_test_vector() {
         let valid_record = hex::decode("f884b8407098ad865b00a582051940cb9cf36836572411a47278783077011599ed5cd16b76f2635f4e234738f30813a89eb9137e3e3df5266e3a1f11df72ecf1145ccb9c01826964827634826970847f00000189736563703235366b31a103ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd31388375647082765f").unwrap();
         let signature = hex::decode("7098ad865b00a582051940cb9cf36836572411a47278783077011599ed5cd16b76f2635f4e234738f30813a89eb9137e3e3df5266e3a1f11df72ecf1145ccb9c").unwrap();
@@ -998,6 +1000,7 @@ mod tests {
         assert!(enr.verify());
     }
 
+    #[cfg(feature = "libsecp256k1")]
     #[test]
     fn check_test_vector_2() {
         let text = "enr:-IS4QHCYrYZbAKWCBRlAy5zzaDZXJBGkcnh4MHcBFZntXNFrdvJjX04jRzjzCBOonrkTfj499SZuOh8R33Ls8RRcy5wBgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQPKY0yuDUmstAHYpMa2_oxVtw0RW_QAdpzBQA8yWM0xOIN1ZHCCdl8";
@@ -1030,6 +1033,7 @@ mod tests {
         assert!(enr.verify());
     }
 
+    #[cfg(feature = "libsecp256k1")]
     #[test]
     fn test_read_enr() {
         let text = "-Iu4QM-YJF2RRpMcZkFiWzMf2kRd1A5F1GIekPa4Sfi_v0DCLTDBfOMTMMWJhhawr1YLUPb5008CpnBKrgjY3sstjfgCgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQP8u1uyQFyJYuQUTyA1raXKhSw1HhhxNUQ2VE52LNHWMIN0Y3CCIyiDdWRwgiMo";
@@ -1039,6 +1043,7 @@ mod tests {
         dbg!(enr.tcp());
     }
 
+    #[cfg(feature = "libsecp256k1")]
     #[test]
     fn test_encode_test_vector_2() {
         let key = secp256k1::SecretKey::parse_slice(
@@ -1062,6 +1067,7 @@ mod tests {
         assert_eq!(enr.signature(), &signature[..]);
     }
 
+    #[cfg(feature = "libsecp256k1")]
     #[test]
     fn test_encode_decode_secp256k1() {
         let mut rng = rand::thread_rng();
@@ -1079,6 +1085,33 @@ mod tests {
         let encoded_enr = rlp::encode(&enr);
 
         let decoded_enr = rlp::decode::<Enr>(&encoded_enr).unwrap();
+
+        assert_eq!(decoded_enr.id(), Some("v4".into()));
+        assert_eq!(decoded_enr.ip(), Some(ip));
+        assert_eq!(decoded_enr.tcp(), Some(tcp));
+        // Must compare encoding as the public key itself can be different
+        assert_eq!(decoded_enr.public_key().encode(), key.public().encode());
+        assert!(decoded_enr.verify());
+    }
+
+    #[cfg(feature = "rust-secp256k1")]
+    #[test]
+    fn test_encode_decode_c_secp256k1() {
+        let mut rng = c_secp256k1::rand::thread_rng();
+        let key = c_secp256k1::SecretKey::new(&mut rng);
+        let ip = Ipv4Addr::new(127, 0, 0, 1);
+        let tcp = 3000;
+
+        let enr = {
+            let mut builder = EnrBuilder::new("v4");
+            builder.ip(ip.into());
+            builder.tcp(tcp);
+            builder.build(&key).unwrap()
+        };
+
+        let encoded_enr = rlp::encode(&enr);
+
+        let decoded_enr = rlp::decode::<Enr<c_secp256k1::SecretKey>>(&encoded_enr).unwrap();
 
         assert_eq!(decoded_enr.id(), Some("v4".into()));
         assert_eq!(decoded_enr.ip(), Some(ip));

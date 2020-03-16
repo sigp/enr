@@ -14,7 +14,11 @@ mod combined;
 mod ed25519;
 #[cfg(any(feature = "libsecp256k1", doc))]
 mod libsecp256k1;
+#[cfg(feature = "rust-secp256k1")]
+mod rust_secp256k1;
 
+#[cfg(feature = "rust-secp256k1")]
+pub use c_secp256k1;
 #[cfg(any(feature = "ed25519", doc))]
 pub use combined::{CombinedKey, CombinedPublicKey};
 #[cfg(any(feature = "ed25519", doc))]
