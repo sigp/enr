@@ -101,6 +101,9 @@
 //! use std::net::Ipv4Addr;
 //! use rand::thread_rng;
 //!
+//! // specify the type of ENR
+//! type DefaultEnr = Enr<secp256k1::SecretKey>;
+//!
 //! // generate a random secp256k1 key
 //! let mut rng = thread_rng();
 //! let key = SecretKey::random(&mut rng);
@@ -116,7 +119,7 @@
 //! let base_64_string = enr.to_base64();
 //!
 //! // decode from base64
-//! let decoded_enr: Enr = base_64_string.parse().unwrap();
+//! let decoded_enr: DefaultEnr = base_64_string.parse().unwrap();
 //!
 //! assert_eq!(decoded_enr.ip(), Some("192.168.0.1".parse().unwrap()));
 //! assert_eq!(decoded_enr.id(), Some("v4".into()));
@@ -168,9 +171,9 @@
 //!
 //! // decode base64 strings of varying key types
 //! // decode the secp256k1 with default Enr
-//! let decoded_enr_secp256k1: Enr = base64_string_secp256k1.parse().unwrap();
+//! let decoded_enr_secp256k1: Enr<secp256k1::SecretKey> = base64_string_secp256k1.parse().unwrap();
 //! // decode ed25519 ENRs
-//! let decoded_enr_ed25519: Enr<Keypair> = base64_string_ed25519.parse().unwrap();
+//! let decoded_enr_ed25519: Enr<ed25519_dalek::Keypair> = base64_string_ed25519.parse().unwrap();
 //!
 //! // use the combined key to be able to decode either
 //! let decoded_enr: Enr<CombinedKey> = base64_string_secp256k1.parse().unwrap();
@@ -230,26 +233,6 @@ const MAX_ENR_SIZE: usize = 300;
 ///
 /// This struct will always have a valid signature, known public key type, sequence number and `NodeId`. All other parameters are variable/optional.
 #[derive(Eq)]
-#[cfg(any(feature = "libsecp256k1", doc))]
-pub struct Enr<K: EnrKey = secp256k1::SecretKey> {
-    /// ENR sequence number.
-    seq: u64,
-
-    /// The `NodeId` of the ENR record.
-    node_id: NodeId,
-
-    /// Key-value contents of the ENR. A BTreeMap is used to get the keys in sorted order, which is
-    /// important for verifying the signature of the ENR.
-    content: BTreeMap<String, Vec<u8>>,
-
-    /// The signature of the ENR record, stored as bytes.
-    signature: Vec<u8>,
-
-    /// Marker to pin the generic.
-    phantom: PhantomData<K>,
-}
-
-#[cfg(not(feature = "libsecp256k1"))]
 pub struct Enr<K: EnrKey> {
     /// ENR sequence number.
     seq: u64,
@@ -978,6 +961,8 @@ mod tests {
     use std::convert::TryInto;
     use std::net::Ipv4Addr;
 
+    type DefaultEnr = Enr<secp256k1::SecretKey>;
+
     #[cfg(feature = "libsecp256k1")]
     #[test]
     fn check_test_vector() {
@@ -987,7 +972,7 @@ mod tests {
             hex::decode("03ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd3138")
                 .unwrap();
 
-        let enr = rlp::decode::<Enr>(&valid_record).unwrap();
+        let enr = rlp::decode::<DefaultEnr>(&valid_record).unwrap();
 
         let pubkey = enr.public_key().encode();
 
@@ -1012,7 +997,7 @@ mod tests {
             hex::decode("a448f24c6d18e575453db13171562b71999873db5b286df957af199ec94617f7")
                 .unwrap();
 
-        let enr: Enr = text.parse::<Enr>().unwrap();
+        let enr = text.parse::<DefaultEnr>().unwrap();
         let pubkey = enr.public_key().encode();
         assert_eq!(enr.ip(), Some(Ipv4Addr::new(127, 0, 0, 1)));
         dbg!("here");
@@ -1037,7 +1022,7 @@ mod tests {
     #[test]
     fn test_read_enr() {
         let text = "-Iu4QM-YJF2RRpMcZkFiWzMf2kRd1A5F1GIekPa4Sfi_v0DCLTDBfOMTMMWJhhawr1YLUPb5008CpnBKrgjY3sstjfgCgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQP8u1uyQFyJYuQUTyA1raXKhSw1HhhxNUQ2VE52LNHWMIN0Y3CCIyiDdWRwgiMo";
-        let enr: Enr = text.parse::<Enr>().unwrap();
+        let enr = text.parse::<DefaultEnr>().unwrap();
         dbg!(enr.ip());
         dbg!(enr.udp());
         dbg!(enr.tcp());
@@ -1084,7 +1069,7 @@ mod tests {
 
         let encoded_enr = rlp::encode(&enr);
 
-        let decoded_enr = rlp::decode::<Enr>(&encoded_enr).unwrap();
+        let decoded_enr = rlp::decode::<DefaultEnr>(&encoded_enr).unwrap();
 
         assert_eq!(decoded_enr.id(), Some("v4".into()));
         assert_eq!(decoded_enr.ip(), Some(ip));
@@ -1243,7 +1228,7 @@ mod tests {
 
         // decode base64 strings of varying key types
         // decode the secp256k1 with default Enr
-        let _decoded_enr_secp256k1: Enr = base64_string_secp256k1.parse().unwrap();
+        let _decoded_enr_secp256k1: DefaultEnr = base64_string_secp256k1.parse().unwrap();
         // decode ed25519 ENRs
         let _decoded_enr_ed25519: Enr<ed25519_dalek::Keypair> =
             base64_string_ed25519.parse().unwrap();

@@ -3,22 +3,6 @@ use rlp::RlpStream;
 use std::{collections::BTreeMap, marker::PhantomData, net::IpAddr};
 
 ///! The base builder for generating ENR records with arbitrary signing algorithms.
-#[cfg(any(feature = "libsecp256k1", doc))]
-pub struct EnrBuilder<K: EnrKey = secp256k1::SecretKey> {
-    /// The identity scheme used to build the ENR record.
-    id: String,
-
-    /// The starting sequence number for the ENR record.
-    seq: u64,
-
-    /// The key-value pairs for the ENR record.
-    content: BTreeMap<String, Vec<u8>>,
-
-    /// Pins the generic key types.
-    phantom: PhantomData<K>,
-}
-
-#[cfg(not(feature = "libsecp256k1"))]
 pub struct EnrBuilder<K: EnrKey> {
     /// The identity scheme used to build the ENR record.
     id: String,
