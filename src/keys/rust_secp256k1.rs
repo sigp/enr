@@ -1,8 +1,8 @@
 use super::{EnrKey, EnrPublicKey, SigningError};
+use crate::digest;
 #[cfg(feature = "libp2p")]
 use libp2p_core::{PeerId, PublicKey as Libp2pPublicKey};
 use rlp::DecoderError;
-use sha3::{Digest, Keccak256};
 use std::collections::BTreeMap;
 
 /// The ENR key that stores the public key in the ENR record.
@@ -13,7 +13,7 @@ impl EnrKey for c_secp256k1::SecretKey {
 
     fn sign_v4(&self, msg: &[u8]) -> Result<Vec<u8>, SigningError> {
         // take a keccak256 hash then sign.
-        let hash = Keccak256::digest(msg);
+        let hash = digest(msg);
         let m = c_secp256k1::Message::from_slice(&hash)
             .map_err(|_| SigningError::new("failed to parse secp256k1 digest"))?;
         // serialize to an uncompressed 64 byte vector
@@ -40,7 +40,7 @@ impl EnrKey for c_secp256k1::SecretKey {
 
 impl EnrPublicKey for c_secp256k1::PublicKey {
     fn verify_v4(&self, msg: &[u8], sig: &[u8]) -> bool {
-        let msg = Keccak256::digest(msg);
+        let msg = digest(msg);
         c_secp256k1::Signature::from_compact(sig)
             .and_then(|sig| {
                 c_secp256k1::Message::from_slice(&msg)

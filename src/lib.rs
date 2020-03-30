@@ -200,6 +200,7 @@ use base64;
 use log::debug;
 use rlp::{DecoderError, Rlp, RlpStream};
 use std::collections::BTreeMap;
+use tiny_keccak::{Hasher, Keccak};
 
 #[cfg(feature = "serde")]
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
@@ -951,6 +952,14 @@ pub enum EnrError {
     SigningError,
     /// The identity scheme is not supported.
     UnsupportedIdentityScheme,
+}
+
+pub(crate) fn digest(b: &[u8]) -> [u8; 32] {
+    let mut output = [0_u8; 32];
+    let mut hasher = Keccak::v256();
+    hasher.update(b);
+    hasher.finalize(&mut output);
+    output
 }
 
 #[cfg(test)]

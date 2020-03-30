@@ -1,8 +1,7 @@
 //! The identifier for an ENR record. This is the keccak256 hash of the public key (for secp256k1
 //! keys this is the uncompressed encoded form of the public key).
 
-use crate::keys::EnrPublicKey;
-use sha3::{Digest, Keccak256};
+use crate::{digest, keys::EnrPublicKey};
 
 type RawNodeId = [u8; 32];
 
@@ -49,7 +48,7 @@ impl NodeId {
 impl<T: EnrPublicKey> From<T> for NodeId {
     fn from(public_key: T) -> Self {
         let pubkey_bytes = public_key.encode_uncompressed();
-        Self::parse(&Keccak256::digest(&pubkey_bytes)).expect("must be the correct length")
+        Self::parse(&digest(&pubkey_bytes)).expect("always of correct length; qed")
     }
 }
 
