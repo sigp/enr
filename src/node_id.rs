@@ -2,6 +2,7 @@
 //! keys this is the uncompressed encoded form of the public key).
 
 use crate::{digest, keys::EnrPublicKey};
+use crate::{Enr, EnrKey};
 
 type RawNodeId = [u8; 32];
 
@@ -49,6 +50,18 @@ impl<T: EnrPublicKey> From<T> for NodeId {
     fn from(public_key: T) -> Self {
         let pubkey_bytes = public_key.encode_uncompressed();
         Self::parse(&digest(&pubkey_bytes)).expect("always of correct length; qed")
+    }
+}
+
+impl<T: EnrKey> From<Enr<T>> for NodeId {
+    fn from(enr: Enr<T>) -> Self {
+        enr.node_id()
+    }
+}
+
+impl<T: EnrKey> From<&Enr<T>> for NodeId {
+    fn from(enr: &Enr<T>) -> Self {
+        enr.node_id()
     }
 }
 
