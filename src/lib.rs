@@ -280,6 +280,11 @@ impl<K: EnrKey> Enr<K> {
         self.content.get(&key.into())
     }
 
+    /// Returns an iterator over all key/value pairs in the ENR.
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &Vec<u8>)> {
+        self.content.iter()
+    }
+
     #[cfg(any(feature = "libp2p", doc))]
     /// Returns a list of multiaddrs if the ENR has an `ip` and either a `tcp` or `udp` key **or** an `ip6` and either a `tcp6` or `udp6`.
     /// The vector remains empty if these fields are not defined.
