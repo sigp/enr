@@ -39,24 +39,18 @@ Furthermore, a `CombinedKey` is provided if the `ed25519` feature flag is set, w
 ENR type that can support both `secp256k1` and `ed25519` signed ENR records. Examples of the
 use of each of these key types is given below.
 
-Additionally there is support for conversion of `rust-libp2p` `Keypair` to the `CombinedKey` type
-via the `libp2p` feature flag.
-
 ## Features
 
 This crate supports a number of features.
 
 - `serde`: Allows for serde serialization and deserialization for ENRs.
-- `libp2p`: Provides libp2p integration. Libp2p `Keypair`'s can be converted to `CombinedKey`
-types which can be used to sign and modify ENRs. This feature also adds the `peer_id()`
-and `multiaddr()` functions to an ENR which provides an ENR's associated `PeerId` and list of
-`MultiAddr`'s respectively.
 - `ed25519`: Provides support for `ed25519_dalek` keypair types.
+- `rust-secp256k1`: Uses `c-secp256k1` for secp256k1 keys.
 
 These can be enabled via adding the feature flag in your `Cargo.toml`
 
 ```toml
-enr = { version = "*", features = ["serde", "libp2p", "ed25519"] }
+enr = { version = "*", features = ["serde", "ed25519", "rust-secp256k1"] }
 ```
 
 ## Examples
@@ -134,24 +128,6 @@ assert_eq!(decoded_enr.ip(), Some("192.168.0.1".parse().unwrap()));
 assert_eq!(decoded_enr.id(), Some("v4".into()));
 assert_eq!(decoded_enr.tcp(), Some(8001));
 assert_eq!(decoded_enr.get("custom_key"), Some(&vec![0,0,1]));
-```
-
-#### Libp2p key conversion, with the `libp2p` feature flag
-
-```rust
-use enr::{EnrBuilder, CombinedKey};
-use std::net::Ipv4Addr;
-use std::convert::TryInto;
-
-// with the `libp2p` feature flag, one can also use a libp2p key
-let libp2p_key = libp2p_core::identity::Keypair::generate_secp256k1();
-let key: CombinedKey = libp2p_key.try_into().expect("supports secp256k1");
-
-let ip = Ipv4Addr::new(192,168,0,1);
-let enr = EnrBuilder::new("v4").ip(ip.into()).tcp(8000).build(&key).unwrap();
-
-assert_eq!(enr.ip(), Some("192.168.0.1".parse().unwrap()));
-assert_eq!(enr.id(), Some("v4".into()));
 ```
 
 #### Encoding/Decoding ENR's of various key types

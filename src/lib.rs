@@ -26,24 +26,18 @@
 //! ENR type that can support both `secp256k1` and `ed25519` signed ENR records. Examples of the
 //! use of each of these key types is given below.
 //!
-//! Additionally there is support for conversion of `rust-libp2p` `Keypair` to the [`CombinedKey`] type
-//! via the `libp2p` feature flag.
-//!
 //! ## Features
 //!
 //! This crate supports a number of features.
 //!
 //! - `serde`: Allows for serde serialization and deserialization for ENRs.
-//! - `libp2p`: Provides libp2p integration. Libp2p `Keypair`'s can be converted to [`CombinedKey`]
-//! types which can be used to sign and modify ENRs. This feature also adds the `peer_id()`
-//! and `multiaddr()` functions to an ENR which provides an ENR's associated `PeerId` and list of
-//! `MultiAddr`'s respectively.
 //! - `ed25519`: Provides support for `ed25519_dalek` keypair types.
+//! - `rust-secp256k1`: Uses `c-secp256k1` for secp256k1 keys.
 //!
 //! These can be enabled via adding the feature flag in your `Cargo.toml`
 //!
 //! ```toml
-//! enr = { version = "*", features = ["serde", "libp2p", "ed25519"] }
+//! enr = { version = "*", features = ["serde","ed25519"] }
 //! ```
 //!
 //! ## Examples
@@ -127,24 +121,6 @@
 //! assert_eq!(decoded_enr.get("custom_key"), Some(&vec![0,0,1]));
 //! ```
 //!
-//! ### Libp2p key conversion, with the `libp2p` feature flag
-//!
-//! ```rust
-//! use enr::{EnrBuilder, CombinedKey};
-//! use std::net::Ipv4Addr;
-//! use std::convert::TryInto;
-//!
-//! // with the `libp2p` feature flag, one can also use a libp2p key
-//! let libp2p_key = libp2p_core::identity::Keypair::generate_secp256k1();
-//! let key: CombinedKey = libp2p_key.try_into().expect("supports secp256k1");
-//!
-//! let ip = Ipv4Addr::new(192,168,0,1);
-//! let enr = EnrBuilder::new("v4").ip(ip.into()).tcp(8000).build(&key).unwrap();
-//!
-//! assert_eq!(enr.ip(), Some("192.168.0.1".parse().unwrap()));
-//! assert_eq!(enr.id(), Some("v4".into()));
-//! ```
-//!
 //! ### Encoding/Decoding ENR's of various key types
 //!
 //! ```rust
@@ -196,7 +172,6 @@ mod builder;
 mod keys;
 mod node_id;
 
-use base64;
 use log::debug;
 use rlp::{DecoderError, Rlp, RlpStream};
 use std::collections::BTreeMap;
@@ -207,12 +182,6 @@ use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
     str::FromStr,
-};
-
-#[cfg(feature = "libp2p")]
-use libp2p_core::{
-    multiaddr::{Multiaddr, Protocol},
-    PeerId,
 };
 
 pub use builder::EnrBuilder;
@@ -255,14 +224,6 @@ pub struct Enr<K: EnrKey> {
 impl<K: EnrKey> Enr<K> {
     // getters //
 
-    #[cfg(any(feature = "libp2p", doc))]
-    /// The libp2p `PeerId` for the record.
-    ///
-    /// Note: Only available with the `libp2p` feature flag.
-    pub fn peer_id(&self) -> PeerId {
-        self.public_key().into_peer_id()
-    }
-
     /// The `NodeId` for the record.
     #[must_use]
     pub fn node_id(&self) -> NodeId {
@@ -283,42 +244,6 @@ impl<K: EnrKey> Enr<K> {
     /// Returns an iterator over all key/value pairs in the ENR.
     pub fn iter(&self) -> impl Iterator<Item = (&String, &Vec<u8>)> {
         self.content.iter()
-    }
-
-    #[cfg(any(feature = "libp2p", doc))]
-    /// Returns a list of multiaddrs if the ENR has an `ip` and either a `tcp` or `udp` key **or** an `ip6` and either a `tcp6` or `udp6`.
-    /// The vector remains empty if these fields are not defined.
-    ///
-    /// Note: Only available with the `libp2p` feature flag.
-    pub fn multiaddr(&self) -> Vec<Multiaddr> {
-        let mut multiaddrs: Vec<Multiaddr> = Vec::new();
-        if let Some(ip) = self.ip() {
-            if let Some(udp) = self.udp() {
-                let mut multiaddr: Multiaddr = ip.into();
-                multiaddr.push(Protocol::Udp(udp));
-                multiaddrs.push(multiaddr);
-            }
-
-            if let Some(tcp) = self.tcp() {
-                let mut multiaddr: Multiaddr = ip.into();
-                multiaddr.push(Protocol::Tcp(tcp));
-                multiaddrs.push(multiaddr);
-            }
-        }
-        if let Some(ip6) = self.ip6() {
-            if let Some(udp6) = self.udp6() {
-                let mut multiaddr: Multiaddr = ip6.into();
-                multiaddr.push(Protocol::Udp(udp6));
-                multiaddrs.push(multiaddr);
-            }
-
-            if let Some(tcp6) = self.tcp6() {
-                let mut multiaddr: Multiaddr = ip6.into();
-                multiaddr.push(Protocol::Tcp(tcp6));
-                multiaddrs.push(multiaddr);
-            }
-        }
-        multiaddrs
     }
 
     /// Returns the IPv4 address of the ENR record if it is defined.
@@ -793,20 +718,6 @@ impl<K: EnrKey> PartialEq for Enr<K> {
     }
 }
 
-#[cfg(feature = "libp2p")]
-impl<K: EnrKey> std::fmt::Display for Enr<K> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "ENR: NodeId: {}, PeerId: {}, Socket: {:?}",
-            self.node_id(),
-            self.peer_id(),
-            self.udp_socket()
-        )
-    }
-}
-
-#[cfg(not(feature = "libp2p"))]
 impl<K: EnrKey> std::fmt::Display for Enr<K> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
@@ -971,8 +882,6 @@ pub(crate) fn digest(b: &[u8]) -> [u8; 32] {
 #[cfg(feature = "libsecp256k1")]
 mod tests {
     use super::*;
-    #[cfg(feature = "libp2p")]
-    use std::convert::TryInto;
     use std::net::Ipv4Addr;
 
     type DefaultEnr = Enr<secp256k1::SecretKey>;
@@ -1252,82 +1161,5 @@ mod tests {
             .parse()
             .expect("Can decode both secp");
         let _decoded_enr: Enr<CombinedKey> = base64_string_ed25519.parse().unwrap();
-    }
-
-    // libp2p-based tests
-    #[cfg(feature = "libp2p")]
-    #[test]
-    fn test_multiaddr() {
-        let mut rng = rand::thread_rng();
-        let key = secp256k1::SecretKey::random(&mut rng);
-        let tcp = 30303;
-        let udp = 30304;
-        let ip = Ipv4Addr::new(10, 0, 0, 1);
-
-        let enr = {
-            let mut builder = EnrBuilder::new("v4");
-            builder.ip(ip.into());
-            builder.tcp(tcp);
-            builder.udp(udp);
-            builder.build(&key).unwrap()
-        };
-
-        assert_eq!(
-            enr.multiaddr()[0],
-            "/ip4/10.0.0.1/udp/30304".parse().unwrap()
-        );
-        assert_eq!(
-            enr.multiaddr()[1],
-            "/ip4/10.0.0.1/tcp/30303".parse().unwrap()
-        );
-    }
-
-    #[cfg(feature = "libp2p")]
-    #[test]
-    fn test_peer_id_secp256k1() {
-        let key = secp256k1::SecretKey::parse_slice(
-            &hex::decode("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-                .unwrap(),
-        )
-        .unwrap();
-
-        let peer_id_key: PeerId =
-            hex::decode("1220dd86cd1b9414f4b9b42a1b1258390ee9097298126df92a61789483ac90801ed6")
-                .unwrap()
-                .try_into()
-                .unwrap();
-
-        let enr = {
-            let mut builder = EnrBuilder::new("v4");
-            builder.build(&key).unwrap()
-        };
-
-        assert_eq!(enr.peer_id(), peer_id_key);
-    }
-
-    #[cfg(all(feature = "libp2p", feature = "ed25519"))]
-    #[test]
-    fn test_peer_id_ed25519() {
-        let secret = ed25519_dalek::SecretKey::from_bytes(
-            &hex::decode("b2c1d39dea212d859b0723d7092e38902013243942e25029b4e263dd2957dfdc")
-                .unwrap(),
-        )
-        .unwrap();
-
-        let public = ed25519_dalek::PublicKey::from(&secret);
-        let key = ed25519_dalek::Keypair { secret, public };
-
-        let peer_id_key: PeerId =
-            hex::decode("1220ba1da4ed94ad535832a0bea312fcb87289f6bdba33e9b846e4945288ea172364")
-                .unwrap()
-                .try_into()
-                .unwrap();
-
-        let enr = {
-            let mut builder = EnrBuilder::new("v4");
-            builder.build(&key).unwrap()
-        };
-
-        assert_eq!(enr.peer_id(), peer_id_key);
     }
 }

@@ -1,8 +1,8 @@
 [package]
+name = "enr"
 authors = ["Age Manning <Age@AgeManning.com>"]
 edition = "2018"
-name = "enr"
-version = "0.1.0-alpha.5"
+version = "0.1.0-alpha.6"
 description = "Rust implementation of Ethereum Node Record (ENR) EIP778"
 readme = "./README.md"
 keywords = ["ethereum", "enr", "record", "EIP778", "node"]
@@ -34,7 +34,6 @@ c-secp256k1 = { package = "secp256k1", features = ["rand-std"], version = "0.17"
 
 [features]
 default = ["serde", "libsecp256k1" ]
-libp2p = ["libp2p-core"]
 ed25519 = ["ed25519-dalek"]
 rust-secp256k1 = ["c-secp256k1"]
 

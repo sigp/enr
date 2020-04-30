@@ -23,8 +23,6 @@ pub use c_secp256k1;
 pub use combined::{CombinedKey, CombinedPublicKey};
 #[cfg(any(feature = "ed25519", doc))]
 pub use ed25519_dalek;
-#[cfg(feature = "libp2p")]
-use libp2p_core::PeerId;
 #[cfg(any(feature = "libsecp256k1", doc))]
 pub use secp256k1;
 
@@ -69,12 +67,6 @@ pub trait EnrPublicKey {
     /// Returns the ENR key identifier for the public key type. For `secp256k1` keys this
     /// is `secp256k1`.
     fn enr_key(&self) -> String;
-
-    #[cfg(any(feature = "libp2p", doc))]
-    /// Converts an `EnrPublicKey` into a libp2p `PeerId`
-    ///
-    /// Only required with the `libp2p` feature flag.
-    fn into_peer_id(&self) -> PeerId;
 }
 
 /// An error during signing of a message.

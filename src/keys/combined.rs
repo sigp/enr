@@ -10,11 +10,6 @@ pub use secp256k1;
 use std::collections::BTreeMap;
 use zeroize::Zeroize;
 
-#[cfg(feature = "libp2p")]
-use libp2p_core::{identity::Keypair as Libp2pKeypair, PeerId};
-#[cfg(feature = "libp2p")]
-use std::convert::TryFrom;
-
 /// A standard implementation of the `EnrKey` trait used to sign and modify ENR records. The variants here represent the currently
 /// supported in-built signing schemes.
 pub enum CombinedKey {
@@ -41,27 +36,6 @@ impl From<ed25519::SecretKey> for CombinedKey {
     fn from(secret: ed25519::SecretKey) -> CombinedKey {
         let public = ed25519::PublicKey::from(&secret);
         CombinedKey::Ed25519(ed25519::Keypair { secret, public })
-    }
-}
-
-#[cfg(any(feature = "libp2p", doc))]
-impl TryFrom<Libp2pKeypair> for CombinedKey {
-    type Error = &'static str;
-
-    fn try_from(keypair: Libp2pKeypair) -> Result<Self, Self::Error> {
-        match keypair {
-            Libp2pKeypair::Secp256k1(key) => {
-                let secret = secp256k1::SecretKey::parse(&key.secret().to_bytes())
-                    .expect("libp2p key must be valid");
-                Ok(CombinedKey::Secp256k1(secret))
-            }
-            Libp2pKeypair::Ed25519(key) => {
-                let ed_keypair = ed25519::SecretKey::from_bytes(&key.encode()[..32])
-                    .expect("libp2p key must be valid");
-                Ok(CombinedKey::from(ed_keypair))
-            }
-            _ => Err("Unsupported key type"),
-        }
     }
 }
 
@@ -178,8 +152,8 @@ impl EnrPublicKey for CombinedPublicKey {
     /// Verify a raw message, given a public key for the v4 identity scheme.
     fn verify_v4(&self, msg: &[u8], sig: &[u8]) -> bool {
         match self {
-            CombinedPublicKey::Secp256k1(pk) => pk.verify_v4(msg, sig),
-            CombinedPublicKey::Ed25519(pk) => pk.verify_v4(msg, sig),
+            Self::Secp256k1(pk) => pk.verify_v4(msg, sig),
+            Self::Ed25519(pk) => pk.verify_v4(msg, sig),
         }
     }
 
@@ -187,35 +161,24 @@ impl EnrPublicKey for CombinedPublicKey {
     fn encode(&self) -> Vec<u8> {
         match self {
             // serialize in compressed form: 33 bytes
-            CombinedPublicKey::Secp256k1(pk) => pk.encode(),
-            CombinedPublicKey::Ed25519(pk) => pk.encode(),
+            Self::Secp256k1(pk) => pk.encode(),
+            Self::Ed25519(pk) => pk.encode(),
         }
     }
 
     /// Encodes the public key in uncompressed form.
     fn encode_uncompressed(&self) -> Vec<u8> {
         match self {
-            CombinedPublicKey::Secp256k1(pk) => pk.encode_uncompressed(),
-            CombinedPublicKey::Ed25519(pk) => pk.encode_uncompressed(),
+            Self::Secp256k1(pk) => pk.encode_uncompressed(),
+            Self::Ed25519(pk) => pk.encode_uncompressed(),
         }
     }
 
     /// Generates the ENR public key string associated with the key type.
     fn enr_key(&self) -> String {
         match self {
-            CombinedPublicKey::Secp256k1(key) => key.enr_key(),
-            CombinedPublicKey::Ed25519(key) => key.enr_key(),
-        }
-    }
-
-    #[cfg(any(feature = "libp2p", doc))]
-    /// Converts the publickey into a peer id, without consuming the key.
-    ///
-    /// This is only available with the `libp2p` feature flag.
-    fn into_peer_id(&self) -> PeerId {
-        match self {
-            CombinedPublicKey::Secp256k1(pk) => pk.into_peer_id(),
-            CombinedPublicKey::Ed25519(pk) => pk.into_peer_id(),
+            Self::Secp256k1(key) => key.enr_key(),
+            Self::Ed25519(key) => key.enr_key(),
         }
     }
 }

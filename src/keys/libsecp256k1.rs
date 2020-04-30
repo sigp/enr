@@ -2,8 +2,6 @@
 
 use super::{secp256k1, EnrKey, EnrPublicKey, SigningError};
 use crate::digest;
-#[cfg(feature = "libp2p")]
-use libp2p_core::{PeerId, PublicKey as Libp2pPublicKey};
 use rlp::DecoderError;
 use std::collections::BTreeMap;
 
@@ -74,18 +72,5 @@ impl EnrPublicKey for secp256k1::PublicKey {
     /// Generates the ENR public key string associated with the secp256k1 key type.
     fn enr_key(&self) -> String {
         ENR_KEY.into()
-    }
-
-    #[cfg(any(feature = "libp2p", doc))]
-    /// Converts the publickey into a peer id, without consuming the key.
-    ///
-    /// This is only available with the `libp2p` feature flag.
-    fn into_peer_id(&self) -> PeerId {
-        let pk_bytes = self.serialize_compressed();
-        let libp2p_pk = Libp2pPublicKey::Secp256k1(
-            libp2p_core::identity::secp256k1::PublicKey::decode(&pk_bytes)
-                .expect("valid public key"),
-        );
-        PeerId::from_public_key(libp2p_pk)
     }
 }

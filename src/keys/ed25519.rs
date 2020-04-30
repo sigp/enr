@@ -1,6 +1,4 @@
 use super::{ed25519_dalek as ed25519, EnrKey, EnrPublicKey, SigningError};
-#[cfg(feature = "libp2p")]
-use libp2p_core::{PeerId, PublicKey as Libp2pPublicKey};
 use rlp::DecoderError;
 use std::collections::BTreeMap;
 
@@ -56,17 +54,5 @@ impl EnrPublicKey for ed25519::PublicKey {
     /// Generates the ENR public key string associated with the ed25519 key type.
     fn enr_key(&self) -> String {
         ENR_KEY.into()
-    }
-
-    #[cfg(any(feature = "libp2p", doc))]
-    /// Converts the publickey into a peer id, without consuming the key.
-    ///
-    /// This is only available with the `libp2p` feature flag.
-    fn into_peer_id(&self) -> PeerId {
-        let pk_bytes = self.to_bytes();
-        let libp2p_pk = Libp2pPublicKey::Ed25519(
-            libp2p_core::identity::ed25519::PublicKey::decode(&pk_bytes).expect("valid public key"),
-        );
-        PeerId::from_public_key(libp2p_pk)
     }
 }

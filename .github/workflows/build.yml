@@ -47,12 +47,3 @@ jobs:
         run: rustup update stable
       - name: Run tests in release
         run: cargo test --all --release --no-default-features --features "libsecp256k1","ed25519" --tests
-  release-tests-ubuntu-libsecp256k1-ed25519-libp2p:
-    runs-on: ubuntu-latest
-    needs: cargo-fmt
-    steps:
-      - uses: actions/checkout@v2
-      - name: Get latest version of stable rust
-        run: rustup update stable
-      - name: Run tests in release
-        run: cargo test --all --release --no-default-features --features "libsecp256k1","ed25519","libp2p" --tests
