@@ -67,8 +67,8 @@
 //!
 //! Note the `ed25519` feature flag must be set. This makes use of the
 //! [`EnrBuilder`] struct.
-//!
 //! ```rust
+//! # #[cfg(feature = "ed25519")] {
 //! use enr::{EnrBuilder, CombinedKey};
 //! use std::net::Ipv4Addr;
 //!
@@ -83,6 +83,7 @@
 //!
 //! assert_eq!(enr.ip(), Some("192.168.0.1".parse().unwrap()));
 //! assert_eq!(enr.id(), Some("v4".into()));
+//! # }
 //! ```
 //!
 //! ### Modifying an [`Enr`]
@@ -124,6 +125,7 @@
 //! ### Encoding/Decoding ENR's of various key types
 //!
 //! ```rust
+//! # #[cfg(feature = "ed25519")] {
 //! use enr::{EnrBuilder, secp256k1::SecretKey, Enr, ed25519_dalek::Keypair, CombinedKey};
 //! use std::net::Ipv4Addr;
 //! use rand::thread_rng;
@@ -154,6 +156,7 @@
 //! // use the combined key to be able to decode either
 //! let decoded_enr: Enr<CombinedKey> = base64_string_secp256k1.parse().unwrap();
 //! let decoded_enr: Enr<CombinedKey> = base64_string_ed25519.parse().unwrap();
+//! # }
 //! ```
 //!
 //!
@@ -745,8 +748,10 @@ impl<K: EnrKey> FromStr for Enr<K> {
         }
         // support both enr prefix and not
         let mut decode_string = base64_string;
-        if &base64_string[..4] == "enr:" {
-            decode_string = &decode_string[4..];
+        if base64_string.starts_with("enr:") {
+            decode_string = decode_string
+                .get(4..)
+                .ok_or_else(|| "Invalid ENR string".to_string())?;
         }
         let bytes = base64::decode_config(decode_string, base64::URL_SAFE_NO_PAD)
             .map_err(|e| format!("Invalid base64 encoding: {:?}", e))?;
@@ -888,7 +893,7 @@ mod tests {
 
     #[cfg(feature = "libsecp256k1")]
     #[test]
-    fn check_test_vector() {
+    fn test_vector() {
         let valid_record = hex::decode("f884b8407098ad865b00a582051940cb9cf36836572411a47278783077011599ed5cd16b76f2635f4e234738f30813a89eb9137e3e3df5266e3a1f11df72ecf1145ccb9c01826964827634826970847f00000189736563703235366b31a103ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd31388375647082765f").unwrap();
         let signature = hex::decode("7098ad865b00a582051940cb9cf36836572411a47278783077011599ed5cd16b76f2635f4e234738f30813a89eb9137e3e3df5266e3a1f11df72ecf1145ccb9c").unwrap();
         let expected_pubkey =
@@ -910,7 +915,7 @@ mod tests {
 
     #[cfg(feature = "libsecp256k1")]
     #[test]
-    fn check_test_vector_2() {
+    fn test_vector_2() {
         let text = "enr:-IS4QHCYrYZbAKWCBRlAy5zzaDZXJBGkcnh4MHcBFZntXNFrdvJjX04jRzjzCBOonrkTfj499SZuOh8R33Ls8RRcy5wBgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQPKY0yuDUmstAHYpMa2_oxVtw0RW_QAdpzBQA8yWM0xOIN1ZHCCdl8";
         let signature = hex::decode("7098ad865b00a582051940cb9cf36836572411a47278783077011599ed5cd16b76f2635f4e234738f30813a89eb9137e3e3df5266e3a1f11df72ecf1145ccb9c").unwrap();
         let expected_pubkey =
@@ -923,19 +928,14 @@ mod tests {
         let enr = text.parse::<DefaultEnr>().unwrap();
         let pubkey = enr.public_key().encode();
         assert_eq!(enr.ip(), Some(Ipv4Addr::new(127, 0, 0, 1)));
-        dbg!("here");
         assert_eq!(enr.ip6(), None);
-        dbg!("here");
         assert_eq!(enr.id(), Some(String::from("v4")));
         assert_eq!(enr.udp(), Some(30303));
         assert_eq!(enr.udp6(), None);
         assert_eq!(enr.tcp(), None);
         assert_eq!(enr.tcp6(), None);
-        dbg!("here1");
         assert_eq!(enr.signature(), &signature[..]);
-        dbg!("here2");
         assert_eq!(pubkey, expected_pubkey);
-        dbg!("here3");
         assert_eq!(enr.node_id().raw().to_vec(), expected_node_id);
 
         assert!(enr.verify());
@@ -943,12 +943,16 @@ mod tests {
 
     #[cfg(feature = "libsecp256k1")]
     #[test]
-    fn test_read_enr() {
+    fn test_read_enr_no_prefix() {
         let text = "-Iu4QM-YJF2RRpMcZkFiWzMf2kRd1A5F1GIekPa4Sfi_v0DCLTDBfOMTMMWJhhawr1YLUPb5008CpnBKrgjY3sstjfgCgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQP8u1uyQFyJYuQUTyA1raXKhSw1HhhxNUQ2VE52LNHWMIN0Y3CCIyiDdWRwgiMo";
-        let enr = text.parse::<DefaultEnr>().unwrap();
-        dbg!(enr.ip());
-        dbg!(enr.udp());
-        dbg!(enr.tcp());
+        text.parse::<DefaultEnr>().unwrap();
+    }
+
+    #[cfg(feature = "libsecp256k1")]
+    #[test]
+    fn test_read_enr_prefix() {
+        let text = "enr:-Iu4QM-YJF2RRpMcZkFiWzMf2kRd1A5F1GIekPa4Sfi_v0DCLTDBfOMTMMWJhhawr1YLUPb5008CpnBKrgjY3sstjfgCgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQP8u1uyQFyJYuQUTyA1raXKhSw1HhhxNUQ2VE52LNHWMIN0Y3CCIyiDdWRwgiMo";
+        text.parse::<DefaultEnr>().unwrap();
     }
 
     #[cfg(feature = "libsecp256k1")]
