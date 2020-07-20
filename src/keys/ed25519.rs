@@ -1,6 +1,8 @@
-use super::{ed25519_dalek as ed25519, EnrKey, EnrPublicKey, SigningError};
+use super::ed25519_dalek::{self as ed25519, Signer as _, Verifier as _};
+use super::{EnrKey, EnrPublicKey, SigningError};
 use rlp::DecoderError;
 use std::collections::BTreeMap;
+use std::convert::TryFrom;
 
 /// The ENR key that stores the public key in the ENR record.
 pub const ENR_KEY: &str = "ed25519";
@@ -35,7 +37,7 @@ impl EnrKey for ed25519::Keypair {
 impl EnrPublicKey for ed25519::PublicKey {
     /// Verify a raw message, given a public key for the v4 identity scheme.
     fn verify_v4(&self, msg: &[u8], sig: &[u8]) -> bool {
-        ed25519::Signature::from_bytes(sig)
+        ed25519::Signature::try_from(sig)
             .and_then(|s| self.verify(msg, &s))
             .is_ok()
     }
