@@ -800,18 +800,15 @@ impl<K: EnrKey> rlp::Decodable for Enr<K> {
             return Err(DecoderError::RlpExpectedToBeList);
         }
 
-        let mut decoded_list = rlp.as_list::<Vec<u8>>().map_err(|_| {
-            debug!("Could not decode content: {}", rlp);
-            DecoderError::Custom("List decode fail")
-        })?;
+        let mut decoded_list: Vec<Rlp> = rlp.iter().collect();
 
         if decoded_list.is_empty() || decoded_list.len() % 2 != 0 {
             debug!("Failed to decode ENR. List size is not a multiple of 2.");
             return Err(DecoderError::Custom("List not a multiple of two"));
         }
 
-        let signature = decoded_list.remove(0);
-        let seq_bytes = decoded_list.remove(0);
+        let signature = decoded_list.remove(0).data()?;
+        let seq_bytes = decoded_list.remove(0).data()?;
 
         if seq_bytes.len() > 8 {
             debug!("Failed to decode ENR. Sequence number is not a u64.");
@@ -826,8 +823,8 @@ impl<K: EnrKey> rlp::Decodable for Enr<K> {
         let mut content = BTreeMap::new();
         let mut prev: Option<String> = None;
         for _ in 0..decoded_list.len() / 2 {
-            let key = decoded_list.remove(0);
-            let value = decoded_list.remove(0);
+            let key = decoded_list.remove(0).data()?;
+            let value = decoded_list.remove(0).data()?;
 
             let key = String::from_utf8_lossy(&key);
             // TODO: add tests for this error case
@@ -835,7 +832,7 @@ impl<K: EnrKey> rlp::Decodable for Enr<K> {
                 return Err(DecoderError::Custom("Unsorted keys"));
             }
             prev = Some(key.to_string());
-            content.insert(key.to_string(), value);
+            content.insert(key.to_string(), value.into());
         }
 
         // verify we know the signature type
@@ -847,7 +844,7 @@ impl<K: EnrKey> rlp::Decodable for Enr<K> {
         let enr = Self {
             seq,
             node_id,
-            signature,
+            signature: signature.into(),
             content,
             phantom: PhantomData,
         };
@@ -938,6 +935,26 @@ mod tests {
         assert_eq!(pubkey, expected_pubkey);
         assert_eq!(enr.node_id().raw().to_vec(), expected_node_id);
 
+        assert!(enr.verify());
+    }
+
+    // the values in the content are rlp lists
+    #[test]
+    fn test_rlp_list_value() {
+        let text = "enr:-Je4QH0uN2HkMRmscUp6yvyTOPGtOg9U6lCxBFvCGynyystnDNRJbfz5GhXXY2lcu9tsghMxRiYHoznBwG46GQ7dfm0og2V0aMfGhMvbiDiAgmlkgnY0gmlwhA6hJmuJc2VjcDI1NmsxoQJBP4kg9GNBurV3uVXgR72u1n-XIABibUZLT1WvJLKwvIN0Y3CCdyeDdWRwgncn";
+        let signature = hex::decode("7d2e3761e43119ac714a7acafc9338f1ad3a0f54ea50b1045bc21b29f2cacb670cd4496dfcf91a15d763695cbbdb6c821331462607a339c1c06e3a190edd7e6d").unwrap();
+        let expected_pubkey =
+            hex::decode("02413f8920f46341bab577b955e047bdaed67f972000626d464b4f55af24b2b0bc")
+                .unwrap();
+        let enr = text.parse::<DefaultEnr>().unwrap();
+
+        assert_eq!(enr.ip(), Some(Ipv4Addr::new(14, 161, 38, 107)));
+        assert_eq!(enr.id(), Some(String::from("v4")));
+        assert_eq!(enr.udp(), Some(30503));
+        assert_eq!(enr.tcp(), Some(30503));
+        assert_eq!(enr.seq(), 40);
+        assert_eq!(enr.signature(), &signature[..]);
+        assert_eq!(enr.public_key().encode(), expected_pubkey);
         assert!(enr.verify());
     }
 
