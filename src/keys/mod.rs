@@ -12,6 +12,8 @@
 mod combined;
 #[cfg(feature = "ed25519")]
 mod ed25519;
+#[cfg(feature = "k256")]
+mod k256;
 #[cfg(any(feature = "libsecp256k1", doc))]
 mod libsecp256k1;
 #[cfg(feature = "rust-secp256k1")]

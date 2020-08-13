@@ -910,6 +910,28 @@ mod tests {
         assert!(enr.verify());
     }
 
+    #[cfg(feature = "k256")]
+    #[test]
+    fn test_vector_k256() {
+        let valid_record = hex::decode("f884b8407098ad865b00a582051940cb9cf36836572411a47278783077011599ed5cd16b76f2635f4e234738f30813a89eb9137e3e3df5266e3a1f11df72ecf1145ccb9c01826964827634826970847f00000189736563703235366b31a103ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd31388375647082765f").unwrap();
+        let signature = hex::decode("7098ad865b00a582051940cb9cf36836572411a47278783077011599ed5cd16b76f2635f4e234738f30813a89eb9137e3e3df5266e3a1f11df72ecf1145ccb9c").unwrap();
+        let expected_pubkey =
+            hex::decode("03ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd3138")
+                .unwrap();
+
+        let enr = rlp::decode::<Enr<k256_crate::SecretKey>>(&valid_record).unwrap();
+
+        let pubkey = enr.public_key().encode();
+
+        assert_eq!(enr.ip(), Some(Ipv4Addr::new(127, 0, 0, 1)));
+        assert_eq!(enr.id(), Some(String::from("v4")));
+        assert_eq!(enr.udp(), Some(30303));
+        assert_eq!(enr.tcp(), None);
+        assert_eq!(enr.signature(), &signature[..]);
+        assert_eq!(pubkey, expected_pubkey);
+        assert!(enr.verify());
+    }
+
     #[cfg(feature = "libsecp256k1")]
     #[test]
     fn test_vector_2() {
@@ -923,6 +945,34 @@ mod tests {
                 .unwrap();
 
         let enr = text.parse::<DefaultEnr>().unwrap();
+        let pubkey = enr.public_key().encode();
+        assert_eq!(enr.ip(), Some(Ipv4Addr::new(127, 0, 0, 1)));
+        assert_eq!(enr.ip6(), None);
+        assert_eq!(enr.id(), Some(String::from("v4")));
+        assert_eq!(enr.udp(), Some(30303));
+        assert_eq!(enr.udp6(), None);
+        assert_eq!(enr.tcp(), None);
+        assert_eq!(enr.tcp6(), None);
+        assert_eq!(enr.signature(), &signature[..]);
+        assert_eq!(pubkey, expected_pubkey);
+        assert_eq!(enr.node_id().raw().to_vec(), expected_node_id);
+
+        assert!(enr.verify());
+    }
+
+    #[cfg(feature = "k256")]
+    #[test]
+    fn test_vector_2_k256() {
+        let text = "enr:-IS4QHCYrYZbAKWCBRlAy5zzaDZXJBGkcnh4MHcBFZntXNFrdvJjX04jRzjzCBOonrkTfj499SZuOh8R33Ls8RRcy5wBgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQPKY0yuDUmstAHYpMa2_oxVtw0RW_QAdpzBQA8yWM0xOIN1ZHCCdl8";
+        let signature = hex::decode("7098ad865b00a582051940cb9cf36836572411a47278783077011599ed5cd16b76f2635f4e234738f30813a89eb9137e3e3df5266e3a1f11df72ecf1145ccb9c").unwrap();
+        let expected_pubkey =
+            hex::decode("03ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd3138")
+                .unwrap();
+        let expected_node_id =
+            hex::decode("a448f24c6d18e575453db13171562b71999873db5b286df957af199ec94617f7")
+                .unwrap();
+
+        let enr = text.parse::<Enr<k256_crate::SecretKey>>().unwrap();
         let pubkey = enr.public_key().encode();
         assert_eq!(enr.ip(), Some(Ipv4Addr::new(127, 0, 0, 1)));
         assert_eq!(enr.ip6(), None);
@@ -1047,6 +1097,35 @@ mod tests {
         assert_eq!(decoded_enr.tcp(), Some(tcp));
         // Must compare encoding as the public key itself can be different
         assert_eq!(decoded_enr.public_key().encode(), key.public().encode());
+        assert!(decoded_enr.verify());
+    }
+
+    #[cfg(feature = "k256")]
+    #[test]
+    fn test_encode_decode_k256() {
+        use k256_crate::elliptic_curve::Generate;
+
+        let key = k256_crate::SecretKey::generate(&mut rand::rngs::OsRng);
+        let ip = Ipv4Addr::new(127, 0, 0, 1);
+        let tcp = 3000;
+
+        let enr = {
+            let mut builder = EnrBuilder::new("v4");
+            builder.ip(ip.into());
+            builder.tcp(tcp);
+            builder.build(&key).unwrap()
+        };
+
+        let encoded_enr = rlp::encode(&enr);
+
+        let decoded_enr = rlp::decode::<Enr<c_secp256k1::SecretKey>>(&encoded_enr).unwrap();
+
+        assert_eq!(decoded_enr.id(), Some("v4".into()));
+        assert_eq!(decoded_enr.ip(), Some(ip));
+        assert_eq!(decoded_enr.tcp(), Some(tcp));
+        // Must compare encoding as the public key itself can be different
+        assert_eq!(decoded_enr.public_key().encode(), key.public().encode());
+        decoded_enr.public_key().encode_uncompressed();
         assert!(decoded_enr.verify());
     }
 
