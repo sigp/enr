@@ -1,8 +1,7 @@
 //! The identifier for an ENR record. This is the keccak256 hash of the public key (for secp256k1
 //! keys this is the uncompressed encoded form of the public key).
 
-use crate::{digest, keys::EnrPublicKey};
-use crate::{Enr, EnrKey};
+use crate::{digest, keys::EnrPublicKey, Enr, EnrKey};
 
 type RawNodeId = [u8; 32];
 

@@ -817,7 +817,7 @@ impl<K: EnrKey> rlp::Decodable for Enr<K> {
 
         // build u64 from big endian vec<u8>
         let mut seq: [u8; 8] = [0; 8];
-        seq[8 - seq_bytes.len()..].copy_from_slice(&seq_bytes);
+        seq[8 - seq_bytes.len()..].copy_from_slice(seq_bytes);
         let seq = u64::from_be_bytes(seq);
 
         let mut content = BTreeMap::new();
@@ -826,7 +826,7 @@ impl<K: EnrKey> rlp::Decodable for Enr<K> {
             let key = decoded_list.remove(0).data()?;
             let value = decoded_list.remove(0).data()?;
 
-            let key = String::from_utf8_lossy(&key);
+            let key = String::from_utf8_lossy(key);
             // TODO: add tests for this error case
             if prev.is_some() && prev >= Some(key.to_string()) {
                 return Err(DecoderError::Custom("Unsorted keys"));

@@ -26,13 +26,12 @@ impl EnrKey for c_secp256k1::SecretKey {
     }
 
     fn enr_to_public(content: &BTreeMap<String, Vec<u8>>) -> Result<Self::PublicKey, DecoderError> {
-        if let Some(pubkey_bytes) = content.get(ENR_KEY) {
-            // should be encoded in compressed form, i.e 33 byte raw secp256k1 public key
-            c_secp256k1::PublicKey::from_slice(pubkey_bytes)
-                .map_err(|_| DecoderError::Custom("Invalid Secp256k1 Signature"))
-        } else {
-            Err(DecoderError::Custom("Unknown signature"))
-        }
+        let pubkey_bytes = content
+            .get(ENR_KEY)
+            .ok_or_else(|| DecoderError::Custom("Unknown signature"))?;
+        // should be encoded in compressed form, i.e 33 byte raw secp256k1 public key
+        c_secp256k1::PublicKey::from_slice(pubkey_bytes)
+            .map_err(|_| DecoderError::Custom("Invalid Secp256k1 Signature"))
     }
 }
 
