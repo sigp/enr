@@ -1,3 +1,4 @@
+use crate::Key;
 use crate::{Enr, EnrError, EnrKey, EnrPublicKey, NodeId, MAX_ENR_SIZE};
 use rlp::RlpStream;
 use std::{collections::BTreeMap, marker::PhantomData, net::IpAddr};
@@ -11,7 +12,7 @@ pub struct EnrBuilder<K: EnrKey> {
     seq: u64,
 
     /// The key-value pairs for the ENR record.
-    content: BTreeMap<String, Vec<u8>>,
+    content: BTreeMap<Key, Vec<u8>>,
 
     /// Pins the generic key types.
     phantom: PhantomData<K>,
@@ -37,8 +38,8 @@ impl<K: EnrKey> EnrBuilder<K> {
     }
 
     /// Adds an arbitrary key-value to the `ENRBuilder`.
-    pub fn add_value(&mut self, key: String, value: Vec<u8>) -> &mut Self {
-        self.content.insert(key, value);
+    pub fn add_value(&mut self, key: impl AsRef<[u8]>, value: Vec<u8>) -> &mut Self {
+        self.content.insert(key.as_ref().to_vec(), value);
         self
     }
 
@@ -46,12 +47,10 @@ impl<K: EnrKey> EnrBuilder<K> {
     pub fn ip(&mut self, ip: IpAddr) -> &mut Self {
         match ip {
             IpAddr::V4(addr) => {
-                self.content
-                    .insert(String::from("ip"), addr.octets().to_vec());
+                self.content.insert(b"ip".to_vec(), addr.octets().to_vec());
             }
             IpAddr::V6(addr) => {
-                self.content
-                    .insert(String::from("ip6"), addr.octets().to_vec());
+                self.content.insert(b"ip6".to_vec(), addr.octets().to_vec());
             }
         }
         self

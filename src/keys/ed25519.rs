@@ -2,6 +2,7 @@ use super::{
     ed25519_dalek::{self as ed25519, Signer as _, Verifier as _},
     EnrKey, EnrPublicKey, SigningError,
 };
+use crate::Key;
 use rlp::DecoderError;
 use std::{collections::BTreeMap, convert::TryFrom};
 
@@ -25,9 +26,9 @@ impl EnrKey for ed25519::Keypair {
     }
 
     /// Decodes the raw bytes of an ENR's content into a public key if possible.
-    fn enr_to_public(content: &BTreeMap<String, Vec<u8>>) -> Result<Self::PublicKey, DecoderError> {
+    fn enr_to_public(content: &BTreeMap<Key, Vec<u8>>) -> Result<Self::PublicKey, DecoderError> {
         let pubkey_bytes = content
-            .get(ENR_KEY)
+            .get(ENR_KEY.as_bytes())
             .ok_or_else(|| DecoderError::Custom("Unknown signature"))?;
         ed25519::PublicKey::from_bytes(pubkey_bytes)
             .map_err(|_| DecoderError::Custom("Invalid ed25519 Signature"))
@@ -54,7 +55,7 @@ impl EnrPublicKey for ed25519::PublicKey {
     }
 
     /// Generates the ENR public key string associated with the ed25519 key type.
-    fn enr_key(&self) -> String {
+    fn enr_key(&self) -> Key {
         ENR_KEY.into()
     }
 }

@@ -10,6 +10,8 @@ pub use secp256k1;
 use std::collections::BTreeMap;
 use zeroize::Zeroize;
 
+use crate::Key;
+
 /// A standard implementation of the `EnrKey` trait used to sign and modify ENR records. The variants here represent the currently
 /// supported in-built signing schemes.
 pub enum CombinedKey {
@@ -64,7 +66,7 @@ impl EnrKey for CombinedKey {
     }
 
     /// Decodes the raw bytes of an ENR's content into a public key if possible.
-    fn enr_to_public(content: &BTreeMap<String, Vec<u8>>) -> Result<Self::PublicKey, DecoderError> {
+    fn enr_to_public(content: &BTreeMap<Key, Vec<u8>>) -> Result<Self::PublicKey, DecoderError> {
         secp256k1::SecretKey::enr_to_public(content)
             .map(CombinedPublicKey::Secp256k1)
             .or_else(|_| ed25519::Keypair::enr_to_public(content).map(CombinedPublicKey::from))
@@ -178,7 +180,7 @@ impl EnrPublicKey for CombinedPublicKey {
     }
 
     /// Generates the ENR public key string associated with the key type.
-    fn enr_key(&self) -> String {
+    fn enr_key(&self) -> Key {
         match self {
             Self::Secp256k1(key) => key.enr_key(),
             Self::Ed25519(key) => key.enr_key(),

@@ -2,6 +2,7 @@
 
 use super::{secp256k1, EnrKey, EnrPublicKey, SigningError};
 use crate::digest;
+use crate::Key;
 use rlp::DecoderError;
 use std::collections::BTreeMap;
 
@@ -30,9 +31,9 @@ impl EnrKey for secp256k1::SecretKey {
     }
 
     /// Decodes the raw bytes of an ENR's content into a public key if possible.
-    fn enr_to_public(content: &BTreeMap<String, Vec<u8>>) -> Result<Self::PublicKey, DecoderError> {
+    fn enr_to_public(content: &BTreeMap<Key, Vec<u8>>) -> Result<Self::PublicKey, DecoderError> {
         let pubkey_bytes = content
-            .get(ENR_KEY)
+            .get(ENR_KEY.as_bytes())
             .ok_or_else(|| DecoderError::Custom("Unknown signature"))?;
         // should be encoded in compressed form, i.e 33 byte raw secp256k1 public key
         secp256k1::PublicKey::parse_slice(
@@ -69,7 +70,7 @@ impl EnrPublicKey for secp256k1::PublicKey {
     }
 
     /// Generates the ENR public key string associated with the secp256k1 key type.
-    fn enr_key(&self) -> String {
+    fn enr_key(&self) -> Key {
         ENR_KEY.into()
     }
 }

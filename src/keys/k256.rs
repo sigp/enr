@@ -1,6 +1,7 @@
 //! An implementation for `EnrKey` for `k256::SecretKey`
 
 use super::{EnrKey, EnrPublicKey, SigningError};
+use crate::Key;
 use k256_crate::{
     ecdsa::signature::{DigestVerifier, RandomizedDigestSigner, Signature},
     elliptic_curve::weierstrass::public_key::FromPublicKey,
@@ -36,9 +37,9 @@ impl EnrKey for k256_crate::SecretKey {
         self.try_into().unwrap()
     }
 
-    fn enr_to_public(content: &BTreeMap<String, Vec<u8>>) -> Result<Self::PublicKey, DecoderError> {
+    fn enr_to_public(content: &BTreeMap<Key, Vec<u8>>) -> Result<Self::PublicKey, DecoderError> {
         let pubkey_bytes = content
-            .get(ENR_KEY)
+            .get(ENR_KEY.as_bytes())
             .ok_or_else(|| DecoderError::Custom("Unknown signature"))?;
 
         // should be encoded in compressed form, i.e 33 byte raw secp256k1 public key
@@ -75,7 +76,7 @@ impl EnrPublicKey for k256_crate::PublicKey {
             .to_vec()
     }
 
-    fn enr_key(&self) -> String {
+    fn enr_key(&self) -> Key {
         ENR_KEY.into()
     }
 }

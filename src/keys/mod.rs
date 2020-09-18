@@ -28,6 +28,7 @@ pub use ed25519_dalek;
 #[cfg(any(feature = "libsecp256k1", doc))]
 pub use secp256k1;
 
+use crate::Key;
 use rlp::DecoderError;
 use std::{
     collections::BTreeMap,
@@ -51,7 +52,7 @@ pub trait EnrKey {
     /// `EnrPublicKey`. It takes the ENR's `BTreeMap` and returns a public key.
     ///
     /// Note: This specifies the supported key schemes for an ENR.
-    fn enr_to_public(content: &BTreeMap<String, Vec<u8>>) -> Result<Self::PublicKey, DecoderError>;
+    fn enr_to_public(content: &BTreeMap<Key, Vec<u8>>) -> Result<Self::PublicKey, DecoderError>;
 }
 
 /// The trait required for a `PublicKey` to verify an ENR record.
@@ -68,7 +69,7 @@ pub trait EnrPublicKey {
 
     /// Returns the ENR key identifier for the public key type. For `secp256k1` keys this
     /// is `secp256k1`.
-    fn enr_key(&self) -> String;
+    fn enr_key(&self) -> Key;
 }
 
 /// An error during signing of a message.
