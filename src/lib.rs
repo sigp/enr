@@ -1116,9 +1116,7 @@ mod tests {
     #[cfg(feature = "k256")]
     #[test]
     fn test_encode_decode_k256() {
-        use k256_crate::elliptic_curve::Generate;
-
-        let key = k256_crate::SecretKey::generate(&mut rand::rngs::OsRng);
+        let key = k256_crate::SecretKey::random(&mut rand::rngs::OsRng);
         let ip = Ipv4Addr::new(127, 0, 0, 1);
         let tcp = 3000;
 
