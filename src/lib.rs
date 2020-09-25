@@ -178,10 +178,10 @@ mod node_id;
 use log::debug;
 use rlp::{DecoderError, Rlp, RlpStream};
 use std::collections::BTreeMap;
-use tiny_keccak::{Hasher, Keccak};
 
 #[cfg(feature = "serde")]
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
+use sha3::{Digest, Keccak256};
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
     str::FromStr,
@@ -887,9 +887,7 @@ pub enum EnrError {
 
 pub(crate) fn digest(b: &[u8]) -> [u8; 32] {
     let mut output = [0_u8; 32];
-    let mut hasher = Keccak::v256();
-    hasher.update(b);
-    hasher.finalize(&mut output);
+    output.copy_from_slice(&Keccak256::digest(b));
     output
 }
 
