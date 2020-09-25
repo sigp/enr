@@ -932,7 +932,7 @@ mod tests {
             hex::decode("03ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd3138")
                 .unwrap();
 
-        let enr = rlp::decode::<Enr<k256_crate::SecretKey>>(&valid_record).unwrap();
+        let enr = rlp::decode::<Enr<k256_crate::ecdsa::SigningKey>>(&valid_record).unwrap();
 
         let pubkey = enr.public_key().encode();
 
@@ -985,7 +985,7 @@ mod tests {
             hex::decode("a448f24c6d18e575453db13171562b71999873db5b286df957af199ec94617f7")
                 .unwrap();
 
-        let enr = text.parse::<Enr<k256_crate::SecretKey>>().unwrap();
+        let enr = text.parse::<Enr<k256_crate::ecdsa::SigningKey>>().unwrap();
         let pubkey = enr.public_key().encode();
         assert_eq!(enr.ip(), Some(Ipv4Addr::new(127, 0, 0, 1)));
         assert_eq!(enr.ip6(), None);
@@ -1116,7 +1116,7 @@ mod tests {
     #[cfg(feature = "k256")]
     #[test]
     fn test_encode_decode_k256() {
-        let key = k256_crate::SecretKey::random(&mut rand::rngs::OsRng);
+        let key = k256_crate::ecdsa::SigningKey::random(&mut rand::rngs::OsRng);
         let ip = Ipv4Addr::new(127, 0, 0, 1);
         let tcp = 3000;
 

@@ -24,7 +24,6 @@ rlp = "0.4.5"
 tiny-keccak = { version = "2.0.2", features = ["keccak"] }
 zeroize = "1.1.0"
 libsecp256k1 = { version = "0.3.5", optional = true }
-ecdsa = { version = "0.8", optional = true }
 sha3 = { version = "0.9", optional = true }
 k256-crate = { package = "k256", version = "0.5", features = ["ecdsa"], optional = true }
 serde = { version = "1.0.110", optional = true }
@@ -38,7 +37,7 @@ c-secp256k1 = { package = "secp256k1", features = ["rand-std"], version = "0.19"
 default = ["serde", "libsecp256k1" ]
 ed25519 = ["ed25519-dalek"]
 rust-secp256k1 = ["c-secp256k1"]
-k256 = ["k256-crate", "ecdsa", "sha3"]
+k256 = ["k256-crate", "sha3"]
 
 [lib]
 name = "enr"
