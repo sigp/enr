@@ -29,10 +29,10 @@ sha3 = { version = "0.9", optional = true }
 k256-crate = { package = "k256", version = "0.5", features = ["ecdsa"], optional = true }
 serde = { version = "1.0.110", optional = true }
 ed25519-dalek = { version = "1.0.0-pre.4", optional = true }
-c-secp256k1 = { package = "secp256k1", version = "0.17.2", optional = true }
+c-secp256k1 = { package = "secp256k1", version = "0.19", optional = true }
 
 [dev-dependencies]
-c-secp256k1 = { package = "secp256k1", features = ["rand-std"], version = "0.17.2" }
+c-secp256k1 = { package = "secp256k1", features = ["rand-std"], version = "0.19" }
 
 [features]
 default = ["serde", "libsecp256k1" ]
