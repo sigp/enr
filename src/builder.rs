@@ -12,6 +12,7 @@ pub struct EnrBuilder<K: EnrKey> {
     seq: u64,
 
     /// The key-value pairs for the ENR record.
+    /// Values are stored as RLP encoded bytes.
     content: BTreeMap<Key, Vec<u8>>,
 
     /// Pins the generic key types.
@@ -38,8 +39,13 @@ impl<K: EnrKey> EnrBuilder<K> {
     }
 
     /// Adds an arbitrary key-value to the `ENRBuilder`.
-    pub fn add_value(&mut self, key: impl AsRef<[u8]>, value: Vec<u8>) -> &mut Self {
-        self.content.insert(key.as_ref().to_vec(), value);
+    pub fn add_value(&mut self, key: impl AsRef<[u8]>, value: &[u8]) -> &mut Self {
+        self.add_value_rlp(key, rlp::encode(&value))
+    }
+
+    /// Adds an arbitrary key-value where the value is raw RLP encoded bytes.
+    pub fn add_value_rlp(&mut self, key: impl AsRef<[u8]>, rlp: Vec<u8>) -> &mut Self {
+        self.content.insert(key.as_ref().to_vec(), rlp);
         self
     }
 
@@ -47,10 +53,10 @@ impl<K: EnrKey> EnrBuilder<K> {
     pub fn ip(&mut self, ip: IpAddr) -> &mut Self {
         match ip {
             IpAddr::V4(addr) => {
-                self.content.insert(b"ip".to_vec(), addr.octets().to_vec());
+                self.add_value("ip", &addr.octets());
             }
             IpAddr::V6(addr) => {
-                self.content.insert(b"ip6".to_vec(), addr.octets().to_vec());
+                self.add_value("ip6", &addr.octets());
             }
         }
         self
@@ -62,36 +68,32 @@ impl<K: EnrKey> EnrBuilder<K> {
 
     /// Adds an `Id` field to the `ENRBuilder`.
     pub fn id(&mut self, id: &str) -> &mut Self {
-        self.content.insert("id".into(), id.as_bytes().to_vec());
+        self.add_value("id", &id.as_bytes());
         self
     }
     */
 
     /// Adds a `tcp` field to the `ENRBuilder`.
     pub fn tcp(&mut self, tcp: u16) -> &mut Self {
-        self.content
-            .insert("tcp".into(), tcp.to_be_bytes().to_vec());
+        self.add_value("tcp", &tcp.to_be_bytes());
         self
     }
 
     /// Adds a `tcp6` field to the `ENRBuilder`.
     pub fn tcp6(&mut self, tcp: u16) -> &mut Self {
-        self.content
-            .insert("tcp6".into(), tcp.to_be_bytes().to_vec());
+        self.add_value("tcp6", &tcp.to_be_bytes());
         self
     }
 
     /// Adds a `udp` field to the `ENRBuilder`.
     pub fn udp(&mut self, udp: u16) -> &mut Self {
-        self.content
-            .insert("udp".into(), udp.to_be_bytes().to_vec());
+        self.add_value("udp", &udp.to_be_bytes());
         self
     }
 
     /// Adds a `udp6` field to the `ENRBuilder`.
     pub fn udp6(&mut self, udp: u16) -> &mut Self {
-        self.content
-            .insert("udp6".into(), udp.to_be_bytes().to_vec());
+        self.add_value("udp6", &udp.to_be_bytes());
         self
     }
 
@@ -102,7 +104,8 @@ impl<K: EnrKey> EnrBuilder<K> {
         stream.append(&self.seq);
         for (k, v) in &self.content {
             stream.append(k);
-            stream.append(v);
+            // The values are stored as raw RLP encoded bytes
+            stream.append_raw(v, 1);
         }
         stream.drain()
     }
@@ -120,7 +123,7 @@ impl<K: EnrKey> EnrBuilder<K> {
 
     /// Adds a public key to the ENR builder.
     fn add_public_key(&mut self, key: &K::PublicKey) {
-        self.add_value(key.enr_key(), key.encode());
+        self.add_value(key.enr_key(), &key.encode());
     }
 
     /// Constructs an ENR from the `EnrBuilder`.
@@ -133,8 +136,17 @@ impl<K: EnrKey> EnrBuilder<K> {
             return Err(EnrError::UnsupportedIdentityScheme);
         }
 
-        self.content
-            .insert("id".into(), self.id.as_bytes().to_vec());
+        // Sanitize all data, ensuring all RLP data is correctly formatted.
+        for (key, value) in &self.content {
+            if rlp::Rlp::new(value).data().is_err() {
+                return Err(EnrError::InvalidRLPData(
+                    String::from_utf8_lossy(key).into(),
+                ));
+            }
+        }
+
+        let id_bytes = &self.id.as_bytes().to_vec();
+        self.add_value("id", id_bytes);
 
         self.add_public_key(&key.public());
         let rlp_content = self.rlp_content();

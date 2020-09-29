@@ -108,7 +108,7 @@
 //!
 //! enr.set_tcp(8001, &key);
 //! // set a custom key
-//! enr.insert("custom_key", vec![0,0,1], &key);
+//! enr.insert("custom_key", &vec![0,0,1], &key);
 //!
 //! // encode to base64
 //! let base_64_string = enr.to_base64();
@@ -119,7 +119,7 @@
 //! assert_eq!(decoded_enr.ip(), Some("192.168.0.1".parse().unwrap()));
 //! assert_eq!(decoded_enr.id(), Some("v4".into()));
 //! assert_eq!(decoded_enr.tcp(), Some(8001));
-//! assert_eq!(decoded_enr.get("custom_key"), Some(&vec![0,0,1]));
+//! assert_eq!(decoded_enr.get("custom_key"), Some(vec![0,0,1].as_slice()));
 //! ```
 //!
 //! ### Encoding/Decoding ENR's of various key types
@@ -218,6 +218,7 @@ pub struct Enr<K: EnrKey> {
 
     /// Key-value contents of the ENR. A BTreeMap is used to get the keys in sorted order, which is
     /// important for verifying the signature of the ENR.
+    /// Everything is stored as raw RLP bytes.
     content: BTreeMap<Key, Vec<u8>>,
 
     /// The signature of the ENR record, stored as bytes.
@@ -243,7 +244,16 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Reads a custom key from the record if it exists.
-    pub fn get(&self, key: impl AsRef<[u8]>) -> Option<&Vec<u8>> {
+    pub fn get(&self, key: impl AsRef<[u8]>) -> Option<&[u8]> {
+        self.get_raw_rlp(key).map(|rlp_data| {
+            rlp::Rlp::new(rlp_data)
+                .data()
+                .expect("All data is sanitized")
+        })
+    }
+
+    /// Reads a custom key from the record if it exists as raw RLP bytes.
+    pub fn get_raw_rlp(&self, key: impl AsRef<[u8]>) -> Option<&Vec<u8>> {
         self.content.get(key.as_ref())
     }
 
@@ -460,6 +470,19 @@ impl<K: EnrKey> Enr<K> {
     pub fn insert(
         &mut self,
         key: impl AsRef<[u8]>,
+        value: &[u8],
+        enr_key: &K,
+    ) -> Result<Option<Vec<u8>>, EnrError> {
+        self.insert_raw_rlp(key, rlp::encode(&value), enr_key)
+    }
+
+    /// Adds or modifies a key/value to the ENR record. A `EnrKey` is required to re-sign the record once
+    /// modified. The value here is interpreted as raw RLP data.
+    ///
+    /// Returns the previous value in the record if it exists.
+    pub fn insert_raw_rlp(
+        &mut self,
+        key: impl AsRef<[u8]>,
         value: Vec<u8>,
         enr_key: &K,
     ) -> Result<Option<Vec<u8>>, EnrError> {
@@ -473,7 +496,7 @@ impl<K: EnrKey> Enr<K> {
         let public_key = enr_key.public();
         let previous_key = self
             .content
-            .insert(public_key.enr_key(), public_key.encode());
+            .insert(public_key.enr_key(), rlp::encode(&public_key.encode()));
 
         // check the size of the record
         if self.size() > MAX_ENR_SIZE {
@@ -505,7 +528,7 @@ impl<K: EnrKey> Enr<K> {
         self.node_id = NodeId::from(enr_key.public());
 
         if self.size() > MAX_ENR_SIZE {
-            // incase the signature size changes, inform the user the size has exceeded the maximum
+            // in case the signature size changes, inform the user the size has exceeded the maximum
             return Err(EnrError::ExceedsMaxSize);
         }
 
@@ -516,7 +539,7 @@ impl<K: EnrKey> Enr<K> {
     pub fn set_ip(&mut self, ip: IpAddr, key: &K) -> Result<Option<IpAddr>, EnrError> {
         match ip {
             IpAddr::V4(addr) => {
-                let prev_value = self.insert("ip", addr.octets().to_vec(), key)?;
+                let prev_value = self.insert("ip", &addr.octets(), key)?;
                 if let Some(bytes) = prev_value {
                     if bytes.len() == 4 {
                         let mut v = [0_u8; 4];
@@ -526,7 +549,7 @@ impl<K: EnrKey> Enr<K> {
                 }
             }
             IpAddr::V6(addr) => {
-                let prev_value = self.insert("ip6", addr.octets().to_vec(), key)?;
+                let prev_value = self.insert("ip6", &addr.octets(), key)?;
                 if let Some(bytes) = prev_value {
                     if bytes.len() == 16 {
                         let mut v = [0_u8; 16];
@@ -542,7 +565,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets the `udp` field of the ENR. Returns any pre-existing UDP port in the record.
     pub fn set_udp(&mut self, udp: u16, key: &K) -> Result<Option<u16>, EnrError> {
-        if let Some(udp_bytes) = self.insert("udp", udp.to_be_bytes().to_vec(), key)? {
+        if let Some(udp_bytes) = self.insert("udp", &udp.to_be_bytes(), key)? {
             if udp_bytes.len() <= 2 {
                 let mut v = [0_u8; 2];
                 v[2 - udp_bytes.len()..].copy_from_slice(&udp_bytes);
@@ -554,7 +577,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets the `udp6` field of the ENR. Returns any pre-existing UDP port in the record.
     pub fn set_udp6(&mut self, udp: u16, key: &K) -> Result<Option<u16>, EnrError> {
-        if let Some(udp_bytes) = self.insert("udp6", udp.to_be_bytes().to_vec(), key)? {
+        if let Some(udp_bytes) = self.insert("udp6", &udp.to_be_bytes(), key)? {
             if udp_bytes.len() <= 2 {
                 let mut v = [0_u8; 2];
                 v[2 - udp_bytes.len()..].copy_from_slice(&udp_bytes);
@@ -566,7 +589,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets the `tcp` field of the ENR. Returns any pre-existing tcp port in the record.
     pub fn set_tcp(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, EnrError> {
-        if let Some(tcp_bytes) = self.insert("tcp", tcp.to_be_bytes().to_vec(), key)? {
+        if let Some(tcp_bytes) = self.insert("tcp", &tcp.to_be_bytes(), key)? {
             if tcp_bytes.len() <= 2 {
                 let mut v = [0_u8; 2];
                 v[2 - tcp_bytes.len()..].copy_from_slice(&tcp_bytes);
@@ -578,7 +601,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets the `tcp6` field of the ENR. Returns any pre-existing tcp6 port in the record.
     pub fn set_tcp6(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, EnrError> {
-        if let Some(tcp_bytes) = self.insert("tcp6", tcp.to_be_bytes().to_vec(), key)? {
+        if let Some(tcp_bytes) = self.insert("tcp6", &tcp.to_be_bytes(), key)? {
             if tcp_bytes.len() <= 2 {
                 let mut v = [0_u8; 2];
                 v[2 - tcp_bytes.len()..].copy_from_slice(&tcp_bytes);
@@ -608,21 +631,27 @@ impl<K: EnrKey> Enr<K> {
 
         let (prev_ip, prev_port) = match socket.ip() {
             IpAddr::V4(addr) => (
-                self.content.insert("ip".into(), addr.octets().to_vec()),
                 self.content
-                    .insert(port_string.clone(), socket.port().to_be_bytes().to_vec()),
+                    .insert("ip".into(), rlp::encode(&addr.octets().to_vec())),
+                self.content.insert(
+                    port_string.clone(),
+                    rlp::encode(&socket.port().to_be_bytes().to_vec()),
+                ),
             ),
             IpAddr::V6(addr) => (
-                self.content.insert("ip6".into(), addr.octets().to_vec()),
                 self.content
-                    .insert(port_v6_string.clone(), socket.port().to_be_bytes().to_vec()),
+                    .insert("ip6".into(), rlp::encode(&addr.octets().to_vec())),
+                self.content.insert(
+                    port_v6_string.clone(),
+                    rlp::encode(&socket.port().to_be_bytes().to_vec()),
+                ),
             ),
         };
 
         let public_key = key.public();
         let previous_key = self
             .content
-            .insert(public_key.enr_key(), public_key.encode());
+            .insert(public_key.enr_key(), rlp::encode(&public_key.encode()));
 
         // check the size and revert on failure
         if self.size() > MAX_ENR_SIZE {
@@ -680,7 +709,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets a new public key for the record.
     pub fn set_public_key(&mut self, public_key: &K::PublicKey, key: &K) -> Result<(), EnrError> {
-        self.insert(&public_key.enr_key(), public_key.encode(), key)
+        self.insert(&public_key.enr_key(), &public_key.encode(), key)
             .map(|_| {})
     }
 
@@ -692,8 +721,10 @@ impl<K: EnrKey> Enr<K> {
         stream.begin_list(self.content.len() * 2 + 1);
         stream.append(&self.seq);
         for (k, v) in &self.content {
+            // Keys are bytes
             stream.append(k);
-            stream.append(v);
+            // Values are raw RLP encoded data
+            stream.append_raw(v, 1);
         }
         stream.drain()
     }
@@ -802,8 +833,10 @@ impl<K: EnrKey> rlp::Encodable for Enr<K> {
         s.append(&self.seq);
         // must use rlp_content to preserve ordering.
         for (k, v) in &self.content {
+            // Keys are byte data
             s.append(k);
-            s.append(v);
+            // Values are raw RLP encoded data
+            s.append_raw(v, 1);
         }
     }
 }
@@ -839,7 +872,11 @@ impl<K: EnrKey> rlp::Decodable for Enr<K> {
         let mut prev: Option<Key> = None;
         for _ in 0..decoded_list.len() / 2 {
             let key = decoded_list.remove(0).data()?.to_vec();
-            let value = decoded_list.remove(0).data()?;
+            let item = decoded_list.remove(0);
+
+            // Sanitize the data
+            let _ = item.data()?;
+            let value = item.as_raw();
 
             if prev.is_some() && prev.as_ref() >= Some(&key) {
                 return Err(DecoderError::Custom("Unsorted keys"));
@@ -883,6 +920,8 @@ pub enum EnrError {
     SigningError,
     /// The identity scheme is not supported.
     UnsupportedIdentityScheme,
+    /// The entered RLP data is invalid.
+    InvalidRLPData(String),
 }
 
 pub(crate) fn digest(b: &[u8]) -> [u8; 32] {
@@ -1016,6 +1055,7 @@ mod tests {
         assert_eq!(enr.seq(), 40);
         assert_eq!(enr.signature(), &signature[..]);
         assert_eq!(enr.public_key().encode(), expected_pubkey);
+
         assert!(enr.verify());
     }
 
@@ -1177,7 +1217,9 @@ mod tests {
             builder.build(&key).unwrap()
         };
 
-        assert!(enr.insert("random", Vec::new(), &key).is_ok());
+        if let Err(e) = enr.insert("random", &Vec::new(), &key) {
+            panic!(e);
+        }
         assert!(enr.verify());
     }
 

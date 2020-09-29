@@ -35,6 +35,10 @@ impl EnrKey for secp256k1::SecretKey {
         let pubkey_bytes = content
             .get(ENR_KEY.as_bytes())
             .ok_or_else(|| DecoderError::Custom("Unknown signature"))?;
+
+        // Decode the RLP
+        let pubkey_bytes = rlp::Rlp::new(pubkey_bytes).data()?;
+
         // should be encoded in compressed form, i.e 33 byte raw secp256k1 public key
         secp256k1::PublicKey::parse_slice(
             pubkey_bytes,
@@ -48,11 +52,12 @@ impl EnrPublicKey for secp256k1::PublicKey {
     /// Verify a raw message, given a public key for the v4 identity scheme.
     fn verify_v4(&self, msg: &[u8], sig: &[u8]) -> bool {
         let msg = digest(msg);
-        secp256k1::Signature::parse_slice(sig)
-            .and_then(|sig| {
-                secp256k1::Message::parse_slice(&msg).map(|m| secp256k1::verify(&m, &sig, self))
-            })
-            .is_ok()
+        if let Ok(sig) = secp256k1::Signature::parse_slice(sig) {
+            if let Ok(msg) = secp256k1::Message::parse_slice(&msg) {
+                return secp256k1::verify(&msg, &sig, self);
+            }
+        }
+        false
     }
 
     /// Encodes the public key into compressed form, if possible.

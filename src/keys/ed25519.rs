@@ -30,6 +30,10 @@ impl EnrKey for ed25519::Keypair {
         let pubkey_bytes = content
             .get(ENR_KEY.as_bytes())
             .ok_or_else(|| DecoderError::Custom("Unknown signature"))?;
+
+        // Decode the RLP
+        let pubkey_bytes = rlp::Rlp::new(pubkey_bytes).data()?;
+
         ed25519::PublicKey::from_bytes(pubkey_bytes)
             .map_err(|_| DecoderError::Custom("Invalid ed25519 Signature"))
     }

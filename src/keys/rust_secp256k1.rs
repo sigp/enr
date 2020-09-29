@@ -31,6 +31,8 @@ impl EnrKey for c_secp256k1::SecretKey {
             .get(ENR_KEY.as_bytes())
             .ok_or_else(|| DecoderError::Custom("Unknown signature"))?;
         // should be encoded in compressed form, i.e 33 byte raw secp256k1 public key
+        // Decode the RLP
+        let pubkey_bytes = rlp::Rlp::new(pubkey_bytes).data()?;
         c_secp256k1::PublicKey::from_slice(pubkey_bytes)
             .map_err(|_| DecoderError::Custom("Invalid Secp256k1 Signature"))
     }
@@ -39,12 +41,14 @@ impl EnrKey for c_secp256k1::SecretKey {
 impl EnrPublicKey for c_secp256k1::PublicKey {
     fn verify_v4(&self, msg: &[u8], sig: &[u8]) -> bool {
         let msg = digest(msg);
-        c_secp256k1::Signature::from_compact(sig)
-            .and_then(|sig| {
-                c_secp256k1::Message::from_slice(&msg)
-                    .map(|m| c_secp256k1::Secp256k1::new().verify(&m, &sig, self))
-            })
-            .is_ok()
+        if let Ok(sig) = c_secp256k1::Signature::from_compact(sig) {
+            if let Ok(msg) = c_secp256k1::Message::from_slice(&msg) {
+                return c_secp256k1::Secp256k1::new()
+                    .verify(&msg, &sig, self)
+                    .is_ok();
+            }
+        }
+        false
     }
 
     fn encode(&self) -> Vec<u8> {
