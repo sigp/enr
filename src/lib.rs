@@ -4,7 +4,7 @@
 //! [EIP-778](https://eips.ethereum.org/EIPS/eip-778) extended to allow for the use of ed25519 keys.
 //!
 //! An ENR is a signed, key-value record which has an associated [`NodeId`] (a 32-byte identifier).
-//! Updating/modifying an ENR requires an [`EnrKey`] in order to re-sign the record with the
+//! Updating/modifying an ENR requires an [`EnrKey`] in order to re-sign the recrd with the
 //! associated key-pair.
 //!
 //! ENR's are identified by their sequence number. When updating an ENR, the sequence number is
@@ -18,7 +18,7 @@
 //! User's wishing to implement their own singing algorithms simply need to
 //! implement the [`EnrKey`] trait and apply it to an [`Enr`].
 //!
-//! By default, `libsecp256k1::SecretKey` implement [`EnrKey`] and can be used to sign and
+//! By default, `libsecp256::SecretKey` implement [`EnrKey`] and can be used to sign and
 //! verify ENR records. This library also implements [`EnrKey`] for `ed25519_dalek::Keypair` via the `ed25519`
 //! feature flag.
 //!
@@ -33,6 +33,7 @@
 //! - `serde`: Allows for serde serialization and deserialization for ENRs.
 //! - `ed25519`: Provides support for `ed25519_dalek` keypair types.
 //! - `rust-secp256k1`: Uses `c-secp256k1` for secp256k1 keys.
+//! - `libsecp256`: Uses `libsecp256` for secp256k1 keys.
 //!
 //! These can be enabled via adding the feature flag in your `Cargo.toml`
 //!
@@ -44,16 +45,16 @@
 //!
 //! To build an ENR, an [`EnrBuilder`] is provided.
 //!
-//! ### Building an ENR with the default `secp256k1` key type
+//! ### Building an ENR with the default `k256` `secp256k1` key type
 //!
 //! ```rust
-//! use enr::{EnrBuilder, secp256k1};
+//! use enr::{EnrBuilder, k256};
 //! use std::net::Ipv4Addr;
 //! use rand::thread_rng;
 //!
 //! // generate a random secp256k1 key
 //! let mut rng = thread_rng();
-//! let key = secp256k1::SecretKey::random(&mut rng);
+//! let key = k256::ecdsa::SigningKey::random(&mut rng);
 //!
 //! let ip = Ipv4Addr::new(192,168,0,1);
 //! let enr = EnrBuilder::new("v4").ip(ip.into()).tcp(8000).build(&key).unwrap();
@@ -92,16 +93,16 @@
 //! can be added using [`insert`] and retrieved with [`get`].
 //!
 //! ```rust
-//! use enr::{EnrBuilder, secp256k1::SecretKey, Enr};
+//! use enr::{EnrBuilder, k256::ecdsa::SigningKey, Enr};
 //! use std::net::Ipv4Addr;
 //! use rand::thread_rng;
 //!
 //! // specify the type of ENR
-//! type DefaultEnr = Enr<secp256k1::SecretKey>;
+//! type DefaultEnr = Enr<SigningKey>;
 //!
 //! // generate a random secp256k1 key
 //! let mut rng = thread_rng();
-//! let key = SecretKey::random(&mut rng);
+//! let key = SigningKey::random(&mut rng);
 //!
 //! let ip = Ipv4Addr::new(192,168,0,1);
 //! let mut enr = EnrBuilder::new("v4").ip(ip.into()).tcp(8000).build(&key).unwrap();
@@ -191,10 +192,13 @@ pub use builder::EnrBuilder;
 
 #[cfg(feature = "rust-secp256k1")]
 pub use keys::c_secp256k1;
-#[cfg(feature = "libsecp256k1")]
+#[cfg(feature = "k256")]
+pub use keys::k256;
+#[cfg(feature = "libsecp256")]
 pub use keys::secp256k1;
-#[cfg(feature = "ed25519")]
+#[cfg(all(feature = "ed25519", feature = "k256"))]
 pub use keys::{ed25519_dalek, CombinedKey, CombinedPublicKey};
+
 pub use keys::{EnrKey, EnrPublicKey};
 pub use node_id::NodeId;
 use std::marker::PhantomData;
@@ -205,7 +209,7 @@ type Key = Vec<u8>;
 const MAX_ENR_SIZE: usize = 300;
 
 /// The ENR, allowing for arbitrary signing algorithms. The default signing algorithm is
-/// `secp256k1` using the `libsecp256k1` library.
+/// `secp256k1` using the `libsecp256` library.
 ///
 /// This struct will always have a valid signature, known public key type, sequence number and `NodeId`. All other parameters are variable/optional.
 #[derive(Eq)]
@@ -931,23 +935,23 @@ pub(crate) fn digest(b: &[u8]) -> [u8; 32] {
 }
 
 #[cfg(test)]
-#[cfg(feature = "libsecp256k1")]
+#[cfg(feature = "k256")]
 mod tests {
     use super::*;
     use std::net::Ipv4Addr;
 
-    type DefaultEnr = Enr<secp256k1::SecretKey>;
+    type DefaultEnr = Enr<k256::ecdsa::SigningKey>;
 
     #[cfg(feature = "libsecp256k1")]
     #[test]
-    fn test_vector() {
+    fn test_vector_libsecp256k1() {
         let valid_record = hex::decode("f884b8407098ad865b00a582051940cb9cf36836572411a47278783077011599ed5cd16b76f2635f4e234738f30813a89eb9137e3e3df5266e3a1f11df72ecf1145ccb9c01826964827634826970847f00000189736563703235366b31a103ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd31388375647082765f").unwrap();
         let signature = hex::decode("7098ad865b00a582051940cb9cf36836572411a47278783077011599ed5cd16b76f2635f4e234738f30813a89eb9137e3e3df5266e3a1f11df72ecf1145ccb9c").unwrap();
         let expected_pubkey =
             hex::decode("03ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd3138")
                 .unwrap();
 
-        let enr = rlp::decode::<DefaultEnr>(&valid_record).unwrap();
+        let enr = rlp::decode::<Enr<secp256k1::SecretKey>>(&valid_record).unwrap();
 
         let pubkey = enr.public_key().encode();
 
@@ -969,7 +973,7 @@ mod tests {
             hex::decode("03ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd3138")
                 .unwrap();
 
-        let enr = rlp::decode::<Enr<k256_crate::ecdsa::SigningKey>>(&valid_record).unwrap();
+        let enr = rlp::decode::<DefaultEnr>(&valid_record).unwrap();
 
         let pubkey = enr.public_key().encode();
 
@@ -982,7 +986,7 @@ mod tests {
         assert!(enr.verify());
     }
 
-    #[cfg(feature = "libsecp256k1")]
+    #[cfg(feature = "k256")]
     #[test]
     fn test_vector_2() {
         let text = "enr:-IS4QHCYrYZbAKWCBRlAy5zzaDZXJBGkcnh4MHcBFZntXNFrdvJjX04jRzjzCBOonrkTfj499SZuOh8R33Ls8RRcy5wBgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQPKY0yuDUmstAHYpMa2_oxVtw0RW_QAdpzBQA8yWM0xOIN1ZHCCdl8";
@@ -1022,7 +1026,7 @@ mod tests {
             hex::decode("a448f24c6d18e575453db13171562b71999873db5b286df957af199ec94617f7")
                 .unwrap();
 
-        let enr = text.parse::<Enr<k256_crate::ecdsa::SigningKey>>().unwrap();
+        let enr = text.parse::<Enr<k256::ecdsa::SigningKey>>().unwrap();
         let pubkey = enr.public_key().encode();
         assert_eq!(enr.ip(), Some(Ipv4Addr::new(127, 0, 0, 1)));
         assert_eq!(enr.ip6(), None);
@@ -1059,21 +1063,21 @@ mod tests {
         assert!(enr.verify());
     }
 
-    #[cfg(feature = "libsecp256k1")]
+    #[cfg(feature = "k256")]
     #[test]
     fn test_read_enr_no_prefix() {
         let text = "-Iu4QM-YJF2RRpMcZkFiWzMf2kRd1A5F1GIekPa4Sfi_v0DCLTDBfOMTMMWJhhawr1YLUPb5008CpnBKrgjY3sstjfgCgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQP8u1uyQFyJYuQUTyA1raXKhSw1HhhxNUQ2VE52LNHWMIN0Y3CCIyiDdWRwgiMo";
         text.parse::<DefaultEnr>().unwrap();
     }
 
-    #[cfg(feature = "libsecp256k1")]
+    #[cfg(feature = "k256")]
     #[test]
     fn test_read_enr_prefix() {
         let text = "enr:-Iu4QM-YJF2RRpMcZkFiWzMf2kRd1A5F1GIekPa4Sfi_v0DCLTDBfOMTMMWJhhawr1YLUPb5008CpnBKrgjY3sstjfgCgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQP8u1uyQFyJYuQUTyA1raXKhSw1HhhxNUQ2VE52LNHWMIN0Y3CCIyiDdWRwgiMo";
         text.parse::<DefaultEnr>().unwrap();
     }
 
-    #[cfg(feature = "libsecp256k1")]
+    #[cfg(feature = "libsecp256")]
     #[test]
     fn test_encode_test_vector_2() {
         let key = secp256k1::SecretKey::parse_slice(
@@ -1097,7 +1101,7 @@ mod tests {
         assert_eq!(enr.signature(), &signature[..]);
     }
 
-    #[cfg(feature = "libsecp256k1")]
+    #[cfg(feature = "libsecp256")]
     #[test]
     fn test_encode_decode_secp256k1() {
         let mut rng = rand::thread_rng();
@@ -1154,7 +1158,7 @@ mod tests {
     #[cfg(feature = "k256")]
     #[test]
     fn test_encode_decode_k256() {
-        let key = k256_crate::ecdsa::SigningKey::random(&mut rand::rngs::OsRng);
+        let key = k256::ecdsa::SigningKey::random(&mut rand::rngs::OsRng);
         let ip = Ipv4Addr::new(127, 0, 0, 1);
         let tcp = 3000;
 
@@ -1167,7 +1171,7 @@ mod tests {
 
         let encoded_enr = rlp::encode(&enr);
 
-        let decoded_enr = rlp::decode::<Enr<c_secp256k1::SecretKey>>(&encoded_enr).unwrap();
+        let decoded_enr = rlp::decode::<Enr<k256::ecdsa::SigningKey>>(&encoded_enr).unwrap();
 
         assert_eq!(decoded_enr.id(), Some("v4".into()));
         assert_eq!(decoded_enr.ip(), Some(ip));
@@ -1178,7 +1182,7 @@ mod tests {
         assert!(decoded_enr.verify());
     }
 
-    #[cfg(feature = "ed25519")]
+    #[cfg(all(feature = "ed25519", feature = "k256"))]
     #[test]
     fn test_encode_decode_ed25519() {
         let mut rng = rand::thread_rng();
@@ -1206,7 +1210,7 @@ mod tests {
     #[test]
     fn test_add_key() {
         let mut rng = rand::thread_rng();
-        let key = secp256k1::SecretKey::random(&mut rng);
+        let key = k256::ecdsa::SigningKey::random(&mut rng);
         let ip = Ipv4Addr::new(10, 0, 0, 1);
         let tcp = 30303;
 
@@ -1226,7 +1230,7 @@ mod tests {
     #[test]
     fn test_set_ip() {
         let mut rng = rand::thread_rng();
-        let key = secp256k1::SecretKey::random(&mut rng);
+        let key = k256::ecdsa::SigningKey::random(&mut rng);
         let tcp = 30303;
         let ip = Ipv4Addr::new(10, 0, 0, 1);
 
@@ -1249,7 +1253,7 @@ mod tests {
     #[test]
     fn ip_mutation_static_node_id() {
         let mut rng = rand::thread_rng();
-        let key = secp256k1::SecretKey::random(&mut rng);
+        let key = k256::ecdsa::SigningKey::random(&mut rng);
         let tcp = 30303;
         let udp = 30304;
         let ip = Ipv4Addr::new(10, 0, 0, 1);
@@ -1273,12 +1277,12 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "ed25519")]
+    #[cfg(all(feature = "ed25519", feature = "k256"))]
     #[test]
     fn combined_key_can_decode_all() {
         // generate a random secp256k1 key
         let mut rng = rand::thread_rng();
-        let key = secp256k1::SecretKey::random(&mut rng);
+        let key = k256::ecdsa::SigningKey::random(&mut rng);
         let ip = Ipv4Addr::new(192, 168, 0, 1);
         let enr_secp256k1 = EnrBuilder::new("v4")
             .ip(ip.into())

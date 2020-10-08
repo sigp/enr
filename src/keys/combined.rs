@@ -4,9 +4,9 @@
 //! Currently only `secp256k1` and `ed25519` key types are supported.
 
 use super::{ed25519_dalek as ed25519, EnrKey, EnrPublicKey, SigningError};
+pub use k256;
 use rand::RngCore;
 use rlp::DecoderError;
-pub use secp256k1;
 use std::collections::BTreeMap;
 use zeroize::Zeroize;
 
@@ -16,13 +16,13 @@ use crate::Key;
 /// supported in-built signing schemes.
 pub enum CombinedKey {
     /// An `secp256k1` keypair.
-    Secp256k1(secp256k1::SecretKey),
+    Secp256k1(k256::ecdsa::SigningKey),
     /// An `Ed25519` keypair.
     Ed25519(ed25519::Keypair),
 }
 
-impl From<secp256k1::SecretKey> for CombinedKey {
-    fn from(secret_key: secp256k1::SecretKey) -> Self {
+impl From<k256::ecdsa::SigningKey> for CombinedKey {
+    fn from(secret_key: k256::ecdsa::SigningKey) -> Self {
         Self::Secp256k1(secret_key)
     }
 }
@@ -67,7 +67,7 @@ impl EnrKey for CombinedKey {
 
     /// Decodes the raw bytes of an ENR's content into a public key if possible.
     fn enr_to_public(content: &BTreeMap<Key, Vec<u8>>) -> Result<Self::PublicKey, DecoderError> {
-        secp256k1::SecretKey::enr_to_public(content)
+        k256::ecdsa::SigningKey::enr_to_public(content)
             .map(CombinedPublicKey::Secp256k1)
             .or_else(|_| ed25519::Keypair::enr_to_public(content).map(CombinedPublicKey::from))
     }
@@ -77,17 +77,8 @@ impl CombinedKey {
     /// Generates a new secp256k1 key.
     #[must_use]
     pub fn generate_secp256k1() -> Self {
-        let mut r = rand::thread_rng();
-        let mut b = [0; secp256k1::util::SECRET_KEY_SIZE];
-        // This is how it is done in `secp256k1::SecretKey::random` which
-        // we do not use here because it uses `rand::Rng` from rand-0.4.
-        loop {
-            r.fill_bytes(&mut b);
-            if let Ok(k) = secp256k1::SecretKey::parse(&b) {
-                b.zeroize();
-                return Self::Secp256k1(k);
-            }
-        }
+        let key = k256::ecdsa::SigningKey::random(rand::thread_rng());
+        Self::Secp256k1(key)
     }
 
     /// Generates a new ed25510 key.
@@ -105,7 +96,7 @@ impl CombinedKey {
 
     /// Imports a secp256k1 from raw bytes in any format.
     pub fn secp256k1_from_bytes(bytes: &mut [u8]) -> Result<Self, DecoderError> {
-        let key = secp256k1::SecretKey::parse_slice(bytes)
+        let key = k256::ecdsa::SigningKey::new(bytes)
             .map_err(|_| DecoderError::Custom("Invalid secp256k1 secret key"))
             .map(Self::from)?;
         bytes.zeroize();
@@ -125,7 +116,7 @@ impl CombinedKey {
     #[must_use]
     pub fn encode(&self) -> Vec<u8> {
         match self {
-            Self::Secp256k1(key) => key.serialize().to_vec(),
+            Self::Secp256k1(key) => key.to_bytes().to_vec(),
             Self::Ed25519(key) => key.secret.as_bytes().to_vec(),
         }
     }
@@ -136,13 +127,13 @@ impl CombinedKey {
 #[derive(Clone, Debug, PartialEq)]
 pub enum CombinedPublicKey {
     /// An `Secp256k1` public key.
-    Secp256k1(secp256k1::PublicKey),
+    Secp256k1(k256::ecdsa::VerifyKey),
     /// An `Ed25519` public key.
     Ed25519(ed25519::PublicKey),
 }
 
-impl From<secp256k1::PublicKey> for CombinedPublicKey {
-    fn from(public_key: secp256k1::PublicKey) -> Self {
+impl From<k256::ecdsa::VerifyKey> for CombinedPublicKey {
+    fn from(public_key: k256::ecdsa::VerifyKey) -> Self {
         Self::Secp256k1(public_key)
     }
 }

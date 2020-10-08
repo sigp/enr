@@ -24,7 +24,7 @@ rlp = "0.4.5"
 zeroize = "1.1.0"
 libsecp256k1 = { version = "0.3.5", optional = true }
 sha3 = "0.9"
-k256-crate = { package = "k256", version = "0.5", features = ["ecdsa"], optional = true }
+k256 = { version = "0.5", features = ["ecdsa", "zeroize"], optional = true }
 serde = { version = "1.0.110", optional = true }
 ed25519-dalek = { version = "1.0.0-pre.4", optional = true }
 c-secp256k1 = { package = "secp256k1", version = "0.19", optional = true }
@@ -33,10 +33,10 @@ c-secp256k1 = { package = "secp256k1", version = "0.19", optional = true }
 c-secp256k1 = { package = "secp256k1", features = ["rand-std"], version = "0.19" }
 
 [features]
-default = ["serde", "libsecp256k1" ]
+default = ["serde", "k256" ]
 ed25519 = ["ed25519-dalek"]
 rust-secp256k1 = ["c-secp256k1"]
-k256 = ["k256-crate"]
+libsecp256 = ["libsecp256k1"]
 
 [lib]
 name = "enr"

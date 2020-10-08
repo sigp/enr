@@ -2,7 +2,7 @@
 
 use super::{EnrKey, EnrPublicKey, SigningError};
 use crate::Key;
-use k256_crate::{
+use k256::{
     ecdsa::{
         signature::{DigestVerifier, RandomizedDigestSigner, Signature as _},
         Signature, SigningKey, VerifyKey,
@@ -50,7 +50,7 @@ impl EnrKey for SigningKey {
 
 impl EnrPublicKey for VerifyKey {
     fn verify_v4(&self, msg: &[u8], sig: &[u8]) -> bool {
-        if let Ok(sig) = k256_crate::ecdsa::Signature::try_from(sig) {
+        if let Ok(sig) = k256::ecdsa::Signature::try_from(sig) {
             return self
                 .verify_digest(Keccak256::new().chain(msg), &sig)
                 .is_ok();

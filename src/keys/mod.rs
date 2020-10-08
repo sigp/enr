@@ -8,24 +8,26 @@
 //! [`EnrPublicKey`]: crate::EnrPublicKey
 //! [`Enr`]: crate::enr::Enr
 
-#[cfg(feature = "ed25519")]
+#[cfg(all(feature = "ed25519", feature = "k256"))]
 mod combined;
 #[cfg(feature = "ed25519")]
 mod ed25519;
-#[cfg(feature = "k256")]
-mod k256;
-#[cfg(any(feature = "libsecp256k1", doc))]
+#[cfg(any(feature = "k256", doc))]
+mod k256_key;
+#[cfg(feature = "libsecp256k1")]
 mod libsecp256k1;
 #[cfg(feature = "rust-secp256k1")]
 mod rust_secp256k1;
 
 #[cfg(feature = "rust-secp256k1")]
 pub use c_secp256k1;
-#[cfg(feature = "ed25519")]
+#[cfg(all(feature = "ed25519", feature = "k256"))]
 pub use combined::{CombinedKey, CombinedPublicKey};
 #[cfg(feature = "ed25519")]
 pub use ed25519_dalek;
-#[cfg(any(feature = "libsecp256k1", doc))]
+#[cfg(any(feature = "k256", doc))]
+pub use k256;
+#[cfg(feature = "libsecp256k1")]
 pub use secp256k1;
 
 use crate::Key;
