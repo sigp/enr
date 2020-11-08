@@ -1,5 +1,6 @@
 use super::{EnrKey, EnrKeyUnambiguous, EnrPublicKey, SigningError};
 use crate::{digest, Key};
+use c_secp256k1::SECP256K1;
 use rlp::DecoderError;
 use std::collections::BTreeMap;
 
@@ -15,14 +16,11 @@ impl EnrKey for c_secp256k1::SecretKey {
         let m = c_secp256k1::Message::from_slice(&hash)
             .map_err(|_| SigningError::new("failed to parse secp256k1 digest"))?;
         // serialize to an uncompressed 64 byte vector
-        Ok(c_secp256k1::Secp256k1::new()
-            .sign(&m, self)
-            .serialize_compact()
-            .to_vec())
+        Ok(SECP256K1.sign(&m, self).serialize_compact().to_vec())
     }
 
     fn public(&self) -> Self::PublicKey {
-        Self::PublicKey::from_secret_key(&c_secp256k1::Secp256k1::new(), self)
+        Self::PublicKey::from_secret_key(SECP256K1, self)
     }
 
     fn enr_to_public(content: &BTreeMap<Key, Vec<u8>>) -> Result<Self::PublicKey, DecoderError> {
@@ -49,9 +47,7 @@ impl EnrPublicKey for c_secp256k1::PublicKey {
         let msg = digest(msg);
         if let Ok(sig) = c_secp256k1::Signature::from_compact(sig) {
             if let Ok(msg) = c_secp256k1::Message::from_slice(&msg) {
-                return c_secp256k1::Secp256k1::new()
-                    .verify(&msg, &sig, self)
-                    .is_ok();
+                return SECP256K1.verify(&msg, &sig, self).is_ok();
             }
         }
         false
