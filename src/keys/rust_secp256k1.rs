@@ -1,6 +1,5 @@
-use super::{EnrKey, EnrPublicKey, SigningError};
-use crate::digest;
-use crate::Key;
+use super::{EnrKey, EnrKeyUnambiguous, EnrPublicKey, SigningError};
+use crate::{digest, Key};
 use rlp::DecoderError;
 use std::collections::BTreeMap;
 
@@ -30,10 +29,17 @@ impl EnrKey for c_secp256k1::SecretKey {
         let pubkey_bytes = content
             .get(ENR_KEY.as_bytes())
             .ok_or_else(|| DecoderError::Custom("Unknown signature"))?;
-        // should be encoded in compressed form, i.e 33 byte raw secp256k1 public key
         // Decode the RLP
         let pubkey_bytes = rlp::Rlp::new(pubkey_bytes).data()?;
-        c_secp256k1::PublicKey::from_slice(pubkey_bytes)
+
+        Self::decode_public(pubkey_bytes)
+    }
+}
+
+impl EnrKeyUnambiguous for c_secp256k1::SecretKey {
+    fn decode_public(bytes: &[u8]) -> Result<Self::PublicKey, DecoderError> {
+        // should be encoded in compressed form, i.e 33 byte raw secp256k1 public key
+        c_secp256k1::PublicKey::from_slice(bytes)
             .map_err(|_| DecoderError::Custom("Invalid Secp256k1 Signature"))
     }
 }

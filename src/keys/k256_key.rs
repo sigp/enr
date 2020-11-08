@@ -1,6 +1,6 @@
 //! An implementation for `EnrKey` for `k256::ecdsa::SigningKey`
 
-use super::{EnrKey, EnrPublicKey, SigningError};
+use super::{EnrKey, EnrKeyUnambiguous, EnrPublicKey, SigningError};
 use crate::Key;
 use k256::{
     ecdsa::{
@@ -42,8 +42,14 @@ impl EnrKey for SigningKey {
         // Decode the RLP
         let pubkey_bytes = rlp::Rlp::new(pubkey_bytes).data()?;
 
+        Self::decode_public(pubkey_bytes)
+    }
+}
+
+impl EnrKeyUnambiguous for SigningKey {
+    fn decode_public(bytes: &[u8]) -> Result<Self::PublicKey, DecoderError> {
         // should be encoded in compressed form, i.e 33 byte raw secp256k1 public key
-        Ok(VerifyKey::new(pubkey_bytes)
+        Ok(VerifyKey::new(bytes)
             .map_err(|_| DecoderError::Custom("Invalid Secp256k1 Signature"))?)
     }
 }

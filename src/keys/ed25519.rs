@@ -1,6 +1,6 @@
 use super::{
     ed25519_dalek::{self as ed25519, Signer as _, Verifier as _},
-    EnrKey, EnrPublicKey, SigningError,
+    EnrKey, EnrKeyUnambiguous, EnrPublicKey, SigningError,
 };
 use crate::Key;
 use rlp::DecoderError;
@@ -34,7 +34,13 @@ impl EnrKey for ed25519::Keypair {
         // Decode the RLP
         let pubkey_bytes = rlp::Rlp::new(pubkey_bytes).data()?;
 
-        ed25519::PublicKey::from_bytes(pubkey_bytes)
+        Self::decode_public(pubkey_bytes)
+    }
+}
+
+impl EnrKeyUnambiguous for ed25519::Keypair {
+    fn decode_public(bytes: &[u8]) -> Result<Self::PublicKey, DecoderError> {
+        ed25519::PublicKey::from_bytes(bytes)
             .map_err(|_| DecoderError::Custom("Invalid ed25519 Signature"))
     }
 }
