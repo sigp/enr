@@ -65,15 +65,18 @@ pub trait EnrKeyUnambiguous: EnrKey {
 
 /// The trait required for a `PublicKey` to verify an ENR record.
 pub trait EnrPublicKey: Clone + Debug + Send + Sync + Unpin + 'static {
+    type Raw: AsRef<[u8]>;
+    type RawUncompressed: AsRef<[u8]>;
+
     /// Verify an ENR signature for the `v4` identity scheme.
     fn verify_v4(&self, msg: &[u8], sig: &[u8]) -> bool;
 
     /// Encodes the public key to bytes in compressed form, if possible.
-    fn encode(&self) -> Vec<u8>;
+    fn encode(&self) -> Self::Raw;
 
     /// Encodes the public key in uncompressed form.
     // For compatible keys, encode in uncompressed form. Necessary for generating the node-id
-    fn encode_uncompressed(&self) -> Vec<u8>;
+    fn encode_uncompressed(&self) -> Self::RawUncompressed;
 
     /// Returns the ENR key identifier for the public key type. For `secp256k1` keys this
     /// is `secp256k1`.

@@ -26,7 +26,7 @@ impl EnrKey for c_secp256k1::SecretKey {
     fn enr_to_public(content: &BTreeMap<Key, Vec<u8>>) -> Result<Self::PublicKey, DecoderError> {
         let pubkey_bytes = content
             .get(ENR_KEY.as_bytes())
-            .ok_or_else(|| DecoderError::Custom("Unknown signature"))?;
+            .ok_or(DecoderError::Custom("Unknown signature"))?;
         // Decode the RLP
         let pubkey_bytes = rlp::Rlp::new(pubkey_bytes).data()?;
 
@@ -43,6 +43,9 @@ impl EnrKeyUnambiguous for c_secp256k1::SecretKey {
 }
 
 impl EnrPublicKey for c_secp256k1::PublicKey {
+    type Raw = [u8; c_secp256k1::constants::PUBLIC_KEY_SIZE];
+    type RawUncompressed = [u8; c_secp256k1::constants::UNCOMPRESSED_PUBLIC_KEY_SIZE - 1];
+
     fn verify_v4(&self, msg: &[u8], sig: &[u8]) -> bool {
         let msg = digest(msg);
         if let Ok(sig) = c_secp256k1::Signature::from_compact(sig) {
@@ -53,12 +56,14 @@ impl EnrPublicKey for c_secp256k1::PublicKey {
         false
     }
 
-    fn encode(&self) -> Vec<u8> {
-        self.serialize().to_vec()
+    fn encode(&self) -> Self::Raw {
+        self.serialize()
     }
 
-    fn encode_uncompressed(&self) -> Vec<u8> {
-        self.serialize_uncompressed()[1..].to_vec()
+    fn encode_uncompressed(&self) -> Self::RawUncompressed {
+        let mut out = [0_u8; c_secp256k1::constants::UNCOMPRESSED_PUBLIC_KEY_SIZE - 1];
+        out.copy_from_slice(&self.serialize_uncompressed()[1..]);
+        out
     }
 
     fn enr_key(&self) -> Key {

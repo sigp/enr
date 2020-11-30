@@ -47,8 +47,8 @@ impl NodeId {
 
 impl<T: EnrPublicKey> From<T> for NodeId {
     fn from(public_key: T) -> Self {
-        let pubkey_bytes = public_key.encode_uncompressed();
-        Self::parse(&digest(&pubkey_bytes)).expect("always of correct length; qed")
+        Self::parse(&digest(public_key.encode_uncompressed().as_ref()))
+            .expect("always of correct length; qed")
     }
 }
 

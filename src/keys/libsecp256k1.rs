@@ -33,7 +33,7 @@ impl EnrKey for secp256k1::SecretKey {
     fn enr_to_public(content: &BTreeMap<Key, Vec<u8>>) -> Result<Self::PublicKey, DecoderError> {
         let pubkey_bytes = content
             .get(ENR_KEY.as_bytes())
-            .ok_or_else(|| DecoderError::Custom("Unknown signature"))?;
+            .ok_or(DecoderError::Custom("Unknown signature"))?;
 
         // Decode the RLP
         let pubkey_bytes = rlp::Rlp::new(pubkey_bytes).data()?;
@@ -51,6 +51,9 @@ impl EnrKeyUnambiguous for secp256k1::SecretKey {
 }
 
 impl EnrPublicKey for secp256k1::PublicKey {
+    type Raw = [u8; secp256k1::util::COMPRESSED_PUBLIC_KEY_SIZE];
+    type RawUncompressed = Vec<u8>;
+
     /// Verify a raw message, given a public key for the v4 identity scheme.
     fn verify_v4(&self, msg: &[u8], sig: &[u8]) -> bool {
         let msg = digest(msg);
@@ -63,14 +66,14 @@ impl EnrPublicKey for secp256k1::PublicKey {
     }
 
     /// Encodes the public key into compressed form, if possible.
-    fn encode(&self) -> Vec<u8> {
+    fn encode(&self) -> Self::Raw {
         // serialize in compressed form: 33 bytes
-        self.serialize_compressed().to_vec()
+        self.serialize_compressed()
     }
 
     /// Encodes the public key in uncompressed form.
     // For compatible keys, encode in uncompressed form. Necessary for generating node-id
-    fn encode_uncompressed(&self) -> Vec<u8> {
+    fn encode_uncompressed(&self) -> Self::RawUncompressed {
         // Note: The current libsecp256k1 library prefixes the uncompressed output with a byte
         // indicating the type of output. We ignore it here
         self.serialize()[1..].to_vec()

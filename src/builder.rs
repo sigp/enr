@@ -1,5 +1,4 @@
-use crate::Key;
-use crate::{Enr, EnrError, EnrKey, EnrPublicKey, NodeId, MAX_ENR_SIZE};
+use crate::{Enr, EnrError, EnrKey, EnrPublicKey, Key, NodeId, MAX_ENR_SIZE};
 use rlp::RlpStream;
 use std::{collections::BTreeMap, marker::PhantomData, net::IpAddr};
 
@@ -123,7 +122,7 @@ impl<K: EnrKey> EnrBuilder<K> {
 
     /// Adds a public key to the ENR builder.
     fn add_public_key(&mut self, key: &K::PublicKey) {
-        self.add_value(key.enr_key(), &key.encode());
+        self.add_value(key.enr_key(), key.encode().as_ref());
     }
 
     /// Constructs an ENR from the `EnrBuilder`.
@@ -145,8 +144,7 @@ impl<K: EnrKey> EnrBuilder<K> {
             }
         }
 
-        let id_bytes = &self.id.as_bytes().to_vec();
-        self.add_value("id", id_bytes);
+        self.add_value_rlp("id", rlp::encode(&self.id.as_bytes()));
 
         self.add_public_key(&key.public());
         let rlp_content = self.rlp_content();

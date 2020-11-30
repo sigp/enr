@@ -145,6 +145,9 @@ impl From<ed25519::PublicKey> for CombinedPublicKey {
 }
 
 impl EnrPublicKey for CombinedPublicKey {
+    type Raw = Vec<u8>;
+    type RawUncompressed = Vec<u8>;
+
     /// Verify a raw message, given a public key for the v4 identity scheme.
     fn verify_v4(&self, msg: &[u8], sig: &[u8]) -> bool {
         match self {
@@ -157,16 +160,16 @@ impl EnrPublicKey for CombinedPublicKey {
     fn encode(&self) -> Vec<u8> {
         match self {
             // serialize in compressed form: 33 bytes
-            Self::Secp256k1(pk) => pk.encode(),
-            Self::Ed25519(pk) => pk.encode(),
+            Self::Secp256k1(pk) => pk.encode().to_vec(),
+            Self::Ed25519(pk) => pk.encode().to_vec(),
         }
     }
 
     /// Encodes the public key in uncompressed form.
     fn encode_uncompressed(&self) -> Vec<u8> {
         match self {
-            Self::Secp256k1(pk) => pk.encode_uncompressed(),
-            Self::Ed25519(pk) => pk.encode_uncompressed(),
+            Self::Secp256k1(pk) => pk.encode_uncompressed().to_vec(),
+            Self::Ed25519(pk) => pk.encode_uncompressed().to_vec(),
         }
     }
 

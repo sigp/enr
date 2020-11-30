@@ -29,7 +29,7 @@ impl EnrKey for ed25519::Keypair {
     fn enr_to_public(content: &BTreeMap<Key, Vec<u8>>) -> Result<Self::PublicKey, DecoderError> {
         let pubkey_bytes = content
             .get(ENR_KEY.as_bytes())
-            .ok_or_else(|| DecoderError::Custom("Unknown signature"))?;
+            .ok_or(DecoderError::Custom("Unknown signature"))?;
 
         // Decode the RLP
         let pubkey_bytes = rlp::Rlp::new(pubkey_bytes).data()?;
@@ -46,6 +46,9 @@ impl EnrKeyUnambiguous for ed25519::Keypair {
 }
 
 impl EnrPublicKey for ed25519::PublicKey {
+    type Raw = [u8; ed25519::PUBLIC_KEY_LENGTH];
+    type RawUncompressed = [u8; ed25519::PUBLIC_KEY_LENGTH];
+
     /// Verify a raw message, given a public key for the v4 identity scheme.
     fn verify_v4(&self, msg: &[u8], sig: &[u8]) -> bool {
         ed25519::Signature::try_from(sig)
@@ -54,13 +57,13 @@ impl EnrPublicKey for ed25519::PublicKey {
     }
 
     /// Encodes the public key into compressed form, if possible.
-    fn encode(&self) -> Vec<u8> {
-        self.to_bytes().to_vec()
+    fn encode(&self) -> Self::Raw {
+        self.to_bytes()
     }
 
     /// Encodes the public key in uncompressed form. This is the same as the compressed form for
     /// ed25519 keys
-    fn encode_uncompressed(&self) -> Vec<u8> {
+    fn encode_uncompressed(&self) -> Self::RawUncompressed {
         self.encode()
     }
 

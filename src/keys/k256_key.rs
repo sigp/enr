@@ -7,7 +7,8 @@ use k256::{
         signature::{DigestVerifier, RandomizedDigestSigner, Signature as _},
         Signature, SigningKey, VerifyKey,
     },
-    EncodedPoint,
+    elliptic_curve::{generic_array::GenericArray, sec1::UntaggedPointSize},
+    CompressedPoint, EncodedPoint, Secp256k1,
 };
 use rand::rngs::OsRng;
 use rlp::DecoderError;
@@ -37,7 +38,7 @@ impl EnrKey for SigningKey {
     fn enr_to_public(content: &BTreeMap<Key, Vec<u8>>) -> Result<Self::PublicKey, DecoderError> {
         let pubkey_bytes = content
             .get(ENR_KEY.as_bytes())
-            .ok_or_else(|| DecoderError::Custom("Unknown signature"))?;
+            .ok_or(DecoderError::Custom("Unknown signature"))?;
 
         // Decode the RLP
         let pubkey_bytes = rlp::Rlp::new(pubkey_bytes).data()?;
@@ -55,6 +56,9 @@ impl EnrKeyUnambiguous for SigningKey {
 }
 
 impl EnrPublicKey for VerifyKey {
+    type Raw = CompressedPoint;
+    type RawUncompressed = GenericArray<u8, UntaggedPointSize<Secp256k1>>;
+
     fn verify_v4(&self, msg: &[u8], sig: &[u8]) -> bool {
         if let Ok(sig) = k256::ecdsa::Signature::try_from(sig) {
             return self
@@ -64,16 +68,13 @@ impl EnrPublicKey for VerifyKey {
         false
     }
 
-    fn encode(&self) -> Vec<u8> {
+    fn encode(&self) -> Self::Raw {
         // serialize in compressed form: 33 bytes
-        self.to_bytes().to_vec()
+        self.to_bytes()
     }
 
-    fn encode_uncompressed(&self) -> Vec<u8> {
-        EncodedPoint::from(self)
-            .to_untagged_bytes()
-            .unwrap()
-            .to_vec()
+    fn encode_uncompressed(&self) -> Self::RawUncompressed {
+        EncodedPoint::from(self).to_untagged_bytes().unwrap()
     }
 
     fn enr_key(&self) -> Key {
