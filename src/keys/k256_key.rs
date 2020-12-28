@@ -5,7 +5,7 @@ use crate::Key;
 use k256::{
     ecdsa::{
         signature::{DigestVerifier, RandomizedDigestSigner, Signature as _},
-        Signature, SigningKey, VerifyKey,
+        Signature, SigningKey, VerifyingKey,
     },
     elliptic_curve::{generic_array::GenericArray, sec1::UntaggedPointSize},
     CompressedPoint, EncodedPoint, Secp256k1,
@@ -19,7 +19,7 @@ use std::{collections::BTreeMap, convert::TryFrom};
 pub const ENR_KEY: &str = "secp256k1";
 
 impl EnrKey for SigningKey {
-    type PublicKey = VerifyKey;
+    type PublicKey = VerifyingKey;
 
     fn sign_v4(&self, msg: &[u8]) -> Result<Vec<u8>, SigningError> {
         // take a keccak256 hash then sign.
@@ -50,12 +50,12 @@ impl EnrKey for SigningKey {
 impl EnrKeyUnambiguous for SigningKey {
     fn decode_public(bytes: &[u8]) -> Result<Self::PublicKey, DecoderError> {
         // should be encoded in compressed form, i.e 33 byte raw secp256k1 public key
-        Ok(VerifyKey::new(bytes)
+        Ok(VerifyingKey::from_sec1_bytes(bytes)
             .map_err(|_| DecoderError::Custom("Invalid Secp256k1 Signature"))?)
     }
 }
 
-impl EnrPublicKey for VerifyKey {
+impl EnrPublicKey for VerifyingKey {
     type Raw = CompressedPoint;
     type RawUncompressed = GenericArray<u8, UntaggedPointSize<Secp256k1>>;
 

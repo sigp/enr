@@ -96,7 +96,7 @@ impl CombinedKey {
 
     /// Imports a secp256k1 from raw bytes in any format.
     pub fn secp256k1_from_bytes(bytes: &mut [u8]) -> Result<Self, DecoderError> {
-        let key = k256::ecdsa::SigningKey::new(bytes)
+        let key = k256::ecdsa::SigningKey::from_bytes(bytes)
             .map_err(|_| DecoderError::Custom("Invalid secp256k1 secret key"))
             .map(Self::from)?;
         bytes.zeroize();
@@ -127,13 +127,13 @@ impl CombinedKey {
 #[derive(Clone, Debug, PartialEq)]
 pub enum CombinedPublicKey {
     /// An `Secp256k1` public key.
-    Secp256k1(k256::ecdsa::VerifyKey),
+    Secp256k1(k256::ecdsa::VerifyingKey),
     /// An `Ed25519` public key.
     Ed25519(ed25519::PublicKey),
 }
 
-impl From<k256::ecdsa::VerifyKey> for CombinedPublicKey {
-    fn from(public_key: k256::ecdsa::VerifyKey) -> Self {
+impl From<k256::ecdsa::VerifyingKey> for CombinedPublicKey {
+    fn from(public_key: k256::ecdsa::VerifyingKey) -> Self {
         Self::Secp256k1(public_key)
     }
 }
