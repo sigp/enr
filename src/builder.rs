@@ -1,4 +1,5 @@
 use crate::{Enr, EnrError, EnrKey, EnrPublicKey, Key, NodeId, MAX_ENR_SIZE};
+use bytes::{Bytes, BytesMut};
 use rlp::RlpStream;
 use std::{collections::BTreeMap, marker::PhantomData, net::IpAddr};
 
@@ -12,7 +13,7 @@ pub struct EnrBuilder<K: EnrKey> {
 
     /// The key-value pairs for the ENR record.
     /// Values are stored as RLP encoded bytes.
-    content: BTreeMap<Key, Vec<u8>>,
+    content: BTreeMap<Key, Bytes>,
 
     /// Pins the generic key types.
     phantom: PhantomData<K>,
@@ -39,11 +40,11 @@ impl<K: EnrKey> EnrBuilder<K> {
 
     /// Adds an arbitrary key-value to the `ENRBuilder`.
     pub fn add_value(&mut self, key: impl AsRef<[u8]>, value: &[u8]) -> &mut Self {
-        self.add_value_rlp(key, rlp::encode(&value))
+        self.add_value_rlp(key, rlp::encode(&value).freeze())
     }
 
     /// Adds an arbitrary key-value where the value is raw RLP encoded bytes.
-    pub fn add_value_rlp(&mut self, key: impl AsRef<[u8]>, rlp: Vec<u8>) -> &mut Self {
+    pub fn add_value_rlp(&mut self, key: impl AsRef<[u8]>, rlp: Bytes) -> &mut Self {
         self.content.insert(key.as_ref().to_vec(), rlp);
         self
     }
@@ -97,8 +98,8 @@ impl<K: EnrKey> EnrBuilder<K> {
     }
 
     /// Generates the rlp-encoded form of the ENR specified by the builder config.
-    fn rlp_content(&self) -> Vec<u8> {
-        let mut stream = RlpStream::new();
+    fn rlp_content(&self) -> BytesMut {
+        let mut stream = RlpStream::new_with_buffer(BytesMut::with_capacity(MAX_ENR_SIZE));
         stream.begin_list(self.content.len() * 2 + 1);
         stream.append(&self.seq);
         for (k, v) in &self.content {
@@ -106,7 +107,7 @@ impl<K: EnrKey> EnrBuilder<K> {
             // The values are stored as raw RLP encoded bytes
             stream.append_raw(v, 1);
         }
-        stream.drain()
+        stream.out()
     }
 
     /// Signs record based on the identity scheme. Currently only "v4" is supported.
@@ -144,7 +145,7 @@ impl<K: EnrKey> EnrBuilder<K> {
             }
         }
 
-        self.add_value_rlp("id", rlp::encode(&self.id.as_bytes()));
+        self.add_value_rlp("id", rlp::encode(&self.id.as_bytes()).freeze());
 
         self.add_public_key(&key.public());
         let rlp_content = self.rlp_content();

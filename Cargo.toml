@@ -17,10 +17,11 @@ exclude = [
 [dependencies]
 base64 = "0.12.1"
 bs58 = "0.3.1"
+bytes = "1"
 hex = "0.4.2"
 log = "0.4.8"
 rand = "0.7.3"
-rlp = "0.4.5"
+rlp = "0.5"
 zeroize = "1.1.0"
 libsecp256k1 = { version = "0.3.5", optional = true }
 sha3 = "0.9"

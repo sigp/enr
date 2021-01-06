@@ -180,6 +180,7 @@ mod builder;
 mod keys;
 mod node_id;
 
+use bytes::{Bytes, BytesMut};
 use log::debug;
 use rlp::{DecoderError, Rlp, RlpStream};
 use std::collections::BTreeMap;
@@ -227,7 +228,7 @@ pub struct Enr<K: EnrKey> {
     /// Key-value contents of the ENR. A BTreeMap is used to get the keys in sorted order, which is
     /// important for verifying the signature of the ENR.
     /// Everything is stored as raw RLP bytes.
-    content: BTreeMap<Key, Vec<u8>>,
+    content: BTreeMap<Key, Bytes>,
 
     /// The signature of the ENR record, stored as bytes.
     signature: Vec<u8>,
@@ -261,13 +262,13 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Reads a custom key from the record if it exists as raw RLP bytes.
-    pub fn get_raw_rlp(&self, key: impl AsRef<[u8]>) -> Option<&Vec<u8>> {
-        self.content.get(key.as_ref())
+    pub fn get_raw_rlp(&self, key: impl AsRef<[u8]>) -> Option<&[u8]> {
+        self.content.get(key.as_ref()).map(AsRef::as_ref)
     }
 
     /// Returns an iterator over all key/value pairs in the ENR.
-    pub fn iter(&self) -> impl Iterator<Item = (&Key, &Vec<u8>)> {
-        self.content.iter()
+    pub fn iter(&self) -> impl Iterator<Item = (&Key, &[u8])> {
+        self.content.iter().map(|(k, v)| (k, v.as_ref()))
     }
 
     /// Returns the IPv4 address of the ENR record if it is defined.
@@ -430,18 +431,10 @@ impl<K: EnrKey> Enr<K> {
         }
     }
 
-    /// RLP encodes the ENR into a byte array.
-    #[must_use]
-    pub fn encode(&self) -> Vec<u8> {
-        let mut s = RlpStream::new();
-        s.append(self);
-        s.drain()
-    }
-
     /// Provides the URL-safe base64 encoded "text" version of the ENR prefixed by "enr:".
     #[must_use]
     pub fn to_base64(&self) -> String {
-        let hex = base64::encode_config(&self.encode(), base64::URL_SAFE_NO_PAD);
+        let hex = base64::encode_config(&rlp::encode(self), base64::URL_SAFE_NO_PAD);
         format!("enr:{}", hex)
     }
 
@@ -480,8 +473,8 @@ impl<K: EnrKey> Enr<K> {
         key: impl AsRef<[u8]>,
         value: &[u8],
         enr_key: &K,
-    ) -> Result<Option<Vec<u8>>, EnrError> {
-        self.insert_raw_rlp(key, rlp::encode(&value), enr_key)
+    ) -> Result<Option<Bytes>, EnrError> {
+        self.insert_raw_rlp(key, rlp::encode(&value).freeze(), enr_key)
     }
 
     /// Adds or modifies a key/value to the ENR record. A `EnrKey` is required to re-sign the record once
@@ -491,11 +484,11 @@ impl<K: EnrKey> Enr<K> {
     pub fn insert_raw_rlp(
         &mut self,
         key: impl AsRef<[u8]>,
-        value: Vec<u8>,
+        value: Bytes,
         enr_key: &K,
-    ) -> Result<Option<Vec<u8>>, EnrError> {
+    ) -> Result<Option<Bytes>, EnrError> {
         // currently only support "v4" identity schemes
-        if key.as_ref() == b"id" && value != b"v4" {
+        if key.as_ref() == b"id" && &*value != b"v4" {
             return Err(EnrError::UnsupportedIdentityScheme);
         }
 
@@ -504,7 +497,7 @@ impl<K: EnrKey> Enr<K> {
         let public_key = enr_key.public();
         let previous_key = self.content.insert(
             public_key.enr_key(),
-            rlp::encode(&public_key.encode().as_ref()),
+            rlp::encode(&public_key.encode().as_ref()).freeze(),
         );
 
         // check the size of the record
@@ -640,19 +633,23 @@ impl<K: EnrKey> Enr<K> {
 
         let (prev_ip, prev_port) = match socket.ip() {
             IpAddr::V4(addr) => (
-                self.content
-                    .insert("ip".into(), rlp::encode(&(&addr.octets() as &[u8]))),
+                self.content.insert(
+                    "ip".into(),
+                    rlp::encode(&(&addr.octets() as &[u8])).freeze(),
+                ),
                 self.content.insert(
                     port_string.clone(),
-                    rlp::encode(&(&socket.port().to_be_bytes() as &[u8])),
+                    rlp::encode(&(&socket.port().to_be_bytes() as &[u8])).freeze(),
                 ),
             ),
             IpAddr::V6(addr) => (
-                self.content
-                    .insert("ip6".into(), rlp::encode(&(&addr.octets() as &[u8]))),
+                self.content.insert(
+                    "ip6".into(),
+                    rlp::encode(&(&addr.octets() as &[u8])).freeze(),
+                ),
                 self.content.insert(
                     port_v6_string.clone(),
-                    rlp::encode(&(&socket.port().to_be_bytes() as &[u8])),
+                    rlp::encode(&(&socket.port().to_be_bytes() as &[u8])).freeze(),
                 ),
             ),
         };
@@ -660,7 +657,7 @@ impl<K: EnrKey> Enr<K> {
         let public_key = key.public();
         let previous_key = self.content.insert(
             public_key.enr_key(),
-            rlp::encode(&public_key.encode().as_ref()),
+            rlp::encode(&public_key.encode().as_ref()).freeze(),
         );
 
         // check the size and revert on failure
@@ -726,8 +723,8 @@ impl<K: EnrKey> Enr<K> {
     // Private Functions //
 
     /// Evaluates the RLP-encoding of the content of the ENR record.
-    fn rlp_content(&self) -> Vec<u8> {
-        let mut stream = RlpStream::new();
+    fn rlp_content(&self) -> BytesMut {
+        let mut stream = RlpStream::new_with_buffer(BytesMut::with_capacity(MAX_ENR_SIZE));
         stream.begin_list(self.content.len() * 2 + 1);
         stream.append(&self.seq);
         for (k, v) in &self.content {
@@ -736,7 +733,7 @@ impl<K: EnrKey> Enr<K> {
             // Values are raw RLP encoded data
             stream.append_raw(v, 1);
         }
-        stream.drain()
+        stream.out()
     }
 
     /// Signs the ENR record based on the identity scheme. Currently only "v4" is supported.
@@ -892,7 +889,7 @@ impl<K: EnrKey> rlp::Decodable for Enr<K> {
                 return Err(DecoderError::Custom("Unsorted keys"));
             }
             prev = Some(key.clone());
-            content.insert(key, value.into());
+            content.insert(key, Bytes::copy_from_slice(value));
         }
 
         // verify we know the signature type

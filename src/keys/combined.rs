@@ -4,6 +4,7 @@
 //! Currently only `secp256k1` and `ed25519` key types are supported.
 
 use super::{ed25519_dalek as ed25519, EnrKey, EnrPublicKey, SigningError};
+use bytes::Bytes;
 pub use k256;
 use rand::RngCore;
 use rlp::DecoderError;
@@ -66,7 +67,7 @@ impl EnrKey for CombinedKey {
     }
 
     /// Decodes the raw bytes of an ENR's content into a public key if possible.
-    fn enr_to_public(content: &BTreeMap<Key, Vec<u8>>) -> Result<Self::PublicKey, DecoderError> {
+    fn enr_to_public(content: &BTreeMap<Key, Bytes>) -> Result<Self::PublicKey, DecoderError> {
         k256::ecdsa::SigningKey::enr_to_public(content)
             .map(CombinedPublicKey::Secp256k1)
             .or_else(|_| ed25519::Keypair::enr_to_public(content).map(CombinedPublicKey::from))

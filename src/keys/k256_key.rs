@@ -2,6 +2,7 @@
 
 use super::{EnrKey, EnrKeyUnambiguous, EnrPublicKey, SigningError};
 use crate::Key;
+use bytes::Bytes;
 use k256::{
     ecdsa::{
         signature::{DigestVerifier, RandomizedDigestSigner, Signature as _},
@@ -35,7 +36,7 @@ impl EnrKey for SigningKey {
         self.verify_key()
     }
 
-    fn enr_to_public(content: &BTreeMap<Key, Vec<u8>>) -> Result<Self::PublicKey, DecoderError> {
+    fn enr_to_public(content: &BTreeMap<Key, Bytes>) -> Result<Self::PublicKey, DecoderError> {
         let pubkey_bytes = content
             .get(ENR_KEY.as_bytes())
             .ok_or(DecoderError::Custom("Unknown signature"))?;

@@ -31,6 +31,7 @@ pub use k256;
 pub use secp256k1;
 
 use crate::Key;
+use bytes::Bytes;
 use rlp::DecoderError;
 use std::{
     collections::BTreeMap,
@@ -54,7 +55,7 @@ pub trait EnrKey: Send + Sync + Unpin + 'static {
     /// `EnrPublicKey`. It takes the ENR's `BTreeMap` and returns a public key.
     ///
     /// Note: This specifies the supported key schemes for an ENR.
-    fn enr_to_public(content: &BTreeMap<Key, Vec<u8>>) -> Result<Self::PublicKey, DecoderError>;
+    fn enr_to_public(content: &BTreeMap<Key, Bytes>) -> Result<Self::PublicKey, DecoderError>;
 }
 
 /// Trait for keys that are uniquely represented
