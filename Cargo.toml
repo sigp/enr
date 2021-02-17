@@ -15,15 +15,15 @@ exclude = [
 ]
 
 [dependencies]
-base64 = "0.12.1"
-bs58 = "0.3.1"
+base64 = "0.13"
+bs58 = "0.4"
 bytes = "1"
+funty = "<1.2"
 hex = "0.4.2"
 log = "0.4.8"
 rand = "0.7.3"
 rlp = "0.5"
 zeroize = "1.1.0"
-libsecp256k1 = { version = "0.3.5", optional = true }
 sha3 = "0.9"
 k256 = { version = "0.7", features = ["ecdsa", "zeroize"], optional = true }
 serde = { version = "1.0.110", optional = true }
@@ -37,7 +37,6 @@ c-secp256k1 = { package = "secp256k1", features = ["rand-std"], version = "0.20"
 default = ["serde", "k256" ]
 ed25519 = ["ed25519-dalek"]
 rust-secp256k1 = ["c-secp256k1"]
-libsecp256 = ["libsecp256k1"]
 
 [lib]
 name = "enr"

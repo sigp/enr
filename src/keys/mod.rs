@@ -1,9 +1,6 @@
 //! This module provides the [`EnrKey`] and [`EnrPublicKey`] traits. User's wishing to implement their
 //! own signing schemes can implement these traits and apply them to a [`Enr`].
 //!
-//! This module contains implementations for the `libsecp256k1` and `ed25519_dalek`
-//! secret key libraries, provided the `libsecp256k1` and `ed25519` features are set.
-//!
 //! [`EnrKey`]: crate::EnrKey
 //! [`EnrPublicKey`]: crate::EnrPublicKey
 //! [`Enr`]: crate::enr::Enr
@@ -14,8 +11,6 @@ mod combined;
 mod ed25519;
 #[cfg(any(feature = "k256", doc))]
 mod k256_key;
-#[cfg(feature = "libsecp256k1")]
-mod libsecp256k1;
 #[cfg(feature = "rust-secp256k1")]
 mod rust_secp256k1;
 
@@ -27,8 +22,6 @@ pub use combined::{CombinedKey, CombinedPublicKey};
 pub use ed25519_dalek;
 #[cfg(any(feature = "k256", doc))]
 pub use k256;
-#[cfg(feature = "libsecp256k1")]
-pub use secp256k1;
 
 use crate::Key;
 use bytes::Bytes;

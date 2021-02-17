@@ -31,7 +31,7 @@ Different identity schemes can be used to define the node id and signatures. Cur
 User's wishing to implement their own singing algorithms simply need to
 implement the `EnrKey` trait and apply it to an `Enr`.
 
-By default, `libsecp256k1::SecretKey` implement `EnrKey` and can be used to sign and
+By default, `k256::SigningKey` implement `EnrKey` and can be used to sign and
 verify ENR records. This library also implements `EnrKey` for `ed25519_dalek::Keypair` via the `ed25519`
 feature flag.
 

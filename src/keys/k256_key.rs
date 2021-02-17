@@ -51,8 +51,8 @@ impl EnrKey for SigningKey {
 impl EnrKeyUnambiguous for SigningKey {
     fn decode_public(bytes: &[u8]) -> Result<Self::PublicKey, DecoderError> {
         // should be encoded in compressed form, i.e 33 byte raw secp256k1 public key
-        Ok(VerifyingKey::from_sec1_bytes(bytes)
-            .map_err(|_| DecoderError::Custom("Invalid Secp256k1 Signature"))?)
+        VerifyingKey::from_sec1_bytes(bytes)
+            .map_err(|_| DecoderError::Custom("Invalid Secp256k1 Signature"))
     }
 }
 

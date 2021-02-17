@@ -139,7 +139,7 @@ impl<K: EnrKey> EnrBuilder<K> {
         // Sanitize all data, ensuring all RLP data is correctly formatted.
         for (key, value) in &self.content {
             if rlp::Rlp::new(value).data().is_err() {
-                return Err(EnrError::InvalidRLPData(
+                return Err(EnrError::InvalidRlpData(
                     String::from_utf8_lossy(key).into(),
                 ));
             }
