@@ -215,7 +215,6 @@ const MAX_ENR_SIZE: usize = 300;
 /// The ENR, allowing for arbitrary signing algorithms.
 ///
 /// This struct will always have a valid signature, known public key type, sequence number and `NodeId`. All other parameters are variable/optional.
-#[derive(Eq)]
 pub struct Enr<K: EnrKey> {
     /// ENR sequence number.
     seq: u64,
@@ -763,12 +762,11 @@ impl<K: EnrKey> Clone for Enr<K> {
     }
 }
 
+impl<K: EnrKey> std::cmp::Eq for Enr<K> {}
+
 impl<K: EnrKey> PartialEq for Enr<K> {
     fn eq(&self, other: &Self) -> bool {
-        self.seq == other.seq
-            && self.node_id == other.node_id
-            && self.content == other.content
-            && self.signature == other.signature
+        self.seq == other.seq && self.node_id == other.node_id && self.signature == other.signature
     }
 }
 
