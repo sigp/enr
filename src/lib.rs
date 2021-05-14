@@ -142,6 +142,7 @@
 //! let base64_string_secp256k1 = enr_secp256k1.to_base64();
 //!
 //! // generate a random ed25519 key
+//! # let mut rng = rand_07::thread_rng();
 //! let key = Keypair::generate(&mut rng);
 //! let enr_ed25519 = EnrBuilder::new("v4").ip(ip.into()).tcp(8000).build(&key).unwrap();
 //!
@@ -1112,7 +1113,7 @@ mod tests {
     #[cfg(all(feature = "ed25519", feature = "k256"))]
     #[test]
     fn test_encode_decode_ed25519() {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand_07::thread_rng();
         let key = ed25519_dalek::Keypair::generate(&mut rng);
         let ip = Ipv4Addr::new(10, 0, 0, 1);
         let tcp = 30303;
@@ -1206,8 +1207,7 @@ mod tests {
     #[test]
     fn combined_key_can_decode_all() {
         // generate a random secp256k1 key
-        let mut rng = rand::thread_rng();
-        let key = k256::ecdsa::SigningKey::random(&mut rng);
+        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
         let ip = Ipv4Addr::new(192, 168, 0, 1);
         let enr_secp256k1 = EnrBuilder::new("v4")
             .ip(ip.into())
@@ -1219,7 +1219,7 @@ mod tests {
         let base64_string_secp256k1 = enr_secp256k1.to_base64();
 
         // generate a random ed25519 key
-        let key = ed25519_dalek::Keypair::generate(&mut rng);
+        let key = ed25519_dalek::Keypair::generate(&mut rand_07::thread_rng());
         let enr_ed25519 = EnrBuilder::new("v4")
             .ip(ip.into())
             .tcp(8000)
