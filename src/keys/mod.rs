@@ -3,7 +3,7 @@
 //!
 //! [`EnrKey`]: crate::EnrKey
 //! [`EnrPublicKey`]: crate::EnrPublicKey
-//! [`Enr`]: crate::enr::Enr
+//! [`Enr`]: crate::Enr
 
 #[cfg(all(feature = "ed25519", feature = "k256"))]
 mod combined;

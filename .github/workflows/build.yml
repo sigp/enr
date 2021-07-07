@@ -61,3 +61,12 @@ jobs:
         run: cargo install --force cargo-audit
       - name: Run cargo audit to identify known security vulnerabilities reported to the RustSec Advisory Database
         run: cargo audit
+  check-rustdoc-links:
+    name: Check rustdoc intra-doc links
+    runs-on: ubuntu-latest
+    container:
+      image: rust
+    steps:
+    - uses: actions/checkout@v2
+    - name: Check rustdoc links
+      run: RUSTDOCFLAGS="--deny broken_intra_doc_links" cargo doc --verbose --workspace --no-deps --document-private-items
