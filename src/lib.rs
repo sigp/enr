@@ -851,15 +851,21 @@ impl<K: EnrKey> rlp::Decodable for Enr<K> {
             return Err(DecoderError::RlpExpectedToBeList);
         }
 
-        let mut decoded_list: Vec<Rlp> = rlp.iter().collect();
+        let mut rlp_iter = rlp.iter();
 
-        if decoded_list.is_empty() || decoded_list.len() % 2 != 0 {
+        if rlp_iter.len() == 0 || rlp_iter.len() % 2 != 0 {
             debug!("Failed to decode ENR. List size is not a multiple of 2.");
             return Err(DecoderError::Custom("List not a multiple of two"));
         }
 
-        let signature = decoded_list.remove(0).data()?;
-        let seq_bytes = decoded_list.remove(0).data()?;
+        let signature = rlp_iter
+            .next()
+            .ok_or(DecoderError::Custom("List is empty"))?
+            .data()?;
+        let seq_bytes = rlp_iter
+            .next()
+            .ok_or(DecoderError::Custom("List has only one item"))?
+            .data()?;
 
         if seq_bytes.len() > 8 {
             debug!("Failed to decode ENR. Sequence number is not a u64.");
@@ -872,20 +878,22 @@ impl<K: EnrKey> rlp::Decodable for Enr<K> {
         let seq = u64::from_be_bytes(seq);
 
         let mut content = BTreeMap::new();
-        let mut prev: Option<Key> = None;
-        for _ in 0..decoded_list.len() / 2 {
-            let key = decoded_list.remove(0).data()?.to_vec();
-            let item = decoded_list.remove(0);
+        let mut prev: Option<&[u8]> = None;
+        while let Some(key) = rlp_iter.next() {
+            let key = key.data()?;
+            let item = rlp_iter
+                .next()
+                .ok_or(DecoderError::Custom("List not a multiple of 2"))?;
 
             // Sanitize the data
             let _ = item.data()?;
             let value = item.as_raw();
 
-            if prev.is_some() && prev.as_ref() >= Some(&key) {
+            if prev.is_some() && prev >= Some(key) {
                 return Err(DecoderError::Custom("Unsorted keys"));
             }
-            prev = Some(key.clone());
-            content.insert(key, Bytes::copy_from_slice(value));
+            prev = Some(key);
+            content.insert(key.to_vec(), Bytes::copy_from_slice(value));
         }
 
         // verify we know the signature type
