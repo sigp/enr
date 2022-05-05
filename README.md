@@ -64,14 +64,14 @@ use enr::{EnrBuilder, k256};
 use std::net::Ipv4Addr;
 use rand::thread_rng;
 
+// generate a random secp256k1 key
 let mut rng = thread_rng();
-// generate a random k256 key
 let key = k256::ecdsa::SigningKey::random(&mut rng);
 
 let ip = Ipv4Addr::new(192,168,0,1);
-let enr = EnrBuilder::new("v4").ip(ip.into()).tcp(8000).build(&key).unwrap();
+let enr = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
 
-assert_eq!(enr.ip(), Some("192.168.0.1".parse().unwrap()));
+assert_eq!(enr.ip4(), Some("192.168.0.1".parse().unwrap()));
 assert_eq!(enr.id(), Some("v4".into()));
 ```
 
@@ -84,22 +84,22 @@ Note the `ed25519` feature flag must be set. This makes use of the
 use enr::{EnrBuilder, CombinedKey};
 use std::net::Ipv4Addr;
 
-// create a new k256 key
+// create a new secp256k1 key
 let key = CombinedKey::generate_secp256k1();
 
 // or create a new ed25519 key
 let key = CombinedKey::generate_ed25519();
 
 let ip = Ipv4Addr::new(192,168,0,1);
-let enr = EnrBuilder::new("v4").ip(ip.into()).tcp(8000).build(&key).unwrap();
+let enr = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
 
-assert_eq!(enr.ip(), Some("192.168.0.1".parse().unwrap()));
+assert_eq!(enr.ip4(), Some("192.168.0.1".parse().unwrap()));
 assert_eq!(enr.id(), Some("v4".into()));
 ```
 
 #### Modifying an ENR
 
-Enr fields can be added and modified using the getters/setters on `Enr`. A custom field
+ENR fields can be added and modified using the getters/setters on `Enr`. A custom field
 can be added using `insert` and retrieved with `get`.
 
 ```rust
@@ -107,14 +107,17 @@ use enr::{EnrBuilder, k256::ecdsa::SigningKey, Enr};
 use std::net::Ipv4Addr;
 use rand::thread_rng;
 
-// generate a random k256 key
+// specify the type of ENR
+type DefaultEnr = Enr<SigningKey>;
+
+// generate a random secp256k1 key
 let mut rng = thread_rng();
 let key = SigningKey::random(&mut rng);
 
 let ip = Ipv4Addr::new(192,168,0,1);
-let mut enr = EnrBuilder::new("v4").ip(ip.into()).tcp(8000).build(&key).unwrap();
+let mut enr = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
 
-enr.set_tcp(8001, &key);
+enr.set_tcp4(8001, &key);
 // set a custom key
 enr.insert("custom_key", &vec![0,0,1], &key);
 
@@ -122,11 +125,11 @@ enr.insert("custom_key", &vec![0,0,1], &key);
 let base_64_string = enr.to_base64();
 
 // decode from base64
-let decoded_enr: Enr<SigningKey> = base_64_string.parse().unwrap();
+let decoded_enr: DefaultEnr = base_64_string.parse().unwrap();
 
-assert_eq!(decoded_enr.ip(), Some("192.168.0.1".parse().unwrap()));
+assert_eq!(decoded_enr.ip4(), Some("192.168.0.1".parse().unwrap()));
 assert_eq!(decoded_enr.id(), Some("v4".into()));
-assert_eq!(decoded_enr.tcp(), Some(8001));
+assert_eq!(decoded_enr.tcp4(), Some(8001));
 assert_eq!(decoded_enr.get("custom_key"), Some(vec![0,0,1].as_slice()));
 ```
 
@@ -136,28 +139,30 @@ assert_eq!(decoded_enr.get("custom_key"), Some(vec![0,0,1].as_slice()));
 use enr::{EnrBuilder, k256::ecdsa::SigningKey, Enr, ed25519_dalek::Keypair, CombinedKey};
 use std::net::Ipv4Addr;
 use rand::thread_rng;
+use rand::Rng;
 
-// generate a random k256 key
+// generate a random secp256k1 key
 let mut rng = thread_rng();
 let key = SigningKey::random(&mut rng);
 let ip = Ipv4Addr::new(192,168,0,1);
-let enr_secp256k1 = EnrBuilder::new("v4").ip(ip.into()).tcp(8000).build(&key).unwrap();
+let enr_secp256k1 = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
 
 // encode to base64
 let base64_string_secp256k1 = enr_secp256k1.to_base64();
 
 // generate a random ed25519 key
+let mut rng = rand_07::thread_rng();
 let key = Keypair::generate(&mut rng);
-let enr_ed25519 = EnrBuilder::new("v4").ip(ip.into()).tcp(8000).build(&key).unwrap();
+let enr_ed25519 = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
 
 // encode to base64
 let base64_string_ed25519 = enr_ed25519.to_base64();
 
 // decode base64 strings of varying key types
 // decode the secp256k1 with default Enr
-let decoded_enr_secp256k1: Enr<SigningKey> = base64_string_secp256k1.parse().unwrap();
+let decoded_enr_secp256k1: Enr<k256::ecdsa::SigningKey> = base64_string_secp256k1.parse().unwrap();
 // decode ed25519 ENRs
-let decoded_enr_ed25519: Enr<Keypair> = base64_string_ed25519.parse().unwrap();
+let decoded_enr_ed25519: Enr<ed25519_dalek::Keypair> = base64_string_ed25519.parse().unwrap();
 
 // use the combined key to be able to decode either
 let decoded_enr: Enr<CombinedKey> = base64_string_secp256k1.parse().unwrap();
