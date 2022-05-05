@@ -57,9 +57,9 @@
 //! let key = k256::ecdsa::SigningKey::random(&mut rng);
 //!
 //! let ip = Ipv4Addr::new(192,168,0,1);
-//! let enr = EnrBuilder::new("v4").ip(ip.into()).tcp(8000).build(&key).unwrap();
+//! let enr = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
 //!
-//! assert_eq!(enr.ip(), Some("192.168.0.1".parse().unwrap()));
+//! assert_eq!(enr.ip4(), Some("192.168.0.1".parse().unwrap()));
 //! assert_eq!(enr.id(), Some("v4".into()));
 //! ```
 //!
@@ -80,9 +80,9 @@
 //! let key = CombinedKey::generate_ed25519();
 //!
 //! let ip = Ipv4Addr::new(192,168,0,1);
-//! let enr = EnrBuilder::new("v4").ip(ip.into()).tcp(8000).build(&key).unwrap();
+//! let enr = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
 //!
-//! assert_eq!(enr.ip(), Some("192.168.0.1".parse().unwrap()));
+//! assert_eq!(enr.ip4(), Some("192.168.0.1".parse().unwrap()));
 //! assert_eq!(enr.id(), Some("v4".into()));
 //! # }
 //! ```
@@ -105,9 +105,9 @@
 //! let key = SigningKey::random(&mut rng);
 //!
 //! let ip = Ipv4Addr::new(192,168,0,1);
-//! let mut enr = EnrBuilder::new("v4").ip(ip.into()).tcp(8000).build(&key).unwrap();
+//! let mut enr = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
 //!
-//! enr.set_tcp(8001, &key);
+//! enr.set_tcp4(8001, &key);
 //! // set a custom key
 //! enr.insert("custom_key", &vec![0,0,1], &key);
 //!
@@ -117,9 +117,9 @@
 //! // decode from base64
 //! let decoded_enr: DefaultEnr = base_64_string.parse().unwrap();
 //!
-//! assert_eq!(decoded_enr.ip(), Some("192.168.0.1".parse().unwrap()));
+//! assert_eq!(decoded_enr.ip4(), Some("192.168.0.1".parse().unwrap()));
 //! assert_eq!(decoded_enr.id(), Some("v4".into()));
-//! assert_eq!(decoded_enr.tcp(), Some(8001));
+//! assert_eq!(decoded_enr.tcp4(), Some(8001));
 //! assert_eq!(decoded_enr.get("custom_key"), Some(vec![0,0,1].as_slice()));
 //! ```
 //!
@@ -136,7 +136,7 @@
 //! let mut rng = thread_rng();
 //! let key = SigningKey::random(&mut rng);
 //! let ip = Ipv4Addr::new(192,168,0,1);
-//! let enr_secp256k1 = EnrBuilder::new("v4").ip(ip.into()).tcp(8000).build(&key).unwrap();
+//! let enr_secp256k1 = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
 //!
 //! // encode to base64
 //! let base64_string_secp256k1 = enr_secp256k1.to_base64();
@@ -144,7 +144,7 @@
 //! // generate a random ed25519 key
 //! # let mut rng = rand_07::thread_rng();
 //! let key = Keypair::generate(&mut rng);
-//! let enr_ed25519 = EnrBuilder::new("v4").ip(ip.into()).tcp(8000).build(&key).unwrap();
+//! let enr_ed25519 = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
 //!
 //! // encode to base64
 //! let base64_string_ed25519 = enr_ed25519.to_base64();
@@ -184,7 +184,10 @@ mod node_id;
 use bytes::{Bytes, BytesMut};
 use log::debug;
 use rlp::{DecoderError, Rlp, RlpStream};
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    net::{SocketAddrV4, SocketAddrV6},
+};
 
 #[cfg(feature = "serde")]
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
@@ -270,7 +273,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Returns the IPv4 address of the ENR record if it is defined.
     #[must_use]
-    pub fn ip(&self) -> Option<Ipv4Addr> {
+    pub fn ip4(&self) -> Option<Ipv4Addr> {
         if let Some(ip_bytes) = self.get("ip") {
             return match ip_bytes.len() {
                 4 => {
@@ -311,7 +314,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// The TCP port of ENR record if it is defined.
     #[must_use]
-    pub fn tcp(&self) -> Option<u16> {
+    pub fn tcp4(&self) -> Option<u16> {
         if let Some(tcp_bytes) = self.get("tcp") {
             if tcp_bytes.len() <= 2 {
                 let mut tcp = [0_u8; 2];
@@ -337,7 +340,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// The UDP port of ENR record if it is defined.
     #[must_use]
-    pub fn udp(&self) -> Option<u16> {
+    pub fn udp4(&self) -> Option<u16> {
         if let Some(udp_bytes) = self.get("udp") {
             if udp_bytes.len() <= 2 {
                 let mut udp = [0_u8; 2];
@@ -363,10 +366,10 @@ impl<K: EnrKey> Enr<K> {
 
     /// Provides a socket (based on the UDP port), if the IPv4 and UDP fields are specified.
     #[must_use]
-    pub fn udp_socket(&self) -> Option<SocketAddr> {
-        if let Some(ip) = self.ip() {
-            if let Some(udp) = self.udp() {
-                return Some(SocketAddr::new(IpAddr::V4(ip), udp));
+    pub fn udp4_socket(&self) -> Option<SocketAddrV4> {
+        if let Some(ip) = self.ip4() {
+            if let Some(udp) = self.udp4() {
+                return Some(SocketAddrV4::new(ip, udp));
             }
         }
         None
@@ -374,10 +377,10 @@ impl<K: EnrKey> Enr<K> {
 
     /// Provides a socket (based on the UDP port), if the IPv4 and UDP fields are specified.
     #[must_use]
-    pub fn udp6_socket(&self) -> Option<SocketAddr> {
+    pub fn udp6_socket(&self) -> Option<SocketAddrV6> {
         if let Some(ip6) = self.ip6() {
             if let Some(udp6) = self.udp6() {
-                return Some(SocketAddr::new(IpAddr::V6(ip6), udp6));
+                return Some(SocketAddrV6::new(ip6, udp6, 0, 0));
             }
         }
         None
@@ -385,10 +388,10 @@ impl<K: EnrKey> Enr<K> {
 
     /// Provides a socket (based on the TCP port), if the IP and TCP fields are specified.
     #[must_use]
-    pub fn tcp_socket(&self) -> Option<SocketAddr> {
-        if let Some(ip) = self.ip() {
-            if let Some(tcp) = self.tcp() {
-                return Some(SocketAddr::new(IpAddr::V4(ip), tcp));
+    pub fn tcp4_socket(&self) -> Option<SocketAddrV4> {
+        if let Some(ip) = self.ip4() {
+            if let Some(tcp) = self.tcp4() {
+                return Some(SocketAddrV4::new(ip, tcp));
             }
         }
         None
@@ -396,10 +399,10 @@ impl<K: EnrKey> Enr<K> {
 
     /// Provides a socket (based on the TCP port), if the IPv6 and TCP6 fields are specified.
     #[must_use]
-    pub fn tcp6_socket(&self) -> Option<SocketAddr> {
+    pub fn tcp6_socket(&self) -> Option<SocketAddrV6> {
         if let Some(ip6) = self.ip6() {
             if let Some(tcp6) = self.tcp6() {
-                return Some(SocketAddr::new(IpAddr::V6(ip6), tcp6));
+                return Some(SocketAddrV6::new(ip6, tcp6, 0, 0));
             }
         }
         None
@@ -563,7 +566,7 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Sets the `udp` field of the ENR. Returns any pre-existing UDP port in the record.
-    pub fn set_udp(&mut self, udp: u16, key: &K) -> Result<Option<u16>, EnrError> {
+    pub fn set_udp4(&mut self, udp: u16, key: &K) -> Result<Option<u16>, EnrError> {
         if let Some(udp_bytes) = self.insert("udp", &udp.to_be_bytes(), key)? {
             if udp_bytes.len() <= 2 {
                 let mut v = [0_u8; 2];
@@ -587,7 +590,7 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Sets the `tcp` field of the ENR. Returns any pre-existing tcp port in the record.
-    pub fn set_tcp(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, EnrError> {
+    pub fn set_tcp4(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, EnrError> {
         if let Some(tcp_bytes) = self.insert("tcp", &tcp.to_be_bytes(), key)? {
             if tcp_bytes.len() <= 2 {
                 let mut v = [0_u8; 2];
@@ -774,9 +777,10 @@ impl<K: EnrKey> std::fmt::Display for Enr<K> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
             f,
-            "ENR: NodeId: {}, Socket: {:?}",
+            "ENR: NodeId: {}, IpV4 Socket: {:?} IpV6 Socket: {:?}",
             self.node_id(),
-            self.udp_socket()
+            self.udp4_socket(),
+            self.udp6_socket()
         )
     }
 }
@@ -962,10 +966,10 @@ mod tests {
 
         let pubkey = enr.public_key().encode();
 
-        assert_eq!(enr.ip(), Some(Ipv4Addr::new(127, 0, 0, 1)));
+        assert_eq!(enr.ip4(), Some(Ipv4Addr::new(127, 0, 0, 1)));
         assert_eq!(enr.id(), Some(String::from("v4")));
-        assert_eq!(enr.udp(), Some(30303));
-        assert_eq!(enr.tcp(), None);
+        assert_eq!(enr.udp4(), Some(30303));
+        assert_eq!(enr.tcp4(), None);
         assert_eq!(enr.signature(), &signature[..]);
         assert_eq!(pubkey.to_vec(), expected_pubkey);
         assert!(enr.verify());
@@ -985,12 +989,12 @@ mod tests {
 
         let enr = text.parse::<DefaultEnr>().unwrap();
         let pubkey = enr.public_key().encode();
-        assert_eq!(enr.ip(), Some(Ipv4Addr::new(127, 0, 0, 1)));
+        assert_eq!(enr.ip4(), Some(Ipv4Addr::new(127, 0, 0, 1)));
         assert_eq!(enr.ip6(), None);
         assert_eq!(enr.id(), Some(String::from("v4")));
-        assert_eq!(enr.udp(), Some(30303));
+        assert_eq!(enr.udp4(), Some(30303));
         assert_eq!(enr.udp6(), None);
-        assert_eq!(enr.tcp(), None);
+        assert_eq!(enr.tcp4(), None);
         assert_eq!(enr.tcp6(), None);
         assert_eq!(enr.signature(), &signature[..]);
         assert_eq!(pubkey.to_vec(), expected_pubkey);
@@ -1013,12 +1017,12 @@ mod tests {
 
         let enr = text.parse::<Enr<k256::ecdsa::SigningKey>>().unwrap();
         let pubkey = enr.public_key().encode();
-        assert_eq!(enr.ip(), Some(Ipv4Addr::new(127, 0, 0, 1)));
+        assert_eq!(enr.ip4(), Some(Ipv4Addr::new(127, 0, 0, 1)));
         assert_eq!(enr.ip6(), None);
         assert_eq!(enr.id(), Some(String::from("v4")));
-        assert_eq!(enr.udp(), Some(30303));
+        assert_eq!(enr.udp4(), Some(30303));
         assert_eq!(enr.udp6(), None);
-        assert_eq!(enr.tcp(), None);
+        assert_eq!(enr.tcp4(), None);
         assert_eq!(enr.tcp6(), None);
         assert_eq!(enr.signature(), &signature[..]);
         assert_eq!(pubkey.to_vec(), expected_pubkey);
@@ -1037,10 +1041,10 @@ mod tests {
                 .unwrap();
         let enr = text.parse::<DefaultEnr>().unwrap();
 
-        assert_eq!(enr.ip(), Some(Ipv4Addr::new(14, 161, 38, 107)));
+        assert_eq!(enr.ip4(), Some(Ipv4Addr::new(14, 161, 38, 107)));
         assert_eq!(enr.id(), Some(String::from("v4")));
-        assert_eq!(enr.udp(), Some(30503));
-        assert_eq!(enr.tcp(), Some(30503));
+        assert_eq!(enr.udp4(), Some(30503));
+        assert_eq!(enr.tcp4(), Some(30503));
         assert_eq!(enr.seq(), 40);
         assert_eq!(enr.signature(), &signature[..]);
         assert_eq!(enr.public_key().encode().to_vec(), expected_pubkey);
@@ -1072,8 +1076,8 @@ mod tests {
 
         let enr = {
             let mut builder = EnrBuilder::new("v4");
-            builder.ip(ip.into());
-            builder.tcp(tcp);
+            builder.ip4(ip);
+            builder.tcp4(tcp);
             builder.build(&key).unwrap()
         };
 
@@ -1082,8 +1086,8 @@ mod tests {
         let decoded_enr = rlp::decode::<Enr<c_secp256k1::SecretKey>>(&encoded_enr).unwrap();
 
         assert_eq!(decoded_enr.id(), Some("v4".into()));
-        assert_eq!(decoded_enr.ip(), Some(ip));
-        assert_eq!(decoded_enr.tcp(), Some(tcp));
+        assert_eq!(decoded_enr.ip4(), Some(ip));
+        assert_eq!(decoded_enr.tcp4(), Some(tcp));
         // Must compare encoding as the public key itself can be different
         assert_eq!(decoded_enr.public_key().encode(), key.public().encode());
         assert!(decoded_enr.verify());
@@ -1099,7 +1103,7 @@ mod tests {
         let enr = {
             let mut builder = EnrBuilder::new("v4");
             builder.ip(ip.into());
-            builder.tcp(tcp);
+            builder.tcp4(tcp);
             builder.build(&key).unwrap()
         };
 
@@ -1108,8 +1112,8 @@ mod tests {
         let decoded_enr = rlp::decode::<Enr<k256::ecdsa::SigningKey>>(&encoded_enr).unwrap();
 
         assert_eq!(decoded_enr.id(), Some("v4".into()));
-        assert_eq!(decoded_enr.ip(), Some(ip));
-        assert_eq!(decoded_enr.tcp(), Some(tcp));
+        assert_eq!(decoded_enr.ip4(), Some(ip));
+        assert_eq!(decoded_enr.tcp4(), Some(tcp));
         // Must compare encoding as the public key itself can be different
         assert_eq!(decoded_enr.public_key().encode(), key.public().encode());
         decoded_enr.public_key().encode_uncompressed();
@@ -1126,8 +1130,8 @@ mod tests {
 
         let enr = {
             let mut builder = EnrBuilder::new("v4");
-            builder.ip(ip.into());
-            builder.tcp(tcp);
+            builder.ip4(ip.into());
+            builder.tcp4(tcp);
             builder.build(&key).unwrap()
         };
 
@@ -1135,8 +1139,8 @@ mod tests {
         let decoded_enr = rlp::decode::<Enr<CombinedKey>>(&encoded_enr).unwrap();
 
         assert_eq!(decoded_enr.id(), Some("v4".into()));
-        assert_eq!(decoded_enr.ip(), Some(ip));
-        assert_eq!(decoded_enr.tcp(), Some(tcp));
+        assert_eq!(decoded_enr.ip4(), Some(ip));
+        assert_eq!(decoded_enr.tcp4(), Some(tcp));
         assert_eq!(decoded_enr.public_key().encode(), key.public().encode());
         assert!(decoded_enr.verify());
     }
@@ -1151,7 +1155,7 @@ mod tests {
         let mut enr = {
             let mut builder = EnrBuilder::new("v4");
             builder.ip(ip.into());
-            builder.tcp(tcp);
+            builder.tcp4(tcp);
             builder.build(&key).unwrap()
         };
 
@@ -1168,14 +1172,14 @@ mod tests {
 
         let mut enr = {
             let mut builder = EnrBuilder::new("v4");
-            builder.tcp(tcp);
+            builder.tcp4(tcp);
             builder.build(&key).unwrap()
         };
 
         assert!(enr.set_ip(ip.into(), &key).is_ok());
         assert_eq!(enr.id(), Some("v4".into()));
-        assert_eq!(enr.ip(), Some(ip));
-        assert_eq!(enr.tcp(), Some(tcp));
+        assert_eq!(enr.ip4(), Some(ip));
+        assert_eq!(enr.tcp4(), Some(tcp));
         assert!(enr.verify());
 
         // Compare the encoding as the key itself can be differnet
@@ -1193,8 +1197,8 @@ mod tests {
         let mut enr = {
             let mut builder = EnrBuilder::new("v4");
             builder.ip(ip.into());
-            builder.tcp(tcp);
-            builder.udp(udp);
+            builder.tcp4(tcp);
+            builder.udp4(udp);
             builder.build(&key).unwrap()
         };
 
@@ -1204,8 +1208,8 @@ mod tests {
             .unwrap();
         assert_eq!(node_id, enr.node_id());
         assert_eq!(
-            enr.udp_socket(),
-            "192.168.0.1:800".parse::<SocketAddr>().unwrap().into()
+            enr.udp4_socket(),
+            "192.168.0.1:800".parse::<SocketAddrV4>().unwrap().into()
         );
     }
 
@@ -1217,7 +1221,7 @@ mod tests {
         let ip = Ipv4Addr::new(192, 168, 0, 1);
         let enr_secp256k1 = EnrBuilder::new("v4")
             .ip(ip.into())
-            .tcp(8000)
+            .tcp4(8000)
             .build(&key)
             .unwrap();
 
@@ -1228,7 +1232,7 @@ mod tests {
         let key = ed25519_dalek::Keypair::generate(&mut rand_07::thread_rng());
         let enr_ed25519 = EnrBuilder::new("v4")
             .ip(ip.into())
-            .tcp(8000)
+            .tcp4(8000)
             .build(&key)
             .unwrap();
 

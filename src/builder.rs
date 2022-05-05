@@ -1,7 +1,11 @@
 use crate::{Enr, EnrError, EnrKey, EnrPublicKey, Key, NodeId, MAX_ENR_SIZE};
 use bytes::{Bytes, BytesMut};
 use rlp::RlpStream;
-use std::{collections::BTreeMap, marker::PhantomData, net::IpAddr};
+use std::{
+    collections::BTreeMap,
+    marker::PhantomData,
+    net::{IpAddr, Ipv4Addr, Ipv6Addr},
+};
 
 ///! The base builder for generating ENR records with arbitrary signing algorithms.
 pub struct EnrBuilder<K: EnrKey> {
@@ -49,16 +53,23 @@ impl<K: EnrKey> EnrBuilder<K> {
         self
     }
 
-    /// Adds an `ip` field to the `ENRBuilder`.
+    /// Adds an `ip`/`ip6` field to the `ENRBuilder`.
     pub fn ip(&mut self, ip: IpAddr) -> &mut Self {
         match ip {
-            IpAddr::V4(addr) => {
-                self.add_value("ip", &addr.octets());
-            }
-            IpAddr::V6(addr) => {
-                self.add_value("ip6", &addr.octets());
-            }
+            IpAddr::V4(addr) => self.ip4(addr),
+            IpAddr::V6(addr) => self.ip6(addr),
         }
+    }
+
+    /// Adds an `ip` field to the `ENRBuilder`.
+    pub fn ip4(&mut self, ip: Ipv4Addr) -> &mut Self {
+        self.add_value("ip", &ip.octets());
+        self
+    }
+
+    /// Adds an `ip6` field to the `ENRBuilder`.
+    pub fn ip6(&mut self, ip: Ipv6Addr) -> &mut Self {
+        self.add_value("ip6", &ip.octets());
         self
     }
 
@@ -74,7 +85,7 @@ impl<K: EnrKey> EnrBuilder<K> {
     */
 
     /// Adds a `tcp` field to the `ENRBuilder`.
-    pub fn tcp(&mut self, tcp: u16) -> &mut Self {
+    pub fn tcp4(&mut self, tcp: u16) -> &mut Self {
         self.add_value("tcp", &tcp.to_be_bytes());
         self
     }
@@ -86,7 +97,7 @@ impl<K: EnrKey> EnrBuilder<K> {
     }
 
     /// Adds a `udp` field to the `ENRBuilder`.
-    pub fn udp(&mut self, udp: u16) -> &mut Self {
+    pub fn udp4(&mut self, udp: u16) -> &mut Self {
         self.add_value("udp", &udp.to_be_bytes());
         self
     }
