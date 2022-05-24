@@ -199,10 +199,10 @@ use std::{
 
 pub use builder::EnrBuilder;
 
-#[cfg(feature = "rust-secp256k1")]
-pub use keys::c_secp256k1;
 #[cfg(feature = "k256")]
 pub use keys::k256;
+#[cfg(feature = "rust-secp256k1")]
+pub use keys::secp256k1;
 #[cfg(all(feature = "ed25519", feature = "k256"))]
 pub use keys::{ed25519_dalek, CombinedKey, CombinedPublicKey};
 
@@ -242,13 +242,13 @@ impl<K: EnrKey> Enr<K> {
 
     /// The `NodeId` for the record.
     #[must_use]
-    pub fn node_id(&self) -> NodeId {
+    pub const fn node_id(&self) -> NodeId {
         self.node_id
     }
 
     /// The current sequence number of the ENR record.
     #[must_use]
-    pub fn seq(&self) -> u64 {
+    pub const fn seq(&self) -> u64 {
         self.seq
     }
 
@@ -812,7 +812,7 @@ impl<K: EnrKey> FromStr for Enr<K> {
     }
 }
 
-#[cfg(any(feature = "serde", doc))]
+#[cfg(any(feature = "serde"))]
 impl<K: EnrKey> Serialize for Enr<K> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -822,7 +822,7 @@ impl<K: EnrKey> Serialize for Enr<K> {
     }
 }
 
-#[cfg(any(feature = "serde", doc))]
+#[cfg(any(feature = "serde"))]
 impl<'de, K: EnrKey> Deserialize<'de> for Enr<K> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -1068,9 +1068,9 @@ mod tests {
 
     #[cfg(feature = "rust-secp256k1")]
     #[test]
-    fn test_encode_decode_c_secp256k1() {
-        let mut rng = c_secp256k1::rand::thread_rng();
-        let key = c_secp256k1::SecretKey::new(&mut rng);
+    fn test_encode_decode_secp256k1() {
+        let mut rng = secp256k1::rand::thread_rng();
+        let key = secp256k1::SecretKey::new(&mut rng);
         let ip = Ipv4Addr::new(127, 0, 0, 1);
         let tcp = 3000;
 
@@ -1083,7 +1083,7 @@ mod tests {
 
         let encoded_enr = rlp::encode(&enr);
 
-        let decoded_enr = rlp::decode::<Enr<c_secp256k1::SecretKey>>(&encoded_enr).unwrap();
+        let decoded_enr = rlp::decode::<Enr<secp256k1::SecretKey>>(&encoded_enr).unwrap();
 
         assert_eq!(decoded_enr.id(), Some("v4".into()));
         assert_eq!(decoded_enr.ip4(), Some(ip));

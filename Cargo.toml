@@ -9,10 +9,7 @@ keywords = ["ethereum", "enr", "record", "EIP778", "node"]
 repository = "https://github.com/rust-ethereum/enr"
 categories = ["cryptography::cryptocurrencies"]
 license = "MIT"
-exclude = [
-	".gitignore",
-	".github/*"
-]
+exclude = [".gitignore", ".github/*"]
 
 [dependencies]
 base64 = "0.13"
@@ -23,20 +20,22 @@ log = "0.4.8"
 rand = "0.8"
 rlp = "0.5"
 zeroize = "1.1.0"
-sha3 = "0.9"
-k256 = { version = "0.8", features = ["ecdsa", "zeroize"], optional = true }
+sha3 = "0.10"
+k256 = { version = "0.11", features = ["ecdsa"], optional = true }
 serde = { version = "1.0.110", optional = true }
 ed25519-dalek = { version = "1.0.0-pre.4", optional = true }
-c-secp256k1 = { package = "secp256k1", version = "0.20", optional = true, features = ["global-context"] }
+secp256k1 = { version = "0.22", optional = true, default-features = false, features = [
+    "global-context",
+] }
 
 [dev-dependencies]
 rand_07 = { package = "rand", version = "0.7" }
-c-secp256k1 = { package = "secp256k1", features = ["rand-std"], version = "0.20" }
+secp256k1 = { features = ["rand-std"], version = "0.22" }
 
 [features]
-default = ["serde", "k256" ]
+default = ["serde", "k256"]
 ed25519 = ["ed25519-dalek"]
-rust-secp256k1 = ["c-secp256k1"]
+rust-secp256k1 = ["secp256k1"]
 
 [lib]
 name = "enr"
