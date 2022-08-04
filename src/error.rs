@@ -21,11 +21,11 @@ pub enum EnrError {
 impl fmt::Display for EnrError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            EnrError::ExceedsMaxSize => write!(f, "enr exceeds max size"),
-            EnrError::SequenceNumberTooHigh => write!(f, "sequence number too large"),
-            EnrError::SigningError => write!(f, "signing error"),
-            EnrError::UnsupportedIdentityScheme => write!(f, "unsupported identity scheme"),
-            EnrError::InvalidRlpData(_rlp) => write!(f, "invalid rlp data"),
+            Self::ExceedsMaxSize => write!(f, "enr exceeds max size"),
+            Self::SequenceNumberTooHigh => write!(f, "sequence number too large"),
+            Self::SigningError => write!(f, "signing error"),
+            Self::UnsupportedIdentityScheme => write!(f, "unsupported identity scheme"),
+            Self::InvalidRlpData(_rlp) => write!(f, "invalid rlp data"),
         }
     }
 }
