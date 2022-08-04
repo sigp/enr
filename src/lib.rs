@@ -178,6 +178,7 @@
 )]
 
 mod builder;
+mod error;
 mod keys;
 mod node_id;
 
@@ -198,6 +199,7 @@ use std::{
 };
 
 pub use builder::EnrBuilder;
+pub use error::EnrError;
 
 #[cfg(feature = "k256")]
 pub use keys::k256;
@@ -922,21 +924,6 @@ impl<K: EnrKey> rlp::Decodable for Enr<K> {
         }
         Ok(enr)
     }
-}
-
-#[derive(Clone, Debug)]
-/// An error type for handling various ENR operations.
-pub enum EnrError {
-    /// The ENR is too large.
-    ExceedsMaxSize,
-    /// The sequence number is too large.
-    SequenceNumberTooHigh,
-    /// There was an error with signing an ENR record.
-    SigningError,
-    /// The identity scheme is not supported.
-    UnsupportedIdentityScheme,
-    /// The entered RLP data is invalid.
-    InvalidRlpData(String),
 }
 
 pub(crate) fn digest(b: &[u8]) -> [u8; 32] {
