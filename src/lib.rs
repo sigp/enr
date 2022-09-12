@@ -377,7 +377,7 @@ impl<K: EnrKey> Enr<K> {
         None
     }
 
-    /// Provides a socket (based on the UDP port), if the IPv4 and UDP fields are specified.
+    /// Provides a socket (based on the UDP port), if the IPv6 and UDP fields are specified.
     #[must_use]
     pub fn udp6_socket(&self) -> Option<SocketAddrV6> {
         if let Some(ip6) = self.ip6() {
