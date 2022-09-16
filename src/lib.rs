@@ -1117,7 +1117,7 @@ mod tests {
 
         let enr = {
             let mut builder = EnrBuilder::new("v4");
-            builder.ip4(ip.into());
+            builder.ip4(ip);
             builder.tcp4(tcp);
             builder.build(&key).unwrap()
         };
