@@ -125,7 +125,7 @@ impl CombinedKey {
 
 /// A combined implementation of `EnrPublicKey` which has support for `Secp256k1`
 /// and `Ed25519` for ENR signature verification.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CombinedPublicKey {
     /// An `Secp256k1` public key.
     Secp256k1(k256::ecdsa::VerifyingKey),
