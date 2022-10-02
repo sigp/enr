@@ -742,10 +742,6 @@ impl<K: EnrKey> Enr<K> {
             public_key.enr_key(),
             rlp::encode(&public_key.encode().as_ref()).freeze(),
         );
-        if self.size() > MAX_ENR_SIZE {
-            *self = enr_backup;
-            return Err(EnrError::ExceedsMaxSize);
-        }
 
         let mut inserted = Vec::new();
         for (key, value) in insert_key_values {
@@ -758,10 +754,6 @@ impl<K: EnrKey> Enr<K> {
                 self.content
                     .insert(key.as_ref().to_vec(), rlp::encode(&(value)).freeze()),
             );
-            if self.size() > MAX_ENR_SIZE {
-                *self = enr_backup;
-                return Err(EnrError::ExceedsMaxSize);
-            }
         }
 
         // increment the sequence number
