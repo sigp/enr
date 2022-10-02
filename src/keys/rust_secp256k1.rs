@@ -1,9 +1,15 @@
 use super::{EnrKey, EnrKeyUnambiguous, EnrPublicKey, SigningError};
 use crate::{digest, Key};
 use bytes::Bytes;
+use rand::RngCore;
 use rlp::DecoderError;
 use secp256k1::SECP256K1;
 use std::collections::BTreeMap;
+
+#[cfg(test)]
+use self::MockOsRng as OsRng;
+#[cfg(not(test))]
+use rand::rngs::OsRng;
 
 /// The ENR key that stores the public key in the ENR record.
 pub const ENR_KEY: &str = "secp256k1";
@@ -17,7 +23,13 @@ impl EnrKey for secp256k1::SecretKey {
         let m = secp256k1::Message::from_slice(&hash)
             .map_err(|_| SigningError::new("failed to parse secp256k1 digest"))?;
         // serialize to an uncompressed 64 byte vector
-        Ok(SECP256K1.sign_ecdsa(&m, self).serialize_compact().to_vec())
+        let signature = {
+            let mut noncedata = [0; 32];
+            OsRng.fill_bytes(&mut noncedata);
+            let signature = SECP256K1.sign_ecdsa_with_noncedata(&m, self, &noncedata);
+            signature
+        };
+        Ok(signature.serialize_compact().to_vec())
     }
 
     fn public(&self) -> Self::PublicKey {
@@ -69,5 +81,35 @@ impl EnrPublicKey for secp256k1::PublicKey {
 
     fn enr_key(&self) -> Key {
         ENR_KEY.into()
+    }
+}
+
+#[cfg(test)]
+const MOCK_ECDSA_NONCE_ADDITIONAL_DATA: [u8; 32] = [
+    // 0xbaaaaaad...
+    0xba, 0xaa, 0xaa, 0xad, 0xba, 0xaa, 0xaa, 0xad, 0xba, 0xaa, 0xaa, 0xad, 0xba, 0xaa, 0xaa, 0xad,
+    0xba, 0xaa, 0xaa, 0xad, 0xba, 0xaa, 0xaa, 0xad, 0xba, 0xaa, 0xaa, 0xad, 0xba, 0xaa, 0xaa, 0xad,
+];
+
+#[cfg(test)]
+struct MockOsRng;
+
+#[cfg(test)]
+impl RngCore for MockOsRng {
+    fn next_u32(&mut self) -> u32 {
+        unimplemented!();
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        unimplemented!();
+    }
+
+    fn fill_bytes(&mut self, dest: &mut [u8]) {
+        debug_assert_eq!(dest.len(), MOCK_ECDSA_NONCE_ADDITIONAL_DATA.len());
+        dest.copy_from_slice(&MOCK_ECDSA_NONCE_ADDITIONAL_DATA);
+    }
+
+    fn try_fill_bytes(&mut self, _dest: &mut [u8]) -> Result<(), rand::Error> {
+        unimplemented!();
     }
 }
