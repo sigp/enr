@@ -443,7 +443,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Returns the current size of the ENR.
     #[must_use]
-    pub fn size(&self) -> usize {
+    pub fn size_content(&self) -> usize {
         self.rlp_content().len()
     }
 
@@ -460,7 +460,7 @@ impl<K: EnrKey> Enr<K> {
         self.node_id = NodeId::from(key.public());
 
         // check the size of the record
-        if self.size() > MAX_ENR_SIZE {
+        if self.size_content() + self.signature.len() > MAX_ENR_SIZE {
             return Err(EnrError::ExceedsMaxSize);
         }
 
@@ -504,7 +504,7 @@ impl<K: EnrKey> Enr<K> {
         );
 
         // check the size of the record
-        if self.size() > MAX_ENR_SIZE {
+        if self.size_content() > MAX_ENR_SIZE {
             // if the size of the record is too large, revert and error
             // revert the public key
             if let Some(key) = previous_key {
@@ -532,7 +532,7 @@ impl<K: EnrKey> Enr<K> {
         // update the node id
         self.node_id = NodeId::from(enr_key.public());
 
-        if self.size() > MAX_ENR_SIZE {
+        if self.size_content() + self.signature.len() > MAX_ENR_SIZE {
             // in case the signature size changes, inform the user the size has exceeded the maximum
             return Err(EnrError::ExceedsMaxSize);
         }
@@ -664,7 +664,7 @@ impl<K: EnrKey> Enr<K> {
         );
 
         // check the size and revert on failure
-        if self.size() > MAX_ENR_SIZE {
+        if self.size_content() > MAX_ENR_SIZE {
             // if the size of the record is too large, revert and error
             // revert the public key
             if let Some(key) = previous_key {
@@ -768,7 +768,7 @@ impl<K: EnrKey> Enr<K> {
         // update the node id
         self.node_id = NodeId::from(enr_key.public());
 
-        if self.size() > MAX_ENR_SIZE {
+        if self.size_content() + self.signature.len() > MAX_ENR_SIZE {
             // in case the signature size changes, inform the user the size has exceeded the
             // maximum
             *self = enr_backup;
