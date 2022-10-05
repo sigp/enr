@@ -214,6 +214,7 @@ use std::marker::PhantomData;
 
 /// The "key" in an ENR record can be arbitrary bytes.
 type Key = Vec<u8>;
+type PreviousRlpEncodedValues = Vec<Option<Bytes>>;
 
 const MAX_ENR_SIZE: usize = 300;
 
@@ -443,7 +444,7 @@ impl<K: EnrKey> Enr<K> {
     /// Returns the current size of the ENR.
     #[must_use]
     pub fn size(&self) -> usize {
-        self.rlp_content().len()
+        rlp::encode(self).len()
     }
 
     // Setters //
@@ -469,7 +470,7 @@ impl<K: EnrKey> Enr<K> {
     /// Adds or modifies a key/value to the ENR record. A `EnrKey` is required to re-sign the record once
     /// modified.
     ///
-    /// Returns the previous value in the record if it exists.
+    /// Returns the previous value as rlp encoded bytes in the record if it exists.
     pub fn insert(
         &mut self,
         key: impl AsRef<[u8]>,
@@ -482,7 +483,7 @@ impl<K: EnrKey> Enr<K> {
     /// Adds or modifies a key/value to the ENR record. A `EnrKey` is required to re-sign the record once
     /// modified. The value here is interpreted as raw RLP data.
     ///
-    /// Returns the previous value in the record if it exists.
+    /// Returns the previous value as rlp encoded bytes in the record if it exists.
     pub fn insert_raw_rlp(
         &mut self,
         key: impl AsRef<[u8]>,
@@ -714,6 +715,67 @@ impl<K: EnrKey> Enr<K> {
         self.node_id = NodeId::from(key.public());
 
         Ok(())
+    }
+
+    /// Removes key/value mappings and adds or overwrites key/value mappings to the ENR record as
+    /// one sequence number update. An `EnrKey` is required to re-sign the record once modified.
+    /// Reverts whole ENR record on error.
+    ///
+    /// Returns the previous values as rlp encoded bytes if they exist for the removed and added/
+    /// overwritten keys.
+    pub fn remove_insert<'a>(
+        &mut self,
+        remove_keys: impl Iterator<Item = impl AsRef<[u8]>>,
+        insert_key_values: impl Iterator<Item = (impl AsRef<[u8]>, &'a [u8])>,
+        enr_key: &K,
+    ) -> Result<(PreviousRlpEncodedValues, PreviousRlpEncodedValues), EnrError> {
+        let enr_backup = self.clone();
+
+        let mut removed = Vec::new();
+        for key in remove_keys {
+            removed.push(self.content.remove(key.as_ref()));
+        }
+
+        // add the new public key
+        let public_key = enr_key.public();
+        self.content.insert(
+            public_key.enr_key(),
+            rlp::encode(&public_key.encode().as_ref()).freeze(),
+        );
+
+        let mut inserted = Vec::new();
+        for (key, value) in insert_key_values {
+            // currently only support "v4" identity schemes
+            if key.as_ref() == b"id" && value != b"v4" {
+                *self = enr_backup;
+                return Err(EnrError::UnsupportedIdentityScheme);
+            }
+            inserted.push(
+                self.content
+                    .insert(key.as_ref().to_vec(), rlp::encode(&(value)).freeze()),
+            );
+        }
+
+        // increment the sequence number
+        self.seq = self
+            .seq
+            .checked_add(1)
+            .ok_or(EnrError::SequenceNumberTooHigh)?;
+
+        // sign the record
+        self.sign(enr_key)?;
+
+        // update the node id
+        self.node_id = NodeId::from(enr_key.public());
+
+        if self.size() > MAX_ENR_SIZE {
+            // in case the signature size changes, inform the user the size has exceeded the
+            // maximum
+            *self = enr_backup;
+            return Err(EnrError::ExceedsMaxSize);
+        }
+
+        Ok((removed, inserted))
     }
 
     /// Sets a new public key for the record.
@@ -1169,8 +1231,8 @@ mod tests {
         assert_eq!(enr.tcp4(), Some(tcp));
         assert!(enr.verify());
 
-        // Compare the encoding as the key itself can be differnet
-        assert_eq!(enr.public_key().encode(), key.public().encode(),);
+        // Compare the encoding as the key itself can be different
+        assert_eq!(enr.public_key().encode(), key.public().encode());
     }
 
     #[test]
@@ -1238,5 +1300,49 @@ mod tests {
             .parse()
             .expect("Can decode both secp");
         let _decoded_enr: Enr<CombinedKey> = base64_string_ed25519.parse().unwrap();
+    }
+
+    #[test]
+    fn test_remove_insert() {
+        let mut rng = rand::thread_rng();
+        let key = k256::ecdsa::SigningKey::random(&mut rng);
+        let tcp = 30303;
+        let mut topics = Vec::new();
+        let mut s = RlpStream::new();
+        s.begin_list(2);
+        s.append(&"lighthouse");
+        s.append(&"eth_syncing");
+        topics.extend_from_slice(&s.out().freeze());
+
+        let mut enr = {
+            let mut builder = EnrBuilder::new("v4");
+            builder.tcp4(tcp);
+            builder.build(&key).unwrap()
+        };
+
+        assert_eq!(enr.tcp4(), Some(tcp));
+        assert_eq!(enr.get("topics"), None);
+
+        let topics: &[u8] = &topics;
+
+        let (removed, inserted) = enr
+            .remove_insert(
+                vec![b"tcp"].iter(),
+                vec![(b"topics", topics)].into_iter(),
+                &key,
+            )
+            .unwrap();
+
+        assert_eq!(
+            removed[0],
+            Some(rlp::encode(&tcp.to_be_bytes().to_vec()).freeze())
+        );
+        assert_eq!(inserted[0], None);
+
+        assert_eq!(enr.tcp4(), None);
+        assert_eq!(enr.get("topics"), Some(topics));
+
+        // Compare the encoding as the key itself can be different
+        assert_eq!(enr.public_key().encode(), key.public().encode());
     }
 }
