@@ -187,7 +187,8 @@ use log::debug;
 use rlp::{DecoderError, Rlp, RlpStream};
 use std::{
     collections::BTreeMap,
-    net::{SocketAddrV4, SocketAddrV6}, hash::{Hash, Hasher},
+    hash::{Hash, Hasher},
+    net::{SocketAddrV4, SocketAddrV6},
 };
 
 #[cfg(feature = "serde")]
