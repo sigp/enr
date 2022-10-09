@@ -941,20 +941,10 @@ impl<K: EnrKey> rlp::Decodable for Enr<K> {
             .next()
             .ok_or(DecoderError::Custom("List is empty"))?
             .data()?;
-        let seq_bytes = rlp_iter
+        let seq: u64 = rlp_iter
             .next()
             .ok_or(DecoderError::Custom("List has only one item"))?
-            .data()?;
-
-        if seq_bytes.len() > 8 {
-            debug!("Failed to decode ENR. Sequence number is not a u64.");
-            return Err(DecoderError::Custom("Invalid Sequence number"));
-        }
-
-        // build u64 from big endian vec<u8>
-        let mut seq: [u8; 8] = [0; 8];
-        seq[8 - seq_bytes.len()..].copy_from_slice(seq_bytes);
-        let seq = u64::from_be_bytes(seq);
+            .as_val()?;
 
         let mut content = BTreeMap::new();
         let mut prev: Option<&[u8]> = None;
@@ -1124,6 +1114,32 @@ mod tests {
     fn test_read_enr_prefix() {
         let text = "enr:-Iu4QM-YJF2RRpMcZkFiWzMf2kRd1A5F1GIekPa4Sfi_v0DCLTDBfOMTMMWJhhawr1YLUPb5008CpnBKrgjY3sstjfgCgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQP8u1uyQFyJYuQUTyA1raXKhSw1HhhxNUQ2VE52LNHWMIN0Y3CCIyiDdWRwgiMo";
         text.parse::<DefaultEnr>().unwrap();
+    }
+
+    /// Tests that RLP integers decoding rejects any item with leading zeroes.
+    #[cfg(feature = "k256")]
+    #[test]
+    fn test_rlp_integer_decoding() {
+        // Uses the example node from the ENR spec.
+        //
+        // We first replace "seq" 0x01 with 0x0001 for a leading zero byte,
+        // and then construct the RLP.
+        //
+        // ```
+        // seq = bytes.fromhex('0001')  # replaces 0x01
+        // rlp_data = encode(
+        //     [
+        //         0x7098ad865b00a582051940cb9cf36836572411a47278783077011599ed5cd16b76f2635f4e234738f30813a89eb9137e3e3df5266e3a1f11df72ecf1145ccb9c,
+        //         seq, 'id', 'v4', 'ip', 0x7f000001, 'secp256k1', bytes.fromhex(
+        //         '03ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd3138'), 'udp', 0x765f])
+        // textual_form = "enr:" + urlsafe_b64encode(rlp_data).decode('utf-8').rstrip('=')
+        // print(textual_form)
+        // ```
+        let text = "enr:-Ia4QHCYrYZbAKWCBRlAy5zzaDZXJBGkcnh4MHcBFZntXNFrdvJjX04jRzjzCBOonrkTfj499SZuOh8R33Ls8RRcy5yCAAGCaWSCdjSCaXCEfwAAAYlzZWNwMjU2azGhA8pjTK4NSay0Adikxrb-jFW3DRFb9AB2nMFADzJYzTE4g3VkcIJ2Xw";
+        assert_eq!(
+            text.parse::<DefaultEnr>().unwrap_err(),
+            "Invalid ENR: RlpInvalidIndirection"
+        );
     }
 
     #[cfg(feature = "rust-secp256k1")]
