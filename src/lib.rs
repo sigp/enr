@@ -1193,7 +1193,11 @@ mod tests {
 
         let key = secp256k1::SecretKey::from_slice(&key_data).unwrap();
         let enr = EnrBuilder::new("v4").ip4(ip).udp4(udp).build(&key).unwrap();
-        assert_eq!(enr.to_base64(), expected_enr_base64);
+        let enr_base64 = enr.to_base64();
+        assert_eq!(enr_base64, expected_enr_base64);
+
+        let enr = enr_base64.parse::<Enr<secp256k1::SecretKey>>().unwrap();
+        assert!(enr.verify());
     }
 
     #[cfg(feature = "k256")]
