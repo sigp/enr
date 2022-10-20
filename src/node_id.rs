@@ -76,6 +76,12 @@ impl PartialEq<RawNodeId> for NodeId {
     }
 }
 
+impl From<RawNodeId> for NodeId {
+    fn from(raw: RawNodeId) -> Self {
+        Self { raw }
+    }
+}
+
 impl std::fmt::Display for NodeId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let hex_encode = hex::encode(self.raw);
