@@ -64,6 +64,18 @@ impl<T: EnrKey> From<&Enr<T>> for NodeId {
     }
 }
 
+impl AsRef<[u8]> for NodeId {
+    fn as_ref(&self) -> &[u8] {
+        &self.raw[..]
+    }
+}
+
+impl PartialEq<RawNodeId> for NodeId {
+    fn eq(&self, other: &RawNodeId) -> bool {
+        self.raw.eq(other)
+    }
+}
+
 impl std::fmt::Display for NodeId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let hex_encode = hex::encode(self.raw);
@@ -73,5 +85,18 @@ impl std::fmt::Display for NodeId {
             &hex_encode[0..4],
             &hex_encode[hex_encode.len() - 4..]
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_eq_node_raw_node() {
+        let node = NodeId::random();
+        let raw = node.raw;
+        assert_eq!(node, raw);
+        assert_eq!(node.as_ref(), &raw[..]);
     }
 }
