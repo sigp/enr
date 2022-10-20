@@ -26,8 +26,7 @@ impl EnrKey for secp256k1::SecretKey {
         let signature = {
             let mut noncedata = [0; 32];
             OsRng.fill_bytes(&mut noncedata);
-            let signature = SECP256K1.sign_ecdsa_with_noncedata(&m, self, &noncedata);
-            signature
+            SECP256K1.sign_ecdsa_with_noncedata(&m, self, &noncedata)
         };
         Ok(signature.serialize_compact().to_vec())
     }
