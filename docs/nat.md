@@ -9,6 +9,7 @@ hole-punching in [discv5](https://github.com/sigp/discv5).
 This library supports the following additional fields:
 
 | Key | Value |
+| --- | ----- |
 | `features` | A bitfield representing which features are supported |
 | `nat` | IPv4 address, 4 bytes, representing a NAT'd external IP address |
 | `nat6` | IPv6 address, 16 bytes, representing a NAT'd external IPv6 address |
