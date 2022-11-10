@@ -14,6 +14,8 @@ pub enum EnrError {
     SigningError,
     /// The identity scheme is not supported.
     UnsupportedIdentityScheme,
+    /// The Nat configuration is incorrect.
+    NATConfigurationError,
     /// The entered RLP data is invalid.
     InvalidRlpData(String),
 }
@@ -25,6 +27,7 @@ impl fmt::Display for EnrError {
             Self::SequenceNumberTooHigh => write!(f, "sequence number too large"),
             Self::SigningError => write!(f, "signing error"),
             Self::UnsupportedIdentityScheme => write!(f, "unsupported identity scheme"),
+            Self::NATConfigurationError => write!(f, "NAT fields cannot be set with IP fields"),
             Self::InvalidRlpData(_rlp) => write!(f, "invalid rlp data"),
         }
     }

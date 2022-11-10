@@ -1,4 +1,8 @@
 use crate::{Enr, EnrError, EnrKey, EnrPublicKey, Key, NodeId, MAX_ENR_SIZE};
+use crate::{
+    FEATURES_FIELD, ID_FIELD, IP6_FIELD, IP_FIELD, NAT6_FIELD, NAT_FIELD, TCP6_FIELD, TCP_FIELD,
+    UDP6_FIELD, UDP_FIELD, V4,
+};
 use bytes::{Bytes, BytesMut};
 use rlp::RlpStream;
 use std::{
@@ -63,13 +67,13 @@ impl<K: EnrKey> EnrBuilder<K> {
 
     /// Adds an `ip` field to the `ENRBuilder`.
     pub fn ip4(&mut self, ip: Ipv4Addr) -> &mut Self {
-        self.add_value("ip", &ip.octets());
+        self.add_value(IP_FIELD, &ip.octets());
         self
     }
 
     /// Adds an `ip6` field to the `ENRBuilder`.
     pub fn ip6(&mut self, ip: Ipv6Addr) -> &mut Self {
-        self.add_value("ip6", &ip.octets());
+        self.add_value(IP6_FIELD, &ip.octets());
         self
     }
 
@@ -79,32 +83,59 @@ impl<K: EnrKey> EnrBuilder<K> {
 
     /// Adds an `Id` field to the `ENRBuilder`.
     pub fn id(&mut self, id: &str) -> &mut Self {
-        self.add_value("id", &id.as_bytes());
+        self.add_value(ID_FIELD, &id.as_bytes());
         self
     }
     */
 
     /// Adds a `tcp` field to the `ENRBuilder`.
     pub fn tcp4(&mut self, tcp: u16) -> &mut Self {
-        self.add_value("tcp", &tcp.to_be_bytes());
+        self.add_value(TCP_FIELD, &tcp.to_be_bytes());
         self
     }
 
     /// Adds a `tcp6` field to the `ENRBuilder`.
     pub fn tcp6(&mut self, tcp: u16) -> &mut Self {
-        self.add_value("tcp6", &tcp.to_be_bytes());
+        self.add_value(TCP6_FIELD, &tcp.to_be_bytes());
         self
     }
 
     /// Adds a `udp` field to the `ENRBuilder`.
     pub fn udp4(&mut self, udp: u16) -> &mut Self {
-        self.add_value("udp", &udp.to_be_bytes());
+        self.add_value(UDP_FIELD, &udp.to_be_bytes());
         self
     }
 
     /// Adds a `udp6` field to the `ENRBuilder`.
     pub fn udp6(&mut self, udp: u16) -> &mut Self {
-        self.add_value("udp6", &udp.to_be_bytes());
+        self.add_value(UDP6_FIELD, &udp.to_be_bytes());
+        self
+    }
+
+    // NAT Specific functions
+
+    pub fn features(&mut self, features: u8) -> &mut Self {
+        self.add_value(FEATURES_FIELD, &[features]);
+        self
+    }
+
+    /// Adds an NAT `ip`/`ip6` field to the `ENRBuilder`.
+    pub fn nat(&mut self, ip: IpAddr) -> &mut Self {
+        match ip {
+            IpAddr::V4(addr) => self.ip4(addr),
+            IpAddr::V6(addr) => self.ip6(addr),
+        }
+    }
+
+    /// Adds an `nat` field to the `ENRBuilder`.
+    pub fn nat4(&mut self, ip: Ipv4Addr) -> &mut Self {
+        self.add_value(NAT_FIELD, &ip.octets());
+        self
+    }
+
+    /// Adds an `ip6` field to the `ENRBuilder`.
+    pub fn nat6(&mut self, ip: Ipv6Addr) -> &mut Self {
+        self.add_value(NAT6_FIELD, &ip.octets());
         self
     }
 
@@ -143,8 +174,21 @@ impl<K: EnrKey> EnrBuilder<K> {
     /// Fails if the identity scheme is not supported, or the record size exceeds `MAX_ENR_SIZE`.
     pub fn build(&mut self, key: &K) -> Result<Enr<K>, EnrError> {
         // add the identity scheme to the content
-        if self.id != "v4" {
+        if self.id != V4 {
             return Err(EnrError::UnsupportedIdentityScheme);
+        }
+
+        // If an IP field is set, the NAT fields cannot be set, and vice-versa.
+        if self.content.get(IP_FIELD.as_bytes()).is_some()
+            && self.content.get(NAT_FIELD.as_bytes()).is_some()
+        {
+            return Err(EnrError::NATConfigurationError);
+        }
+
+        if self.content.get(IP6_FIELD.as_bytes()).is_some()
+            && self.content.get(NAT6_FIELD.as_bytes()).is_some()
+        {
+            return Err(EnrError::NATConfigurationError);
         }
 
         // Sanitize all data, ensuring all RLP data is correctly formatted.
@@ -156,7 +200,7 @@ impl<K: EnrKey> EnrBuilder<K> {
             }
         }
 
-        self.add_value_rlp("id", rlp::encode(&self.id.as_bytes()).freeze());
+        self.add_value_rlp(ID_FIELD, rlp::encode(&self.id.as_bytes()).freeze());
 
         self.add_public_key(&key.public());
         let rlp_content = self.rlp_content();

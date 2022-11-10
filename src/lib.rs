@@ -179,6 +179,7 @@
 
 mod builder;
 mod error;
+mod feature_bitfield;
 mod keys;
 mod node_id;
 
@@ -201,6 +202,7 @@ use std::{
 
 pub use builder::EnrBuilder;
 pub use error::EnrError;
+pub use feature_bitfield::{Feature, FeatureBitfield, NAT_FEATURE};
 
 #[cfg(feature = "k256")]
 pub use keys::k256;
@@ -212,6 +214,32 @@ pub use keys::{ed25519_dalek, CombinedKey, CombinedPublicKey};
 pub use keys::{EnrKey, EnrKeyUnambiguous, EnrPublicKey};
 pub use node_id::NodeId;
 use std::marker::PhantomData;
+
+// Set of default keys for the ENR specification
+/// The ENR version field.
+pub const ID_FIELD: &str = "id";
+/// The only specified ID version.
+pub const V4: &str = "v4";
+/// The IP field.
+pub const IP_FIELD: &str = "ip";
+/// The IPv6 field.
+pub const IP6_FIELD: &str = "ip6";
+/// The tcp field.
+pub const TCP_FIELD: &str = "tcp";
+/// The tcp6 field.
+pub const TCP6_FIELD: &str = "tcp6";
+/// The udp field.
+pub const UDP_FIELD: &str = "udp";
+/// The udp6 field.
+pub const UDP6_FIELD: &str = "udp6";
+
+// NAT specific fields
+/// The features field.
+pub const FEATURES_FIELD: &str = "features";
+/// The nat field.
+pub const NAT_FIELD: &str = "nat";
+/// The nat6 field.
+pub const NAT6_FIELD: &str = "nat6";
 
 /// The "key" in an ENR record can be arbitrary bytes.
 type Key = Vec<u8>;
@@ -278,7 +306,7 @@ impl<K: EnrKey> Enr<K> {
     /// Returns the IPv4 address of the ENR record if it is defined.
     #[must_use]
     pub fn ip4(&self) -> Option<Ipv4Addr> {
-        if let Some(ip_bytes) = self.get("ip") {
+        if let Some(ip_bytes) = self.get(IP_FIELD) {
             return match ip_bytes.len() {
                 4 => {
                     let mut ip = [0_u8; 4];
@@ -294,7 +322,7 @@ impl<K: EnrKey> Enr<K> {
     /// Returns the IPv6 address of the ENR record if it is defined.
     #[must_use]
     pub fn ip6(&self) -> Option<Ipv6Addr> {
-        if let Some(ip_bytes) = self.get("ip6") {
+        if let Some(ip_bytes) = self.get(IP6_FIELD) {
             return match ip_bytes.len() {
                 16 => {
                     let mut ip = [0_u8; 16];
@@ -310,7 +338,7 @@ impl<K: EnrKey> Enr<K> {
     /// The `id` of ENR record if it is defined.
     #[must_use]
     pub fn id(&self) -> Option<String> {
-        if let Some(id_bytes) = self.get("id") {
+        if let Some(id_bytes) = self.get(ID_FIELD) {
             return Some(String::from_utf8_lossy(id_bytes).to_string());
         }
         None
@@ -319,7 +347,7 @@ impl<K: EnrKey> Enr<K> {
     /// The TCP port of ENR record if it is defined.
     #[must_use]
     pub fn tcp4(&self) -> Option<u16> {
-        if let Some(tcp_bytes) = self.get("tcp") {
+        if let Some(tcp_bytes) = self.get(TCP_FIELD) {
             if tcp_bytes.len() <= 2 {
                 let mut tcp = [0_u8; 2];
                 tcp[2 - tcp_bytes.len()..].copy_from_slice(tcp_bytes);
@@ -332,7 +360,7 @@ impl<K: EnrKey> Enr<K> {
     /// The IPv6-specific TCP port of ENR record if it is defined.
     #[must_use]
     pub fn tcp6(&self) -> Option<u16> {
-        if let Some(tcp_bytes) = self.get("tcp6") {
+        if let Some(tcp_bytes) = self.get(TCP6_FIELD) {
             if tcp_bytes.len() <= 2 {
                 let mut tcp = [0_u8; 2];
                 tcp[2 - tcp_bytes.len()..].copy_from_slice(tcp_bytes);
@@ -345,7 +373,7 @@ impl<K: EnrKey> Enr<K> {
     /// The UDP port of ENR record if it is defined.
     #[must_use]
     pub fn udp4(&self) -> Option<u16> {
-        if let Some(udp_bytes) = self.get("udp") {
+        if let Some(udp_bytes) = self.get(UDP_FIELD) {
             if udp_bytes.len() <= 2 {
                 let mut udp = [0_u8; 2];
                 udp[2 - udp_bytes.len()..].copy_from_slice(udp_bytes);
@@ -358,7 +386,7 @@ impl<K: EnrKey> Enr<K> {
     /// The IPv6-specific UDP port of ENR record if it is defined.
     #[must_use]
     pub fn udp6(&self) -> Option<u16> {
-        if let Some(udp_bytes) = self.get("udp6") {
+        if let Some(udp_bytes) = self.get(UDP6_FIELD) {
             if udp_bytes.len() <= 2 {
                 let mut udp = [0_u8; 2];
                 udp[2 - udp_bytes.len()..].copy_from_slice(udp_bytes);
@@ -412,6 +440,76 @@ impl<K: EnrKey> Enr<K> {
         None
     }
 
+    /// Returns in the ENR supports a specific set of features (represented as a u8).
+    #[must_use]
+    pub fn supports_feature(&self, features: Feature) -> bool {
+        self.get(FEATURES_FIELD)
+            .map_or(false, |supported_features| {
+                let bitfield = FeatureBitfield::from(supported_features);
+                bitfield.supports_feature(features)
+            })
+    }
+
+    /// Returns if the ENR specifically supports the NAT feature.
+    #[must_use]
+    pub fn supports_nat(&self) -> bool {
+        self.supports_feature(NAT_FEATURE)
+    }
+
+    /// Returns the `nat` field of the ENR.
+    #[must_use]
+    pub fn nat4(&self) -> Option<Ipv4Addr> {
+        if let Some(ip_bytes) = self.get(NAT_FIELD) {
+            return match ip_bytes.len() {
+                4 => {
+                    let mut ip = [0_u8; 4];
+                    ip.copy_from_slice(ip_bytes);
+                    Some(Ipv4Addr::from(ip))
+                }
+                _ => None,
+            };
+        }
+        None
+    }
+
+    /// Returns the `nat6` field of the ENR.
+    #[must_use]
+    pub fn nat6(&self) -> Option<Ipv6Addr> {
+        if let Some(ip_bytes) = self.get(NAT6_FIELD) {
+            return match ip_bytes.len() {
+                16 => {
+                    let mut ip = [0_u8; 16];
+                    ip.copy_from_slice(ip_bytes);
+                    Some(Ipv6Addr::from(ip))
+                }
+                _ => None,
+            };
+        }
+        None
+    }
+
+    /// Returns the UDP socket if the `nat` field is set and its associated `udp` field.
+    #[must_use]
+    pub fn udp4_socket_nat(&self) -> Option<SocketAddrV4> {
+        if let Some(ip) = self.nat4() {
+            if let Some(udp) = self.udp4() {
+                return Some(SocketAddrV4::new(ip, udp));
+            }
+        }
+        None
+    }
+
+    /// Returns the UDP socket if the `nat6` field is set and its associated `udp6` field.
+    #[must_use]
+    pub fn udp6_socket_nat(&self) -> Option<SocketAddrV6> {
+        if let Some(ip6) = self.nat6() {
+            if let Some(udp6) = self.udp6() {
+                return Some(SocketAddrV6::new(ip6, udp6, 0, 0));
+            }
+        }
+        None
+    }
+
     /// The signature of the ENR record.
     #[must_use]
     pub fn signature(&self) -> &[u8] {
@@ -428,11 +526,9 @@ impl<K: EnrKey> Enr<K> {
     #[must_use]
     pub fn verify(&self) -> bool {
         let pubkey = self.public_key();
-        match self.id() {
-            Some(ref id) if id == "v4" => pubkey.verify_v4(&self.rlp_content(), &self.signature),
-            // unsupported identity schemes
-            _ => false,
-        }
+        self.id().as_ref().map_or(false, |_id| {
+            pubkey.verify_v4(&self.rlp_content(), &self.signature)
+        })
     }
 
     /// Provides the URL-safe base64 encoded "text" version of the ENR prefixed by "enr:".
@@ -492,7 +588,7 @@ impl<K: EnrKey> Enr<K> {
         enr_key: &K,
     ) -> Result<Option<Bytes>, EnrError> {
         // currently only support "v4" identity schemes
-        if key.as_ref() == b"id" && &*value != b"v4" {
+        if key.as_ref() == ID_FIELD.as_bytes() && &*value != V4.as_bytes() {
             return Err(EnrError::UnsupportedIdentityScheme);
         }
 
@@ -545,7 +641,7 @@ impl<K: EnrKey> Enr<K> {
     pub fn set_ip(&mut self, ip: IpAddr, key: &K) -> Result<Option<IpAddr>, EnrError> {
         match ip {
             IpAddr::V4(addr) => {
-                let prev_value = self.insert("ip", &addr.octets(), key)?;
+                let prev_value = self.insert(IP_FIELD, &addr.octets(), key)?;
                 if let Some(bytes) = prev_value {
                     if bytes.len() == 4 {
                         let mut v = [0_u8; 4];
@@ -555,7 +651,7 @@ impl<K: EnrKey> Enr<K> {
                 }
             }
             IpAddr::V6(addr) => {
-                let prev_value = self.insert("ip6", &addr.octets(), key)?;
+                let prev_value = self.insert(IP6_FIELD, &addr.octets(), key)?;
                 if let Some(bytes) = prev_value {
                     if bytes.len() == 16 {
                         let mut v = [0_u8; 16];
@@ -571,7 +667,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets the `udp` field of the ENR. Returns any pre-existing UDP port in the record.
     pub fn set_udp4(&mut self, udp: u16, key: &K) -> Result<Option<u16>, EnrError> {
-        if let Some(udp_bytes) = self.insert("udp", &udp.to_be_bytes(), key)? {
+        if let Some(udp_bytes) = self.insert(UDP_FIELD, &udp.to_be_bytes(), key)? {
             if udp_bytes.len() <= 2 {
                 let mut v = [0_u8; 2];
                 v[2 - udp_bytes.len()..].copy_from_slice(&udp_bytes);
@@ -583,7 +679,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets the `udp6` field of the ENR. Returns any pre-existing UDP port in the record.
     pub fn set_udp6(&mut self, udp: u16, key: &K) -> Result<Option<u16>, EnrError> {
-        if let Some(udp_bytes) = self.insert("udp6", &udp.to_be_bytes(), key)? {
+        if let Some(udp_bytes) = self.insert(UDP6_FIELD, &udp.to_be_bytes(), key)? {
             if udp_bytes.len() <= 2 {
                 let mut v = [0_u8; 2];
                 v[2 - udp_bytes.len()..].copy_from_slice(&udp_bytes);
@@ -595,7 +691,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets the `tcp` field of the ENR. Returns any pre-existing tcp port in the record.
     pub fn set_tcp4(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, EnrError> {
-        if let Some(tcp_bytes) = self.insert("tcp", &tcp.to_be_bytes(), key)? {
+        if let Some(tcp_bytes) = self.insert(TCP_FIELD, &tcp.to_be_bytes(), key)? {
             if tcp_bytes.len() <= 2 {
                 let mut v = [0_u8; 2];
                 v[2 - tcp_bytes.len()..].copy_from_slice(&tcp_bytes);
@@ -607,7 +703,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets the `tcp6` field of the ENR. Returns any pre-existing tcp6 port in the record.
     pub fn set_tcp6(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, EnrError> {
-        if let Some(tcp_bytes) = self.insert("tcp6", &tcp.to_be_bytes(), key)? {
+        if let Some(tcp_bytes) = self.insert(TCP6_FIELD, &tcp.to_be_bytes(), key)? {
             if tcp_bytes.len() <= 2 {
                 let mut v = [0_u8; 2];
                 v[2 - tcp_bytes.len()..].copy_from_slice(&tcp_bytes);
@@ -630,9 +726,9 @@ impl<K: EnrKey> Enr<K> {
     /// Helper function for `set_tcp_socket()` and `set_udp_socket`.
     fn set_socket(&mut self, socket: SocketAddr, key: &K, is_tcp: bool) -> Result<(), EnrError> {
         let (port_string, port_v6_string): (Key, Key) = if is_tcp {
-            ("tcp".into(), "tcp6".into())
+            (TCP_FIELD.into(), TCP6_FIELD.into())
         } else {
-            ("udp".into(), "udp6".into())
+            (UDP_FIELD.into(), UDP6_FIELD.into())
         };
 
         let (prev_ip, prev_port) = match socket.ip() {
@@ -747,7 +843,7 @@ impl<K: EnrKey> Enr<K> {
         let mut inserted = Vec::new();
         for (key, value) in insert_key_values {
             // currently only support "v4" identity schemes
-            if key.as_ref() == b"id" && value != b"v4" {
+            if key.as_ref() == ID_FIELD.as_bytes() && value != V4.as_bytes() {
                 *self = enr_backup;
                 return Err(EnrError::UnsupportedIdentityScheme);
             }
@@ -783,6 +879,77 @@ impl<K: EnrKey> Enr<K> {
     pub fn set_public_key(&mut self, public_key: &K::PublicKey, key: &K) -> Result<(), EnrError> {
         self.insert(&public_key.enr_key(), public_key.encode().as_ref(), key)
             .map(|_| {})
+    }
+
+    /// Sets the NAT feature on the ENR.
+    pub fn set_nat_feature(&mut self, enr_key: &K) -> Result<Option<Feature>, EnrError> {
+        self.set_features(enr_key, NAT_FEATURE)
+    }
+
+    /// Sets a set of supported features, returning any previously set features.
+    pub fn set_features(&mut self, enr_key: &K, features: Feature) -> Result<Option<u8>, EnrError> {
+        let bitfield = self.get(FEATURES_FIELD).map(FeatureBitfield::from);
+
+        let mut new_bitfield = bitfield.clone().unwrap_or_else(FeatureBitfield::new);
+        new_bitfield.set_features(features);
+
+        self.insert(FEATURES_FIELD, &[new_bitfield.features()], enr_key)?;
+        Ok(bitfield.map(|field| field.features()))
+    }
+
+    /// A helper function to set the udp socket for a NAT'd peer.
+    pub fn set_udp_socket_nat(
+        &mut self,
+        enr_key: &K,
+        ip: impl std::convert::Into<IpAddr>,
+        port: Option<u16>,
+    ) -> Result<(), EnrError> {
+        match ip.into() {
+            IpAddr::V4(ip4) => {
+                // Removing 'ip' field to indicate to peers that this node is behind a NAT and
+                // can't listen for incoming connections (until a hole is punched).
+                if let Some(port) = port {
+                    self.remove_insert(
+                        std::iter::once(IP_FIELD),
+                        vec![
+                            (UDP_FIELD, port.to_be_bytes().as_slice()),
+                            (NAT_FIELD, ip4.octets().as_slice()),
+                        ]
+                        .into_iter(),
+                        enr_key,
+                    )?;
+                } else {
+                    self.remove_insert(
+                        [IP_FIELD, UDP_FIELD].iter(),
+                        vec![(NAT_FIELD, ip4.octets().as_slice())].into_iter(),
+                        enr_key,
+                    )?;
+                }
+                Ok(())
+            }
+            IpAddr::V6(ip6) => {
+                // Removing 'ip6' field to indicate to peers that this node is behind a NAT and
+                // can't listen for incoming connections (until a hole is punched).
+                if let Some(port) = port {
+                    self.remove_insert(
+                        std::iter::once(IP6_FIELD),
+                        vec![
+                            (NAT6_FIELD, ip6.octets().as_slice()),
+                            (UDP6_FIELD, port.to_be_bytes().as_slice()),
+                        ]
+                        .into_iter(),
+                        enr_key,
+                    )?;
+                } else {
+                    self.remove_insert(
+                        [IP6_FIELD, UDP6_FIELD].iter(),
+                        vec![(NAT6_FIELD, ip6.octets().as_slice())].into_iter(),
+                        enr_key,
+                    )?;
+                };
+                Ok(())
+            }
+        }
     }
 
     // Private Functions //
@@ -1385,7 +1552,7 @@ mod tests {
 
         let (removed, inserted) = enr
             .remove_insert(
-                vec![b"tcp"].iter(),
+                vec![TCP_FIELD].iter(),
                 vec![(b"topics", topics)].into_iter(),
                 &key,
             )
