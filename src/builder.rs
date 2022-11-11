@@ -122,8 +122,8 @@ impl<K: EnrKey> EnrBuilder<K> {
     /// Adds an NAT `ip`/`ip6` field to the `ENRBuilder`.
     pub fn nat(&mut self, ip: IpAddr) -> &mut Self {
         match ip {
-            IpAddr::V4(addr) => self.ip4(addr),
-            IpAddr::V6(addr) => self.ip6(addr),
+            IpAddr::V4(addr) => self.nat4(addr),
+            IpAddr::V6(addr) => self.nat6(addr),
         }
     }
 
