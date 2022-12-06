@@ -93,16 +93,3 @@ impl std::fmt::Display for NodeId {
         )
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_eq_node_raw_node() {
-        let node = NodeId::random();
-        let raw = node.raw;
-        assert_eq!(node, raw);
-        assert_eq!(node.as_ref(), &raw[..]);
-    }
-}
