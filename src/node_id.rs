@@ -1,12 +1,43 @@
-//! The identifier for an ENR record. This is the keccak256 hash of the public key (for secp256k1
-//! keys this is the uncompressed encoded form of the public key).
+//! ### `NodeId`
+//!
+//! The identifier for an ENR record - a keccak256 hash of the public key.
+//! For secp256k1 keys this is the uncompressed encoded form of the public key.
+//!
+//! #### Usage
+//!
+//! The `NodeId` can be constructed using the [rand](rand) crate. See an example below.
+//! ```rust
+//! use enr::NodeId;
+//! let node_id = NodeId::random();
+//! ```
+//!
+//! Another option is providing a 32 byte array to the `new` function.
+//! ```rust
+//! use enr::NodeId;
+//! let node_id = NodeId::new([0; 32]);
+//! ```
+//!
+//! Additionally, [`NodeId`](enr::NodeId) conveniently exposes a `parse` function which takes a slice with dynamic length.
+//! NOTE: This method only accepts slices with length <= 32, padding underflowing slices with zeros.
+//! ```rust
+//! use enr::NodeId;
+//! let node_id = NodeId::parse(&[0; 32]).unwrap();
+//! ```
+//!
+//! To retrieve the raw bytes of the node id, use the `raw` method as follows.
+//! ```rust
+//! use enr::NodeId;
+//! let node_id = NodeId::new([0; 32]);
+//! let raw = node_id.raw();
+//! assert_eq!(raw, [0; 32]);
+//! ```
 
 use crate::{digest, keys::EnrPublicKey, Enr, EnrKey};
 
 type RawNodeId = [u8; 32];
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 /// The `NodeId` of an ENR (a 32 byte identifier).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct NodeId {
     raw: RawNodeId,
 }
