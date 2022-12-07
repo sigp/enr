@@ -7,7 +7,7 @@ use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
 };
 
-///! The base builder for generating ENR records with arbitrary signing algorithms.
+/// The base builder for generating ENR records with arbitrary signing algorithms.
 pub struct EnrBuilder<K: EnrKey> {
     /// The identity scheme used to build the ENR record.
     id: String,
