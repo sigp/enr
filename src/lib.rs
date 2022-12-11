@@ -164,8 +164,8 @@
 //!
 //! [`CombinedKey`]: enum.CombinedKey.html
 //! [`EnrKey`]: trait.EnrKey.html
-//! [`Enr`]: struct.EnrBase.html
-//! [`EnrBuilder`]: struct.EnrBuilderBase.html
+//! [`Enr`]: struct.Enr.html
+//! [`EnrBuilder`]: struct.EnrBuilder.html
 //! [`NodeId`]: struct.NodeId.html
 //! [`insert`]: struct.Enr.html#method.insert
 //! [`get`]: struct.Enr.html#method.get
