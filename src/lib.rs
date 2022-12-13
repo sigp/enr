@@ -175,7 +175,7 @@
     clippy::map_err_ignore,
     clippy::missing_errors_doc,
     clippy::module_name_repetitions,
-    clippy::option_if_let_else,
+    clippy::option_if_let_else
 )]
 
 mod builder;
