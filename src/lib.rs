@@ -164,8 +164,8 @@
 //!
 //! [`CombinedKey`]: enum.CombinedKey.html
 //! [`EnrKey`]: trait.EnrKey.html
-//! [`Enr`]: struct.EnrBase.html
-//! [`EnrBuilder`]: struct.EnrBuilderBase.html
+//! [`Enr`]: struct.Enr.html
+//! [`EnrBuilder`]: struct.EnrBuilder.html
 //! [`NodeId`]: struct.NodeId.html
 //! [`insert`]: struct.Enr.html#method.insert
 //! [`get`]: struct.Enr.html#method.get
@@ -174,7 +174,8 @@
 #![allow(
     clippy::map_err_ignore,
     clippy::missing_errors_doc,
-    clippy::module_name_repetitions
+    clippy::module_name_repetitions,
+    clippy::option_if_let_else
 )]
 
 mod builder;
