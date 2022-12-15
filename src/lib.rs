@@ -814,6 +814,12 @@ impl<K: EnrKey> Enr<K> {
         };
         Ok(())
     }
+
+    /// Consumes the type and returns all pairs of ENR
+    #[must_use]
+    pub fn into_pairs(self) -> BTreeMap<Key, Bytes> {
+        self.content
+    }
 }
 
 // traits //
