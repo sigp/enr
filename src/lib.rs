@@ -440,7 +440,7 @@ impl<K: EnrKey> Enr<K> {
     #[must_use]
     pub fn to_base64(&self) -> String {
         let hex = base64::encode_config(&rlp::encode(self), base64::URL_SAFE_NO_PAD);
-        format!("enr:{}", hex)
+        format!("enr:{hex}")
     }
 
     /// Returns the current size of the ENR.
@@ -851,19 +851,43 @@ impl<K: EnrKey> Hash for Enr<K> {
 
 impl<K: EnrKey> std::fmt::Display for Enr<K> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "ENR: NodeId: {}, IpV4 Socket: {:?} IpV6 Socket: {:?}",
-            self.node_id(),
-            self.udp4_socket(),
-            self.udp6_socket()
-        )
+        write!(f, "{}", self.to_base64())
     }
 }
 
 impl<K: EnrKey> std::fmt::Debug for Enr<K> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.to_base64())
+        struct OtherPairs<'a>(&'a BTreeMap<Key, Bytes>);
+
+        impl<'a> std::fmt::Debug for OtherPairs<'a> {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.debug_list()
+                    .entries(
+                        self.0
+                            .iter()
+                            .filter(|(key, _)| {
+                                // skip all pairs already covered as fields
+                                !["id", "ip", "ip6", "udp", "udp6", "tcp", "tcp6"]
+                                    .iter()
+                                    .any(|k| k.as_bytes() == key.as_slice())
+                            })
+                            .map(|(key, val)| (String::from_utf8_lossy(key), hex::encode(val))),
+                    )
+                    .finish()
+            }
+        }
+
+        f.debug_struct("Enr")
+            .field("id", &self.id())
+            .field("seq", &self.seq())
+            .field("NodeId", &self.node_id())
+            .field("signature", &hex::encode(&self.signature))
+            .field("IpV4 UDP Socket", &self.udp4_socket())
+            .field("IpV6 UDP Socket", &self.udp6_socket())
+            .field("IpV4 TCP Socket", &self.tcp4_socket())
+            .field("IpV6 TCP Socket", &self.tcp6_socket())
+            .field("Other Pairs", &OtherPairs(&self.content))
+            .finish()
     }
 }
 
@@ -883,8 +907,8 @@ impl<K: EnrKey> FromStr for Enr<K> {
                 .ok_or_else(|| "Invalid ENR string".to_string())?;
         }
         let bytes = base64::decode_config(decode_string, base64::URL_SAFE_NO_PAD)
-            .map_err(|e| format!("Invalid base64 encoding: {:?}", e))?;
-        rlp::decode(&bytes).map_err(|e| format!("Invalid ENR: {:?}", e))
+            .map_err(|e| format!("Invalid base64 encoding: {e:?}"))?;
+        rlp::decode(&bytes).map_err(|e| format!("Invalid ENR: {e:?}"))
     }
 }
 
