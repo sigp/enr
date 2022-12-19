@@ -276,6 +276,11 @@ impl<K: EnrKey> Enr<K> {
         self.content.iter().map(|(k, v)| (k, v.as_ref()))
     }
 
+    /// Returns an owning iterator over all key/value pairs in the ENR.
+    pub fn into_iter(self) -> impl Iterator<Item = (Key, Bytes)> {
+        self.content.into_iter()
+    }
+
     /// Returns the IPv4 address of the ENR record if it is defined.
     #[must_use]
     pub fn ip4(&self) -> Option<Ipv4Addr> {
