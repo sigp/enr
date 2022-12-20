@@ -440,7 +440,7 @@ impl<K: EnrKey> Enr<K> {
     #[must_use]
     pub fn to_base64(&self) -> String {
         let hex = base64::encode_config(&rlp::encode(self), base64::URL_SAFE_NO_PAD);
-        format!("enr:{}", hex)
+        format!("enr:{hex}")
     }
 
     /// Returns the current size of the ENR.
@@ -883,8 +883,8 @@ impl<K: EnrKey> FromStr for Enr<K> {
                 .ok_or_else(|| "Invalid ENR string".to_string())?;
         }
         let bytes = base64::decode_config(decode_string, base64::URL_SAFE_NO_PAD)
-            .map_err(|e| format!("Invalid base64 encoding: {:?}", e))?;
-        rlp::decode(&bytes).map_err(|e| format!("Invalid ENR: {:?}", e))
+            .map_err(|e| format!("Invalid base64 encoding: {e:?}"))?;
+        rlp::decode(&bytes).map_err(|e| format!("Invalid ENR: {e:?}"))
     }
 }
 
