@@ -26,6 +26,7 @@ increased.
 Different identity schemes can be used to define the node id and signatures. Currently only the
 "v4" identity is supported and is set by default.
 
+This crate also supports the [NAT extension](./docs/nat.md) for ENRs.
 ## Signing Algorithms
 
 User's wishing to implement their own singing algorithms simply need to
