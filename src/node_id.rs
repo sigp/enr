@@ -5,7 +5,7 @@ use crate::{digest, keys::EnrPublicKey, Enr, EnrKey};
 
 type RawNodeId = [u8; 32];
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 /// The `NodeId` of an ENR (a 32 byte identifier).
 pub struct NodeId {
     raw: RawNodeId,
@@ -91,6 +91,12 @@ impl std::fmt::Display for NodeId {
             &hex_encode[0..4],
             &hex_encode[hex_encode.len() - 4..]
         )
+    }
+}
+
+impl std::fmt::Debug for NodeId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "0x{}", hex::encode(self.raw))
     }
 }
 
