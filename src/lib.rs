@@ -276,11 +276,6 @@ impl<K: EnrKey> Enr<K> {
         self.content.iter().map(|(k, v)| (k, v.as_ref()))
     }
 
-    /// Returns an owning iterator over all key/value pairs in the ENR.
-    pub fn into_iter(self) -> impl Iterator<Item = (Key, Bytes)> {
-        self.content.into_iter()
-    }
-
     /// Returns the IPv4 address of the ENR record if it is defined.
     #[must_use]
     pub fn ip4(&self) -> Option<Ipv4Addr> {
@@ -1026,6 +1021,31 @@ impl<K: EnrKey> rlp::Decodable for Enr<K> {
             return Err(DecoderError::Custom("Invalid Signature"));
         }
         Ok(enr)
+    }
+}
+
+/// Owning iterator over all key/value pairs in the ENR.
+pub struct EnrIntoIter {
+    inner: <BTreeMap<Key, Bytes> as IntoIterator>::IntoIter,
+}
+
+impl Iterator for EnrIntoIter {
+    type Item = (Key, Bytes);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next()
+    }
+}
+
+impl<K: EnrKey> IntoIterator for Enr<K> {
+    type Item = (Key, Bytes);
+
+    type IntoIter = EnrIntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        EnrIntoIter {
+            inner: self.content.into_iter(),
+        }
     }
 }
 
