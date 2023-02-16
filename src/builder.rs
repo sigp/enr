@@ -142,6 +142,19 @@ impl<K: EnrKey> EnrBuilder<K> {
     /// # Errors
     /// Fails if the identity scheme is not supported, or the record size exceeds `MAX_ENR_SIZE`.
     pub fn build(&mut self, key: &K) -> Result<Enr<K>, EnrError> {
+        let signature = self.signature(key)?;
+        self.build_with_public_key(key.public(), signature)
+    }
+
+    /// Constructs an ENR from the `EnrBuilder`, using the given public key and signature.
+    ///
+    /// # Errors
+    /// Fails if the identity scheme is not supported, or the record size exceeds `MAX_ENR_SIZE`.
+    pub fn build_with_public_key(
+        &mut self,
+        public_key: K::PublicKey,
+        signature: Vec<u8>,
+    ) -> Result<Enr<K>, EnrError> {
         // add the identity scheme to the content
         if self.id != "v4" {
             return Err(EnrError::UnsupportedIdentityScheme);
@@ -158,10 +171,8 @@ impl<K: EnrKey> EnrBuilder<K> {
 
         self.add_value_rlp("id", rlp::encode(&self.id.as_bytes()).freeze());
 
-        self.add_public_key(&key.public());
+        self.add_public_key(&public_key);
         let rlp_content = self.rlp_content();
-
-        let signature = self.signature(key)?;
 
         // check the size of the record
         if rlp_content.len() + signature.len() + 8 > MAX_ENR_SIZE {
@@ -170,7 +181,7 @@ impl<K: EnrKey> EnrBuilder<K> {
 
         Ok(Enr {
             seq: self.seq,
-            node_id: NodeId::from(key.public()),
+            node_id: NodeId::from(public_key),
             content: self.content.clone(),
             signature,
             phantom: PhantomData,
