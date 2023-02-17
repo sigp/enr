@@ -13,7 +13,6 @@ exclude = [".gitignore", ".github/*"]
 
 [dependencies]
 base64 = "0.13"
-bs58 = "0.4"
 bytes = "1"
 hex = "0.4.2"
 log = "0.4.8"
