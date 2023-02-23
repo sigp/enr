@@ -19,6 +19,9 @@ pub struct EnrBuilder<K: EnrKey> {
     /// Values are stored as RLP encoded bytes.
     content: BTreeMap<Key, Bytes>,
 
+    /// Optional signature to use. This will be verified against the computed signature.
+    signature: Option<Vec<u8>>,
+
     /// Pins the generic key types.
     phantom: PhantomData<K>,
 }
@@ -32,6 +35,7 @@ impl<K: EnrKey> EnrBuilder<K> {
             id: id.into(),
             seq: 1,
             content: BTreeMap::new(),
+            signature: None,
             phantom: PhantomData,
         }
     }
@@ -108,6 +112,13 @@ impl<K: EnrKey> EnrBuilder<K> {
         self
     }
 
+    /// Adds a signature to the [`EnrBuilder`]. This will be verified against the computed
+    /// signature to build a valid [`Enr`].
+    pub fn signature(&mut self, signature: Vec<u8>) -> &mut Self {
+        self.signature = Some(signature);
+        self
+    }
+
     /// Generates the rlp-encoded form of the ENR specified by the builder config.
     fn rlp_content(&self) -> BytesMut {
         let mut stream = RlpStream::new_with_buffer(BytesMut::with_capacity(MAX_ENR_SIZE));
@@ -122,7 +133,7 @@ impl<K: EnrKey> EnrBuilder<K> {
     }
 
     /// Signs record based on the identity scheme. Currently only "v4" is supported.
-    fn signature(&self, key: &K) -> Result<Vec<u8>, EnrError> {
+    fn signature_from_content(&self, key: &K) -> Result<Vec<u8>, EnrError> {
         match self.id.as_str() {
             "v4" => key
                 .sign_v4(&self.rlp_content())
@@ -161,19 +172,30 @@ impl<K: EnrKey> EnrBuilder<K> {
         self.add_public_key(&key.public());
         let rlp_content = self.rlp_content();
 
-        let signature = self.signature(key)?;
+        // Use the given signature if any, or compute it from contents. This will be verified.
+        let signature = self
+            .signature
+            .clone()
+            .unwrap_or(self.signature_from_content(key)?);
 
         // check the size of the record
         if rlp_content.len() + signature.len() + 8 > MAX_ENR_SIZE {
             return Err(EnrError::ExceedsMaxSize);
         }
 
-        Ok(Enr {
+        let enr = Enr {
             seq: self.seq,
             node_id: NodeId::from(key.public()),
             content: self.content.clone(),
             signature,
             phantom: PhantomData,
-        })
+        };
+
+        // If the signature was provided, we need to verify it first.
+        if !enr.verify() {
+            return Err(EnrError::SigningError);
+        }
+
+        Ok(enr)
     }
 }
