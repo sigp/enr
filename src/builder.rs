@@ -192,7 +192,7 @@ impl<K: EnrKey> EnrBuilder<K> {
         };
 
         // If the signature was provided, we need to verify it first.
-        if !enr.verify() {
+        if self.signature.is_some() && !enr.verify() {
             return Err(EnrError::SigningError);
         }
 
