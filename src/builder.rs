@@ -1,6 +1,6 @@
 use crate::{Enr, EnrError, EnrKey, EnrPublicKey, Key, NodeId, MAX_ENR_SIZE};
 use bytes::{Bytes, BytesMut};
-use rlp::RlpStream;
+use rlp::{Encodable, RlpStream};
 use std::{
     collections::BTreeMap,
     marker::PhantomData,
@@ -47,6 +47,11 @@ impl<K: EnrKey> EnrBuilder<K> {
         self.add_value_rlp(key, rlp::encode(&value).freeze())
     }
 
+    // TODO @age: Should this fn be pub?
+    fn add_integer<T: Encodable>(&mut self, key: impl AsRef<[u8]>, value: &T) -> &mut Self {
+        self.add_value_rlp(key, rlp::encode(value).freeze())
+    }
+
     /// Adds an arbitrary key-value where the value is raw RLP encoded bytes.
     pub fn add_value_rlp(&mut self, key: impl AsRef<[u8]>, rlp: Bytes) -> &mut Self {
         self.content.insert(key.as_ref().to_vec(), rlp);
@@ -86,25 +91,25 @@ impl<K: EnrKey> EnrBuilder<K> {
 
     /// Adds a `tcp` field to the `ENRBuilder`.
     pub fn tcp4(&mut self, tcp: u16) -> &mut Self {
-        self.add_value("tcp", &tcp.to_be_bytes());
+        self.add_integer("tcp", &tcp);
         self
     }
 
     /// Adds a `tcp6` field to the `ENRBuilder`.
     pub fn tcp6(&mut self, tcp: u16) -> &mut Self {
-        self.add_value("tcp6", &tcp.to_be_bytes());
+        self.add_integer("tcp6", &tcp);
         self
     }
 
     /// Adds a `udp` field to the `ENRBuilder`.
     pub fn udp4(&mut self, udp: u16) -> &mut Self {
-        self.add_value("udp", &udp.to_be_bytes());
+        self.add_integer("udp", &udp);
         self
     }
 
     /// Adds a `udp6` field to the `ENRBuilder`.
     pub fn udp6(&mut self, udp: u16) -> &mut Self {
-        self.add_value("udp6", &udp.to_be_bytes());
+        self.add_integer("udp6", &udp);
         self
     }
 
