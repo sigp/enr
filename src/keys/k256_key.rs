@@ -5,13 +5,13 @@ use crate::Key;
 use bytes::Bytes;
 use k256::{
     ecdsa::{
-        signature::{DigestVerifier, RandomizedDigestSigner, Signature as _},
+        signature::{DigestVerifier, RandomizedDigestSigner},
         Signature, SigningKey, VerifyingKey,
     },
     elliptic_curve::{
+        point::DecompressPoint,
         sec1::{Coordinates, ToEncodedPoint},
         subtle::Choice,
-        DecompressPoint,
     },
     AffinePoint, CompressedPoint, EncodedPoint,
 };
@@ -33,11 +33,11 @@ impl EnrKey for SigningKey {
             .try_sign_digest_with_rng(&mut OsRng, digest)
             .map_err(|_| SigningError::new("failed to sign"))?;
 
-        Ok(signature.as_bytes().to_vec())
+        Ok(signature.to_vec())
     }
 
     fn public(&self) -> Self::PublicKey {
-        self.verifying_key()
+        *self.verifying_key()
     }
 
     fn enr_to_public(content: &BTreeMap<Key, Bytes>) -> Result<Self::PublicKey, DecoderError> {
@@ -75,7 +75,7 @@ impl EnrPublicKey for VerifyingKey {
 
     fn encode(&self) -> Self::Raw {
         // serialize in compressed form: 33 bytes
-        self.to_bytes()
+        self.into()
     }
 
     fn encode_uncompressed(&self) -> Self::RawUncompressed {

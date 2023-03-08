@@ -78,7 +78,7 @@ impl CombinedKey {
     /// Generates a new secp256k1 key.
     #[must_use]
     pub fn generate_secp256k1() -> Self {
-        let key = k256::ecdsa::SigningKey::random(rand::thread_rng());
+        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
         Self::Secp256k1(key)
     }
 
@@ -97,7 +97,7 @@ impl CombinedKey {
 
     /// Imports a secp256k1 from raw bytes in any format.
     pub fn secp256k1_from_bytes(bytes: &mut [u8]) -> Result<Self, DecoderError> {
-        let key = k256::ecdsa::SigningKey::from_bytes(bytes)
+        let key = k256::ecdsa::SigningKey::from_slice(bytes)
             .map_err(|_| DecoderError::Custom("Invalid secp256k1 secret key"))
             .map(Self::from)?;
         bytes.zeroize();
