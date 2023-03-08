@@ -10,8 +10,8 @@ use std::{collections::BTreeMap, convert::TryFrom};
 /// The ENR key that stores the public key in the ENR record.
 pub const ENR_KEY: &str = "ed25519";
 
-impl EnrKey for ed25519::Keypair {
-    type PublicKey = ed25519::PublicKey;
+impl EnrKey for ed25519::SigningKey {
+    type PublicKey = ed25519::VerifyingKey;
 
     /// Performs ENR-specific signing.
     ///
@@ -23,7 +23,7 @@ impl EnrKey for ed25519::Keypair {
 
     /// Returns the public key associated with the private key.
     fn public(&self) -> Self::PublicKey {
-        self.public
+        self.verifying_key()
     }
 
     /// Decodes the raw bytes of an ENR's content into a public key if possible.
@@ -39,14 +39,14 @@ impl EnrKey for ed25519::Keypair {
     }
 }
 
-impl EnrKeyUnambiguous for ed25519::Keypair {
+impl EnrKeyUnambiguous for ed25519::SigningKey {
     fn decode_public(bytes: &[u8]) -> Result<Self::PublicKey, DecoderError> {
-        ed25519::PublicKey::from_bytes(bytes)
+        ed25519::VerifyingKey::try_from(bytes)
             .map_err(|_| DecoderError::Custom("Invalid ed25519 Signature"))
     }
 }
 
-impl EnrPublicKey for ed25519::PublicKey {
+impl EnrPublicKey for ed25519::VerifyingKey {
     type Raw = [u8; ed25519::PUBLIC_KEY_LENGTH];
     type RawUncompressed = [u8; ed25519::PUBLIC_KEY_LENGTH];
 
