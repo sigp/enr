@@ -480,11 +480,7 @@ impl<K: EnrKey> Enr<K> {
             return Err(EnrError::UnsupportedIdentityScheme);
         }
 
-        // TODO @age: You can't insert low integers with Enr::insert API now
-        // A solution would be to change the fn signature of ::insert to
-        // `pub fn insert<T: Encodable>(.., value: T)` so that u16 are encoded properly
-
-        // Prevent inserting invalid RLP integers
+        // Prevent inserting invalid RLP integers into keys with getters
         if is_keyof_u16(key.as_ref()) {
             rlp::decode::<u16>(&value).map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
         }
