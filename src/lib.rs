@@ -257,9 +257,9 @@ impl<K: EnrKey> Enr<K> {
         self.seq
     }
 
-    /// Reads a custom key from the record if it exists.
+    /// Reads a custom key from the record if it exists, decoded as data.
     pub fn get(&self, key: impl AsRef<[u8]>) -> Option<&[u8]> {
-        // It's ok to decode any valid RLP integer as data
+        // It's ok to decode any valid RLP value as data
         self.get_raw_rlp(key).map(|rlp_data| {
             rlp::Rlp::new(rlp_data)
                 .data()
@@ -267,11 +267,14 @@ impl<K: EnrKey> Enr<K> {
         })
     }
 
-    // TODO @age: Should this fn be public?
-    fn get_integer<T: Decodable>(&self, key: impl AsRef<[u8]>) -> Option<T> {
-        // data values may be invalid is parsed as integers, return None in that case
+    /// Reads a custom key from the record if it exists, decoded as `T`.
+    pub fn get_decodable<T: Decodable>(
+        &self,
+        key: impl AsRef<[u8]>,
+    ) -> Result<Option<T>, DecoderError> {
         self.get_raw_rlp(key)
-            .and_then(|rlp_data| rlp::Rlp::new(rlp_data).as_val().ok())
+            .map(|rlp_data| rlp::decode(rlp_data))
+            .transpose()
     }
 
     /// Reads a custom key from the record if it exists as raw RLP bytes.
@@ -328,25 +331,25 @@ impl<K: EnrKey> Enr<K> {
     /// The TCP port of ENR record if it is defined.
     #[must_use]
     pub fn tcp4(&self) -> Option<u16> {
-        self.get_integer("tcp")
+        self.get_decodable("tcp").ok().flatten()
     }
 
     /// The IPv6-specific TCP port of ENR record if it is defined.
     #[must_use]
     pub fn tcp6(&self) -> Option<u16> {
-        self.get_integer("tcp6")
+        self.get_decodable("tcp6").ok().flatten()
     }
 
     /// The UDP port of ENR record if it is defined.
     #[must_use]
     pub fn udp4(&self) -> Option<u16> {
-        self.get_integer("udp")
+        self.get_decodable("udp").ok().flatten()
     }
 
     /// The IPv6-specific UDP port of ENR record if it is defined.
     #[must_use]
     pub fn udp6(&self) -> Option<u16> {
-        self.get_integer("udp6")
+        self.get_decodable("udp6").ok().flatten()
     }
 
     /// Provides a socket (based on the UDP port), if the IPv4 and UDP fields are specified.
