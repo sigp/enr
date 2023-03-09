@@ -185,7 +185,7 @@ mod node_id;
 
 use bytes::{Bytes, BytesMut};
 use log::debug;
-use rlp::{Decodable, DecoderError, Rlp, RlpStream};
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{
     collections::BTreeMap,
     hash::{Hash, Hasher},
@@ -453,13 +453,13 @@ impl<K: EnrKey> Enr<K> {
     /// modified.
     ///
     /// Returns the previous value as rlp encoded bytes in the record if it exists.
-    pub fn insert(
+    pub fn insert<T: Encodable>(
         &mut self,
         key: impl AsRef<[u8]>,
-        value: &[u8],
+        value: &T,
         enr_key: &K,
     ) -> Result<Option<Bytes>, EnrError> {
-        self.insert_raw_rlp(key, rlp::encode(&value).freeze(), enr_key)
+        self.insert_raw_rlp(key, rlp::encode(value).freeze(), enr_key)
     }
 
     /// Adds or modifies a key/value to the ENR record. A `EnrKey` is required to re-sign the record once
@@ -535,7 +535,7 @@ impl<K: EnrKey> Enr<K> {
     pub fn set_ip(&mut self, ip: IpAddr, key: &K) -> Result<Option<IpAddr>, EnrError> {
         match ip {
             IpAddr::V4(addr) => {
-                let prev_value = self.insert("ip", &addr.octets(), key)?;
+                let prev_value = self.insert("ip", &addr.octets().as_ref(), key)?;
                 if let Some(bytes) = prev_value {
                     if bytes.len() == 4 {
                         let mut v = [0_u8; 4];
@@ -545,7 +545,7 @@ impl<K: EnrKey> Enr<K> {
                 }
             }
             IpAddr::V6(addr) => {
-                let prev_value = self.insert("ip6", &addr.octets(), key)?;
+                let prev_value = self.insert("ip6", &addr.octets().as_ref(), key)?;
                 if let Some(bytes) = prev_value {
                     if bytes.len() == 16 {
                         let mut v = [0_u8; 16];
@@ -561,7 +561,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets the `udp` field of the ENR. Returns any pre-existing UDP port in the record.
     pub fn set_udp4(&mut self, udp: u16, key: &K) -> Result<Option<u16>, EnrError> {
-        if let Some(udp_bytes) = self.insert_raw_rlp("udp", rlp::encode(&udp).freeze(), key)? {
+        if let Some(udp_bytes) = self.insert("udp", &udp, key)? {
             return Ok(rlp::decode(&udp_bytes).ok());
         }
         Ok(None)
@@ -569,7 +569,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets the `udp6` field of the ENR. Returns any pre-existing UDP port in the record.
     pub fn set_udp6(&mut self, udp: u16, key: &K) -> Result<Option<u16>, EnrError> {
-        if let Some(udp_bytes) = self.insert_raw_rlp("udp6", rlp::encode(&udp).freeze(), key)? {
+        if let Some(udp_bytes) = self.insert("udp6", &udp, key)? {
             return Ok(rlp::decode(&udp_bytes).ok());
         }
         Ok(None)
@@ -577,7 +577,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets the `tcp` field of the ENR. Returns any pre-existing tcp port in the record.
     pub fn set_tcp4(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, EnrError> {
-        if let Some(tcp_bytes) = self.insert_raw_rlp("tcp", rlp::encode(&tcp).freeze(), key)? {
+        if let Some(tcp_bytes) = self.insert("tcp", &tcp, key)? {
             return Ok(rlp::decode(&tcp_bytes).ok());
         }
         Ok(None)
@@ -585,7 +585,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets the `tcp6` field of the ENR. Returns any pre-existing tcp6 port in the record.
     pub fn set_tcp6(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, EnrError> {
-        if let Some(tcp_bytes) = self.insert_raw_rlp("tcp6", rlp::encode(&tcp).freeze(), key)? {
+        if let Some(tcp_bytes) = self.insert("tcp6", &tcp, key)? {
             return Ok(rlp::decode(&tcp_bytes).ok());
         }
         Ok(None)
@@ -756,7 +756,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets a new public key for the record.
     pub fn set_public_key(&mut self, public_key: &K::PublicKey, key: &K) -> Result<(), EnrError> {
-        self.insert(&public_key.enr_key(), public_key.encode().as_ref(), key)
+        self.insert(&public_key.enr_key(), &public_key.encode().as_ref(), key)
             .map(|_| {})
     }
 
@@ -1506,7 +1506,7 @@ mod tests {
         for tcp in LOW_INT_PORTS {
             let mut enr = EnrBuilder::new("v4").build(&key).unwrap();
 
-            let res = enr.insert(b"tcp", &tcp.to_be_bytes(), &key);
+            let res = enr.insert(b"tcp", &tcp.to_be_bytes().as_ref(), &key);
             if tcp <= u8::MAX as u16 {
                 assert_eq!(res.unwrap_err().to_string(), "invalid rlp data");
             } else {
