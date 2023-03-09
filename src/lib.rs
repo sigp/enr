@@ -271,8 +271,7 @@ impl<K: EnrKey> Enr<K> {
     fn get_integer<T: Decodable>(&self, key: impl AsRef<[u8]>) -> Option<T> {
         // data values may be invalid is parsed as integers, return None in that case
         self.get_raw_rlp(key)
-            .map(|rlp_data| rlp::Rlp::new(rlp_data).as_val().ok())
-            .flatten()
+            .and_then(|rlp_data| rlp::Rlp::new(rlp_data).as_val().ok())
     }
 
     /// Reads a custom key from the record if it exists as raw RLP bytes.
@@ -1024,7 +1023,7 @@ pub(crate) fn digest(b: &[u8]) -> [u8; 32] {
     output
 }
 
-fn is_keyof_u16(key: &[u8]) -> bool {
+const fn is_keyof_u16(key: &[u8]) -> bool {
     matches!(key, b"tcp" | b"tcp6" | b"udp" | b"udp6")
 }
 
