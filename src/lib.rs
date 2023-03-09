@@ -19,7 +19,7 @@
 //! implement the [`EnrKey`] trait and apply it to an [`Enr`].
 //!
 //! By default, `k256::SigningKey` implement [`EnrKey`] and can be used to sign and
-//! verify ENR records. This library also implements [`EnrKey`] for `ed25519_dalek::Keypair` via the `ed25519`
+//! verify ENR records. This library also implements [`EnrKey`] for `ed25519_dalek::SigningKey` via the `ed25519`
 //! feature flag.
 //!
 //! Furthermore, a [`CombinedKey`] is provided if the `ed25519` feature flag is set, which provides an
@@ -127,14 +127,14 @@
 //!
 //! ```rust
 //! # #[cfg(feature = "ed25519")] {
-//! use enr::{EnrBuilder, k256::ecdsa::SigningKey, Enr, ed25519_dalek::Keypair, CombinedKey};
+//! use enr::{EnrBuilder, k256::ecdsa, Enr, ed25519_dalek as ed25519, CombinedKey};
 //! use std::net::Ipv4Addr;
 //! use rand::thread_rng;
 //! use rand::Rng;
 //!
 //! // generate a random secp256k1 key
 //! let mut rng = thread_rng();
-//! let key = SigningKey::random(&mut rng);
+//! let key = ecdsa::SigningKey::random(&mut rng);
 //! let ip = Ipv4Addr::new(192,168,0,1);
 //! let enr_secp256k1 = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
 //!
@@ -142,8 +142,7 @@
 //! let base64_string_secp256k1 = enr_secp256k1.to_base64();
 //!
 //! // generate a random ed25519 key
-//! # let mut rng = rand_07::thread_rng();
-//! let key = Keypair::generate(&mut rng);
+//! let key = ed25519::SigningKey::generate(&mut rng);
 //! let enr_ed25519 = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
 //!
 //! // encode to base64
@@ -153,7 +152,7 @@
 //! // decode the secp256k1 with default Enr
 //! let decoded_enr_secp256k1: Enr<k256::ecdsa::SigningKey> = base64_string_secp256k1.parse().unwrap();
 //! // decode ed25519 ENRs
-//! let decoded_enr_ed25519: Enr<ed25519_dalek::Keypair> = base64_string_ed25519.parse().unwrap();
+//! let decoded_enr_ed25519: Enr<ed25519_dalek::SigningKey> = base64_string_ed25519.parse().unwrap();
 //!
 //! // use the combined key to be able to decode either
 //! let decoded_enr: Enr<CombinedKey> = base64_string_secp256k1.parse().unwrap();
@@ -1280,8 +1279,8 @@ mod tests {
     #[cfg(all(feature = "ed25519", feature = "k256"))]
     #[test]
     fn test_encode_decode_ed25519() {
-        let mut rng = rand_07::thread_rng();
-        let key = ed25519_dalek::Keypair::generate(&mut rng);
+        let mut rng = rand::thread_rng();
+        let key = ed25519_dalek::SigningKey::generate(&mut rng);
         let ip = Ipv4Addr::new(10, 0, 0, 1);
         let tcp = 30303;
 
@@ -1386,7 +1385,7 @@ mod tests {
         let base64_string_secp256k1 = enr_secp256k1.to_base64();
 
         // generate a random ed25519 key
-        let key = ed25519_dalek::Keypair::generate(&mut rand_07::thread_rng());
+        let key = ed25519_dalek::SigningKey::generate(&mut rand::thread_rng());
         let enr_ed25519 = EnrBuilder::new("v4")
             .ip(ip.into())
             .tcp4(8000)
@@ -1400,7 +1399,7 @@ mod tests {
         // decode the secp256k1 with default Enr
         let _decoded_enr_secp256k1: DefaultEnr = base64_string_secp256k1.parse().unwrap();
         // decode ed25519 ENRs
-        let _decoded_enr_ed25519: Enr<ed25519_dalek::Keypair> =
+        let _decoded_enr_ed25519: Enr<ed25519_dalek::SigningKey> =
             base64_string_ed25519.parse().unwrap();
 
         // use the combined key to be able to decode either
