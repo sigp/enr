@@ -271,10 +271,8 @@ impl<K: EnrKey> Enr<K> {
     pub fn get_decodable<T: Decodable>(
         &self,
         key: impl AsRef<[u8]>,
-    ) -> Result<Option<T>, DecoderError> {
-        self.get_raw_rlp(key)
-            .map(|rlp_data| rlp::decode(rlp_data))
-            .transpose()
+    ) -> Option<Result<T, DecoderError>> {
+        self.get_raw_rlp(key).map(|rlp_data| rlp::decode(rlp_data))
     }
 
     /// Reads a custom key from the record if it exists as raw RLP bytes.
@@ -331,25 +329,25 @@ impl<K: EnrKey> Enr<K> {
     /// The TCP port of ENR record if it is defined.
     #[must_use]
     pub fn tcp4(&self) -> Option<u16> {
-        self.get_decodable("tcp").ok().flatten()
+        self.get_decodable("tcp").and_then(Result::ok)
     }
 
     /// The IPv6-specific TCP port of ENR record if it is defined.
     #[must_use]
     pub fn tcp6(&self) -> Option<u16> {
-        self.get_decodable("tcp6").ok().flatten()
+        self.get_decodable("tcp6").and_then(Result::ok)
     }
 
     /// The UDP port of ENR record if it is defined.
     #[must_use]
     pub fn udp4(&self) -> Option<u16> {
-        self.get_decodable("udp").ok().flatten()
+        self.get_decodable("udp").and_then(Result::ok)
     }
 
     /// The IPv6-specific UDP port of ENR record if it is defined.
     #[must_use]
     pub fn udp6(&self) -> Option<u16> {
-        self.get_decodable("udp6").ok().flatten()
+        self.get_decodable("udp6").and_then(Result::ok)
     }
 
     /// Provides a socket (based on the UDP port), if the IPv4 and UDP fields are specified.
