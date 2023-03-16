@@ -1,6 +1,6 @@
 use crate::{Enr, EnrError, EnrKey, EnrPublicKey, Key, NodeId, MAX_ENR_SIZE};
 use bytes::{Bytes, BytesMut};
-use rlp::RlpStream;
+use rlp::{Encodable, RlpStream};
 use std::{
     collections::BTreeMap,
     marker::PhantomData,
@@ -43,8 +43,8 @@ impl<K: EnrKey> EnrBuilder<K> {
     }
 
     /// Adds an arbitrary key-value to the `ENRBuilder`.
-    pub fn add_value(&mut self, key: impl AsRef<[u8]>, value: &[u8]) -> &mut Self {
-        self.add_value_rlp(key, rlp::encode(&value).freeze())
+    pub fn add_value<T: Encodable>(&mut self, key: impl AsRef<[u8]>, value: &T) -> &mut Self {
+        self.add_value_rlp(key, rlp::encode(value).freeze())
     }
 
     /// Adds an arbitrary key-value where the value is raw RLP encoded bytes.
@@ -63,13 +63,13 @@ impl<K: EnrKey> EnrBuilder<K> {
 
     /// Adds an `ip` field to the `ENRBuilder`.
     pub fn ip4(&mut self, ip: Ipv4Addr) -> &mut Self {
-        self.add_value("ip", &ip.octets());
+        self.add_value("ip", &ip.octets().as_ref());
         self
     }
 
     /// Adds an `ip6` field to the `ENRBuilder`.
     pub fn ip6(&mut self, ip: Ipv6Addr) -> &mut Self {
-        self.add_value("ip6", &ip.octets());
+        self.add_value("ip6", &ip.octets().as_ref());
         self
     }
 
@@ -86,25 +86,25 @@ impl<K: EnrKey> EnrBuilder<K> {
 
     /// Adds a `tcp` field to the `ENRBuilder`.
     pub fn tcp4(&mut self, tcp: u16) -> &mut Self {
-        self.add_value("tcp", &tcp.to_be_bytes());
+        self.add_value("tcp", &tcp);
         self
     }
 
     /// Adds a `tcp6` field to the `ENRBuilder`.
     pub fn tcp6(&mut self, tcp: u16) -> &mut Self {
-        self.add_value("tcp6", &tcp.to_be_bytes());
+        self.add_value("tcp6", &tcp);
         self
     }
 
     /// Adds a `udp` field to the `ENRBuilder`.
     pub fn udp4(&mut self, udp: u16) -> &mut Self {
-        self.add_value("udp", &udp.to_be_bytes());
+        self.add_value("udp", &udp);
         self
     }
 
     /// Adds a `udp6` field to the `ENRBuilder`.
     pub fn udp6(&mut self, udp: u16) -> &mut Self {
-        self.add_value("udp6", &udp.to_be_bytes());
+        self.add_value("udp6", &udp);
         self
     }
 
@@ -134,7 +134,7 @@ impl<K: EnrKey> EnrBuilder<K> {
 
     /// Adds a public key to the ENR builder.
     fn add_public_key(&mut self, key: &K::PublicKey) {
-        self.add_value(key.enr_key(), key.encode().as_ref());
+        self.add_value(key.enr_key(), &key.encode().as_ref());
     }
 
     /// Constructs an ENR from the `EnrBuilder`.
