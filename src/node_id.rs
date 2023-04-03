@@ -2,9 +2,12 @@
 //! keys this is the uncompressed encoded form of the public key).
 
 use crate::{digest, keys::EnrPublicKey, Enr, EnrKey};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 type RawNodeId = [u8; 32];
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 /// The `NodeId` of an ENR (a 32 byte identifier).
 pub struct NodeId {
@@ -104,11 +107,22 @@ impl std::fmt::Debug for NodeId {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "serde")]
+    use serde_json;
+
     #[test]
     fn test_eq_node_raw_node() {
         let node = NodeId::random();
         let raw = node.raw;
         assert_eq!(node, raw);
         assert_eq!(node.as_ref(), &raw[..]);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_serde() {
+        let node = NodeId::random();
+        let json_string = serde_json::to_string(&node).unwrap();
+        assert_eq!(node, serde_json::from_str::<NodeId>(&json_string).unwrap());
     }
 }
