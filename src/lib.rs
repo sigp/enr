@@ -756,6 +756,16 @@ impl<K: EnrKey> Enr<K> {
             .map(|_| {})
     }
 
+    /// Returns wether the node can be reached over UDP or not.
+    pub fn is_udp_reachable(&self) -> bool {
+        self.udp4_socket().is_some() || self.udp6_socket().is_some()
+    }
+
+    /// Returns wether the node can be reached over TCP or not.
+    pub fn is_tcp_reachable(&self) -> bool {
+        self.tcp4_socket().is_some() || self.tcp6_socket().is_some()
+    }
+
     // Private Functions //
 
     /// Evaluates the RLP-encoding of the content of the ENR record.
