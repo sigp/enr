@@ -757,11 +757,13 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Returns wether the node can be reached over UDP or not.
+    #[must_use]
     pub fn is_udp_reachable(&self) -> bool {
         self.udp4_socket().is_some() || self.udp6_socket().is_some()
     }
 
     /// Returns wether the node can be reached over TCP or not.
+    #[must_use]
     pub fn is_tcp_reachable(&self) -> bool {
         self.tcp4_socket().is_some() || self.tcp6_socket().is_some()
     }
