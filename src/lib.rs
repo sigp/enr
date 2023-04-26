@@ -890,6 +890,9 @@ impl<K: EnrKey> FromStr for Enr<K> {
         }
         let bytes = base64::decode_config(decode_string, base64::URL_SAFE_NO_PAD)
             .map_err(|e| format!("Invalid base64 encoding: {e:?}"))?;
+        if bytes.len() > MAX_ENR_SIZE {
+            return Err("enr exceeds max size".to_string());
+        }
         rlp::decode(&bytes).map_err(|e| format!("Invalid ENR: {e:?}"))
     }
 }
@@ -1154,6 +1157,37 @@ mod tests {
     fn test_read_enr_prefix() {
         let text = "enr:-Iu4QM-YJF2RRpMcZkFiWzMf2kRd1A5F1GIekPa4Sfi_v0DCLTDBfOMTMMWJhhawr1YLUPb5008CpnBKrgjY3sstjfgCgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQP8u1uyQFyJYuQUTyA1raXKhSw1HhhxNUQ2VE52LNHWMIN0Y3CCIyiDdWRwgiMo";
         text.parse::<DefaultEnr>().unwrap();
+    }
+
+    #[cfg(feature = "k256")]
+    #[test]
+    fn test_read_enr_reject_too_large_record() {
+        // 300-byte rlp encoded content, record creation should succeed.
+        let text = concat!("enr:-QEpuEDaLyrPP4gxBI9YL7QE9U1tZig_Nt8rue8bRIuYv_IMziFc8OEt3LQMwkwt6da-Z0Y8BaqkDalZbBq647UtV2ei",
+                           "AYJpZIJ2NIJpcIR_AAABiXNlY3AyNTZrMaEDymNMrg1JrLQB2KTGtv6MVbcNEVv0AHacwUAPMljNMTiDdWRwgnZferiieHh4",
+                           "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
+                           "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
+                           "eHh4eHh4eHh4eHh4eHh4");
+        let mut record = text.parse::<DefaultEnr>().unwrap();
+        // Ensures the size check when creating a record from string is
+        // consistent with the internal ones, such as when updating a record
+        // field.
+        let key_data =
+            hex::decode("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+                .unwrap();
+        let key = k256::ecdsa::SigningKey::from_slice(&key_data).unwrap();
+        assert!(record.set_udp4(record.udp4().unwrap(), &key).is_ok());
+
+        // 301-byte rlp encoded content, record creation should fail.
+        let text = concat!("enr:-QEquEBxABglcZbIGKJ8RHDCp2Ft59tdf61RhV3XXf2BKTlKE2XwzNfihH-46hKkANsXaGRwH8Dp7a3lTrKiv2FMMaFY",
+                           "AYJpZIJ2NIJpcIR_AAABiXNlY3AyNTZrMaEDymNMrg1JrLQB2KTGtv6MVbcNEVv0AHacwUAPMljNMTiDdWRwgnZferijeHh4",
+                           "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
+                           "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
+                           "eHh4eHh4eHh4eHh4eHh4eA");
+        assert_eq!(
+            text.parse::<DefaultEnr>().unwrap_err(),
+            "enr exceeds max size"
+        );
     }
 
     /// Tests that RLP integers decoding rejects any item with leading zeroes.
