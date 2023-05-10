@@ -191,6 +191,7 @@ use std::{
     net::{SocketAddrV4, SocketAddrV6},
 };
 
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 #[cfg(feature = "serde")]
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use sha3::{Digest, Keccak256};
@@ -419,7 +420,7 @@ impl<K: EnrKey> Enr<K> {
     /// Provides the URL-safe base64 encoded "text" version of the ENR prefixed by "enr:".
     #[must_use]
     pub fn to_base64(&self) -> String {
-        let hex = base64::encode_config(&rlp::encode(self), base64::URL_SAFE_NO_PAD);
+        let hex = URL_SAFE_NO_PAD.encode(&rlp::encode(self));
         format!("enr:{hex}")
     }
 
@@ -888,7 +889,8 @@ impl<K: EnrKey> FromStr for Enr<K> {
                 .get(4..)
                 .ok_or_else(|| "Invalid ENR string".to_string())?;
         }
-        let bytes = base64::decode_config(decode_string, base64::URL_SAFE_NO_PAD)
+        let bytes = URL_SAFE_NO_PAD
+            .decode(decode_string)
             .map_err(|e| format!("Invalid base64 encoding: {e:?}"))?;
         if bytes.len() > MAX_ENR_SIZE {
             return Err("enr exceeds max size".to_string());
@@ -1143,6 +1145,18 @@ mod tests {
         assert_eq!(enr.public_key().encode().to_vec(), expected_pubkey);
 
         assert!(enr.verify());
+    }
+
+    #[cfg(feature = "k256")]
+    #[test]
+    fn test_read_enr_base64url_decoding_enforce_no_pad_no_extra_trailingbits() {
+        let test_data = [
+            ("padded", "Invalid base64 encoding: InvalidPadding", "enr:-IS4QHCYrYZbAKWCBRlAy5zzaDZXJBGkcnh4MHcBFZntXNFrdvJjX04jRzjzCBOonrkTfj499SZuOh8R33Ls8RRcy5wBgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQPKY0yuDUmstAHYpMa2_oxVtw0RW_QAdpzBQA8yWM0xOIN1ZHCCdl8="),
+            ("extra trailing bits", "Invalid base64 encoding: InvalidLastSymbol(178, 57)", "enr:-IS4QHCYrYZbAKWCBRlAy5zzaDZXJBGkcnh4MHcBFZntXNFrdvJjX04jRzjzCBOonrkTfj499SZuOh8R33Ls8RRcy5wBgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQPKY0yuDUmstAHYpMa2_oxVtw0RW_QAdpzBQA8yWM0xOIN1ZHCCdl9"),
+        ];
+        for (test_name, err, text) in test_data {
+            assert_eq!(text.parse::<DefaultEnr>().unwrap_err(), err, "{test_name}",);
+        }
     }
 
     #[cfg(feature = "k256")]
