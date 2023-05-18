@@ -181,6 +181,8 @@ mod builder;
 mod error;
 mod keys;
 mod node_id;
+#[cfg(feature = "thread-safe")]
+mod thread_safe_enr;
 
 use bytes::{Bytes, BytesMut};
 use log::debug;
@@ -198,6 +200,9 @@ use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
     str::FromStr,
 };
+
+#[cfg(feature = "thread-safe")]
+pub use thread_safe_enr::thread_safe_enr::{ArcRwLockEnr, AsEnr};
 
 pub use builder::EnrBuilder;
 pub use error::EnrError;
