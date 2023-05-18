@@ -602,92 +602,6 @@ impl<K: EnrKey> Enr<K> {
         self.set_socket(socket, key, true)
     }
 
-    /// Removes key/value mappings and adds or overwrites key/value mappings to the ENR record as
-    /// one sequence number update. An `EnrKey` is required to re-sign the record once modified.
-    /// Reverts whole ENR record on error.
-    ///
-    /// Returns the previous values as rlp encoded bytes if they exist for the removed and added/
-    /// overwritten keys.
-    pub fn remove_insert<'a>(
-        &mut self,
-        remove_keys: impl Iterator<Item = impl AsRef<[u8]>>,
-        insert_key_values: impl Iterator<Item = (impl AsRef<[u8]>, &'a [u8])>,
-        enr_key: &K,
-    ) -> Result<(PreviousRlpEncodedValues, PreviousRlpEncodedValues), EnrError> {
-        let enr_backup = self.clone();
-
-        let mut removed = Vec::new();
-        for key in remove_keys {
-            removed.push(self.content.remove(key.as_ref()));
-        }
-
-        // add the new public key
-        let public_key = enr_key.public();
-        self.content.insert(
-            public_key.enr_key(),
-            rlp::encode(&public_key.encode().as_ref()).freeze(),
-        );
-
-        let mut inserted = Vec::new();
-        for (key, value) in insert_key_values {
-            // currently only support "v4" identity schemes
-            if key.as_ref() == b"id" && value != b"v4" {
-                *self = enr_backup;
-                return Err(EnrError::UnsupportedIdentityScheme);
-            }
-
-            let value = rlp::encode(&(value)).freeze();
-            // Prevent inserting invalid RLP integers
-            if is_keyof_u16(key.as_ref()) {
-                rlp::decode::<u16>(&value)
-                    .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
-            }
-
-            inserted.push(self.content.insert(key.as_ref().to_vec(), value));
-        }
-
-        // increment the sequence number
-        self.seq = self
-            .seq
-            .checked_add(1)
-            .ok_or(EnrError::SequenceNumberTooHigh)?;
-
-        // sign the record
-        self.sign(enr_key)?;
-
-        // update the node id
-        self.node_id = NodeId::from(enr_key.public());
-
-        if self.size() > MAX_ENR_SIZE {
-            // in case the signature size changes, inform the user the size has exceeded the
-            // maximum
-            *self = enr_backup;
-            return Err(EnrError::ExceedsMaxSize);
-        }
-
-        Ok((removed, inserted))
-    }
-
-    /// Sets a new public key for the record.
-    pub fn set_public_key(&mut self, public_key: &K::PublicKey, key: &K) -> Result<(), EnrError> {
-        self.insert(&public_key.enr_key(), &public_key.encode().as_ref(), key)
-            .map(|_| {})
-    }
-
-    /// Returns wether the node can be reached over UDP or not.
-    #[must_use]
-    pub fn is_udp_reachable(&self) -> bool {
-        self.udp4_socket().is_some() || self.udp6_socket().is_some()
-    }
-
-    /// Returns wether the node can be reached over TCP or not.
-    #[must_use]
-    pub fn is_tcp_reachable(&self) -> bool {
-        self.tcp4_socket().is_some() || self.tcp6_socket().is_some()
-    }
-
-    // Private Functions //
-
     /// Helper function for `set_tcp_socket()` and `set_udp_socket`.
     fn set_socket(&mut self, socket: SocketAddr, key: &K, is_tcp: bool) -> Result<(), EnrError> {
         let (port_string, port_v6_string): (Key, Key) = if is_tcp {
@@ -774,6 +688,92 @@ impl<K: EnrKey> Enr<K> {
 
         Ok(())
     }
+
+    /// Removes key/value mappings and adds or overwrites key/value mappings to the ENR record as
+    /// one sequence number update. An `EnrKey` is required to re-sign the record once modified.
+    /// Reverts whole ENR record on error.
+    ///
+    /// Returns the previous values as rlp encoded bytes if they exist for the removed and added/
+    /// overwritten keys.
+    pub fn remove_insert<'a>(
+        &mut self,
+        remove_keys: impl Iterator<Item = impl AsRef<[u8]>>,
+        insert_key_values: impl Iterator<Item = (impl AsRef<[u8]>, &'a [u8])>,
+        enr_key: &K,
+    ) -> Result<(PreviousRlpEncodedValues, PreviousRlpEncodedValues), EnrError> {
+        let enr_backup = self.clone();
+
+        let mut removed = Vec::new();
+        for key in remove_keys {
+            removed.push(self.content.remove(key.as_ref()));
+        }
+
+        // add the new public key
+        let public_key = enr_key.public();
+        self.content.insert(
+            public_key.enr_key(),
+            rlp::encode(&public_key.encode().as_ref()).freeze(),
+        );
+
+        let mut inserted = Vec::new();
+        for (key, value) in insert_key_values {
+            // currently only support "v4" identity schemes
+            if key.as_ref() == b"id" && value != b"v4" {
+                *self = enr_backup;
+                return Err(EnrError::UnsupportedIdentityScheme);
+            }
+
+            let value = rlp::encode(&(value)).freeze();
+            // Prevent inserting invalid RLP integers
+            if is_keyof_u16(key.as_ref()) {
+                rlp::decode::<u16>(&value)
+                    .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+            }
+
+            inserted.push(self.content.insert(key.as_ref().to_vec(), value));
+        }
+
+        // increment the sequence number
+        self.seq = self
+            .seq
+            .checked_add(1)
+            .ok_or(EnrError::SequenceNumberTooHigh)?;
+
+        // sign the record
+        self.sign(enr_key)?;
+
+        // update the node id
+        self.node_id = NodeId::from(enr_key.public());
+
+        if self.size() > MAX_ENR_SIZE {
+            // in case the signature size changes, inform the user the size has exceeded the
+            // maximum
+            *self = enr_backup;
+            return Err(EnrError::ExceedsMaxSize);
+        }
+
+        Ok((removed, inserted))
+    }
+
+    /// Sets a new public key for the record.
+    pub fn set_public_key(&mut self, public_key: &K::PublicKey, key: &K) -> Result<(), EnrError> {
+        self.insert(&public_key.enr_key(), &public_key.encode().as_ref(), key)
+            .map(|_| {})
+    }
+
+    /// Returns wether the node can be reached over UDP or not.
+    #[must_use]
+    pub fn is_udp_reachable(&self) -> bool {
+        self.udp4_socket().is_some() || self.udp6_socket().is_some()
+    }
+
+    /// Returns wether the node can be reached over TCP or not.
+    #[must_use]
+    pub fn is_tcp_reachable(&self) -> bool {
+        self.tcp4_socket().is_some() || self.tcp6_socket().is_some()
+    }
+
+    // Private Functions //
 
     /// Evaluates the RLP-encoding of the content of the ENR record.
     fn rlp_content(&self) -> BytesMut {
