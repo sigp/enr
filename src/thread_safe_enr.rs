@@ -1,6 +1,9 @@
 #[cfg(feature = "thread-safe")]
-pub mod thread_safe_enr {
-    use crate::*;
+pub mod arc_rwlock_enr {
+    use crate::{
+        Bytes, Decodable, DecoderError, Encodable, Enr, EnrError, EnrKey, IpAddr, Ipv4Addr,
+        Ipv6Addr, NodeId, PreviousRlpEncodedValues, SocketAddr, SocketAddrV4, SocketAddrV6,
+    };
     use parking_lot::RwLock;
     use std::sync::Arc;
 
@@ -125,7 +128,7 @@ pub mod thread_safe_enr {
 
     impl<K: EnrKey> From<Enr<K>> for ArcRwLockEnr<K> {
         fn from(enr: Enr<K>) -> Self {
-            ArcRwLockEnr(Arc::new(RwLock::new(enr)))
+            Self(Arc::new(RwLock::new(enr)))
         }
     }
 
@@ -135,11 +138,11 @@ pub mod thread_safe_enr {
         impl_method!(#[must_use] node_id(&self) -> NodeId);
         impl_method!(#[must_use] seq(&self) -> u64);
         fn get(&self, key: impl AsRef<[u8]>) -> Option<Vec<u8>> {
-            self.0.read().get(key).map(|v| v.to_vec())
+            self.0.read().get(key).map(<[u8]>::to_vec)
         }
         impl_method!(get_decodable<T: Decodable>(&self, key: impl AsRef<[u8]>) -> Option<Result<T, DecoderError>>);
         fn get_raw_rlp(&self, key: impl AsRef<[u8]>) -> Option<Vec<u8>> {
-            self.0.read().get_raw_rlp(key).map(|v| v.to_vec())
+            self.0.read().get_raw_rlp(key).map(<[u8]>::to_vec)
         }
         impl_method!(#[must_use] ip4(&self) -> Option<Ipv4Addr>);
         impl_method!(#[must_use] ip6(&self) -> Option<Ipv6Addr>);
@@ -152,6 +155,7 @@ pub mod thread_safe_enr {
         impl_method!(#[must_use] udp6_socket(&self) -> Option<SocketAddrV6>);
         impl_method!(#[must_use] tcp4_socket(&self) -> Option<SocketAddrV4>);
         impl_method!(#[must_use] tcp6_socket(&self) -> Option<SocketAddrV6>);
+        #[must_use]
         fn signature(&self) -> Vec<u8> {
             self.0.read().signature().to_vec()
         }
@@ -197,7 +201,7 @@ pub mod thread_safe_enr {
 #[cfg(test)]
 #[cfg(all(feature = "thread-safe", feature = "k256"))]
 mod tests {
-    use super::*;
+    use crate::*;
     use std::net::Ipv4Addr;
 
     #[cfg(all(feature = "ed25519", feature = "k256"))]
@@ -208,13 +212,14 @@ mod tests {
         let ip = Ipv4Addr::new(10, 0, 0, 1);
         let tcp = 30303;
 
-        let enr = {
+        let enr: Enr<ed25519_dalek::SigningKey> = {
             let mut builder = EnrBuilder::new("v4");
             builder.ip4(ip);
             builder.tcp4(tcp);
             builder.build(&key).unwrap()
-        }
-        .into();
+        };
+
+        let enr: ArcRwLockEnr<ed25519_dalek::SigningKey> = enr.into();
 
         assert_eq!(enr.id(), Some("v4".into()));
         assert_eq!(enr.ip4(), Some(ip));
@@ -230,12 +235,13 @@ mod tests {
         let ip = Ipv4Addr::new(10, 0, 0, 1);
         let tcp = 30303;
 
-        let enr = {
+        let enr: Enr<k256::ecdsa::SigningKey> = {
             let mut builder = EnrBuilder::new("v4");
             builder.ip(ip.into());
             builder.tcp4(tcp);
             builder.build(&key).unwrap()
         };
+
         let mut enr: ArcRwLockEnr<k256::ecdsa::SigningKey> = enr.into();
 
         enr.insert("random", &Vec::new(), &key).unwrap();
@@ -249,12 +255,13 @@ mod tests {
         let tcp = 30303;
         let ip = Ipv4Addr::new(10, 0, 0, 1);
 
-        let mut enr: ArcRwLockEnr<k256::ecdsa::SigningKey> = {
+        let enr: Enr<k256::ecdsa::SigningKey> = {
             let mut builder = EnrBuilder::new("v4");
             builder.tcp4(tcp);
             builder.build(&key).unwrap()
-        }
-        .into();
+        };
+
+        let mut enr: ArcRwLockEnr<k256::ecdsa::SigningKey> = enr.into();
 
         assert!(enr.set_ip(ip.into(), &key).is_ok());
         assert_eq!(enr.id(), Some("v4".into()));
@@ -274,14 +281,15 @@ mod tests {
         let udp = 30304;
         let ip = Ipv4Addr::new(10, 0, 0, 1);
 
-        let mut enr: ArcRwLockEnr<k256::ecdsa::SigningKey> = {
+        let enr: Enr<k256::ecdsa::SigningKey> = {
             let mut builder = EnrBuilder::new("v4");
             builder.ip(ip.into());
             builder.tcp4(tcp);
             builder.udp4(udp);
             builder.build(&key).unwrap()
-        }
-        .into();
+        };
+
+        let mut enr: ArcRwLockEnr<k256::ecdsa::SigningKey> = enr.into();
 
         let node_id = enr.node_id();
 
@@ -306,12 +314,13 @@ mod tests {
         s.append(&"eth_syncing");
         topics.extend_from_slice(&s.out().freeze());
 
-        let mut enr: ArcRwLockEnr<k256::ecdsa::SigningKey> = {
+        let enr: Enr<k256::ecdsa::SigningKey> = {
             let mut builder = EnrBuilder::new("v4");
             builder.tcp4(tcp);
             builder.build(&key).unwrap()
-        }
-        .into();
+        };
+
+        let mut enr: ArcRwLockEnr<k256::ecdsa::SigningKey> = enr.into();
 
         assert_eq!(enr.tcp4(), Some(tcp));
         assert_eq!(enr.get("topics"), None);

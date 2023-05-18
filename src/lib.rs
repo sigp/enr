@@ -202,7 +202,7 @@ use std::{
 };
 
 #[cfg(feature = "thread-safe")]
-pub use thread_safe_enr::thread_safe_enr::{ArcRwLockEnr, AsEnr};
+pub use thread_safe_enr::arc_rwlock_enr::{ArcRwLockEnr, AsEnr};
 
 pub use builder::EnrBuilder;
 pub use error::EnrError;
