@@ -11,7 +11,7 @@ type RawNodeId = [u8; 32];
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 /// The `NodeId` of an ENR (a 32 byte identifier).
 pub struct NodeId {
-    raw: RawNodeId,
+    #[cfg_attr(feature = "serde", serde(with = "SerHex::<StrictPfx>"))] raw: RawNodeId,
 }
 
 impl NodeId {
