@@ -181,6 +181,9 @@ mod builder;
 mod error;
 mod keys;
 mod node_id;
+mod node_id_serde;
+mod node_id_serde2;
+mod node_id_serde3;
 
 use bytes::{Bytes, BytesMut};
 use log::debug;

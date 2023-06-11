@@ -4,17 +4,18 @@
 use crate::{digest, keys::EnrPublicKey, Enr, EnrKey};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+use stremio_serde_hex::{SerHex, StrictPfx};
 
-type RawNodeId = [u8; 32];
+type RawNodeIdSerde3 = [u8; 32];
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-/// The `NodeId` of an ENR (a 32 byte identifier).
-pub struct NodeId {
-    raw: RawNodeId,
+/// The `NodeIdSerde3` of an ENR (a 32 byte identifier).
+pub struct NodeIdSerde3 {
+    #[serde(with = "SerHex::<StrictPfx>")] raw: RawNodeIdSerde3,
 }
 
-impl NodeId {
+impl NodeIdSerde3 {
     /// Creates a new node record from 32 bytes.
     #[must_use]
     pub const fn new(raw_input: &[u8; 32]) -> Self {
@@ -27,13 +28,13 @@ impl NodeId {
             return Err("Input too large");
         }
 
-        let mut raw: RawNodeId = [0_u8; 32];
+        let mut raw: RawNodeIdSerde3 = [0_u8; 32];
         raw[..std::cmp::min(32, raw_input.len())].copy_from_slice(raw_input);
 
         Ok(Self { raw })
     }
 
-    /// Generates a random `NodeId`.
+    /// Generates a random `NodeIdSerde3`.
     #[must_use]
     pub fn random() -> Self {
         Self {
@@ -41,51 +42,39 @@ impl NodeId {
         }
     }
 
-    /// Returns a `RawNodeId` which is a 32 byte list.
+    /// Returns a `RawNodeIdSerde3` which is a 32 byte list.
     #[must_use]
-    pub const fn raw(&self) -> RawNodeId {
+    pub const fn raw(&self) -> RawNodeIdSerde3 {
         self.raw
     }
 }
 
-impl<T: EnrPublicKey> From<T> for NodeId {
+impl<T: EnrPublicKey> From<T> for NodeIdSerde3 {
     fn from(public_key: T) -> Self {
         Self::parse(&digest(public_key.encode_uncompressed().as_ref()))
             .expect("always of correct length; qed")
     }
 }
 
-impl<T: EnrKey> From<Enr<T>> for NodeId {
-    fn from(enr: Enr<T>) -> Self {
-        enr.node_id()
-    }
-}
-
-impl<T: EnrKey> From<&Enr<T>> for NodeId {
-    fn from(enr: &Enr<T>) -> Self {
-        enr.node_id()
-    }
-}
-
-impl AsRef<[u8]> for NodeId {
+impl AsRef<[u8]> for NodeIdSerde3 {
     fn as_ref(&self) -> &[u8] {
         &self.raw[..]
     }
 }
 
-impl PartialEq<RawNodeId> for NodeId {
-    fn eq(&self, other: &RawNodeId) -> bool {
+impl PartialEq<RawNodeIdSerde3> for NodeIdSerde3 {
+    fn eq(&self, other: &RawNodeIdSerde3) -> bool {
         self.raw.eq(other)
     }
 }
 
-impl From<RawNodeId> for NodeId {
-    fn from(raw: RawNodeId) -> Self {
+impl From<RawNodeIdSerde3> for NodeIdSerde3 {
+    fn from(raw: RawNodeIdSerde3) -> Self {
         Self { raw }
     }
 }
 
-impl std::fmt::Display for NodeId {
+impl std::fmt::Display for NodeIdSerde3 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let hex_encode = hex::encode(self.raw);
         write!(
@@ -97,7 +86,7 @@ impl std::fmt::Display for NodeId {
     }
 }
 
-impl std::fmt::Debug for NodeId {
+impl std::fmt::Debug for NodeIdSerde3 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "0x{}", hex::encode(self.raw))
     }
@@ -114,7 +103,7 @@ mod tests {
 
     #[test]
     fn test_eq_node_raw_node() {
-        let node = NodeId::random();
+        let node = NodeIdSerde3::random();
         let raw = node.raw;
         assert_eq!(node, raw);
         assert_eq!(node.as_ref(), &raw[..]);
@@ -123,16 +112,16 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_serde() {
-        let node = NodeId::random();
+        let node = NodeIdSerde3::random();
         let json_string = serde_json::to_string(&node).unwrap();
-        assert_eq!(node, serde_json::from_str::<NodeId>(&json_string).unwrap());
+        assert_eq!(node, serde_json::from_str::<NodeIdSerde3>(&json_string).unwrap());
     }
 
     #[cfg(feature = "serde")]
     #[test]
     fn test_serde_will_fail() {
-        let mut responses: HashMap<NodeId, u16> = Default::default();
-        responses.insert(NodeId::random(), 1);
+        let mut responses: HashMap<NodeIdSerde3, u16> = Default::default();
+        responses.insert(NodeIdSerde3::random(), 1);
         let hi = json!(responses);
     }
 }
