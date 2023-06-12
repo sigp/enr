@@ -7,11 +7,12 @@ use serde::{Deserialize, Serialize};
 
 type RawNodeId = [u8; 32];
 
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(transparent))]
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 /// The `NodeId` of an ENR (a 32 byte identifier).
 pub struct NodeId {
-    #[cfg_attr(feature = "serde", serde(with = "SerHex::<StrictPfx>"))] raw: RawNodeId,
+    #[cfg_attr(feature = "serde", serde(with = "hex::serde"))]
+    raw: RawNodeId,
 }
 
 impl NodeId {
