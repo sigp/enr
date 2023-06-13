@@ -7,10 +7,11 @@ use serde::{Deserialize, Serialize};
 
 type RawNodeId = [u8; 32];
 
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(transparent))]
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 /// The `NodeId` of an ENR (a 32 byte identifier).
 pub struct NodeId {
+    #[cfg_attr(feature = "serde", serde(with = "hex::serde"))]
     raw: RawNodeId,
 }
 
@@ -106,6 +107,7 @@ impl std::fmt::Debug for NodeId {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[cfg(feature = "serde")]
     use serde_json;
@@ -124,5 +126,13 @@ mod tests {
         let node = NodeId::random();
         let json_string = serde_json::to_string(&node).unwrap();
         assert_eq!(node, serde_json::from_str::<NodeId>(&json_string).unwrap());
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_serde_as_hashmap_key() {
+        let mut responses: HashMap<NodeId, u8> = Default::default();
+        responses.insert(NodeId::random(), 1);
+        let _ = serde_json::json!(responses);
     }
 }

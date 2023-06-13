@@ -14,7 +14,7 @@ exclude = [".gitignore", ".github/*"]
 [dependencies]
 base64 = "0.21.0"
 bytes = "1"
-hex = "0.4.2"
+hex = {version = "0.4.2", features = ["serde"]}
 log = "0.4.8"
 rand = "0.8"
 rlp = "0.5"
