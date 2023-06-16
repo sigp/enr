@@ -4,6 +4,8 @@
 use crate::{digest, keys::EnrPublicKey, Enr, EnrKey};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "serde")]
+use serde_hex::{SerHex, StrictPfx};
 
 type RawNodeId = [u8; 32];
 
@@ -11,7 +13,7 @@ type RawNodeId = [u8; 32];
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 /// The `NodeId` of an ENR (a 32 byte identifier).
 pub struct NodeId {
-    #[cfg_attr(feature = "serde", serde(with = "hex::serde"))]
+    #[cfg_attr(feature = "serde", serde(with = "SerHex::<StrictPfx>"))]
     raw: RawNodeId,
 }
 
