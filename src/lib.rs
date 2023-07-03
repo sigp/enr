@@ -197,7 +197,7 @@ use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use sha3::{Digest, Keccak256};
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
-    str::FromStr,
+    str::FromStr, str, fmt::Write,
 };
 
 pub use builder::EnrBuilder;
@@ -481,6 +481,10 @@ impl<K: EnrKey> Enr<K> {
         // Prevent inserting invalid RLP integers into keys with getters
         if is_keyof_u16(key.as_ref()) {
             rlp::decode::<u16>(&value).map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+        }
+
+        if is_valid_ipaddr(key.as_ref(), &*value) {
+            rlp::decode::<Vec<u8>>(&value).map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
         }
 
         let previous_value = self.content.insert(key.as_ref().to_vec(), value);
@@ -1038,6 +1042,18 @@ pub(crate) fn digest(b: &[u8]) -> [u8; 32] {
 
 const fn is_keyof_u16(key: &[u8]) -> bool {
     matches!(key, b"tcp" | b"tcp6" | b"udp" | b"udp6")
+}
+
+fn is_valid_ipaddr(key: &[u8], value: &[u8]) -> bool {
+    let ip_bytes = rlp::decode::<Vec<u8>>(&value);
+    if let Ok(ip) = ip_bytes {
+        if key.as_ref() == b"ip" && ip.len() == 4 {
+            let mut ip_str = ip.iter().fold(String::new(),|mut s,&n| {write!(s,"{}.",n).ok(); s});
+            ip_str.pop();
+            return ip_str.parse::<Ipv4Addr>().is_ok();
+        }
+    }
+    false
 }
 
 #[cfg(test)]
@@ -1619,5 +1635,29 @@ mod tests {
         assert!(enr.verify());
         assert_eq!(enr.get_raw_rlp("tcp").unwrap(), rlp::encode(&tcp).to_vec());
         assert_eq!(enr.tcp4(), Some(tcp));
+    }
+
+    #[test]
+    fn test_is_valid_ipaddr() {
+        let mut rng = rand::thread_rng();
+        let key = k256::ecdsa::SigningKey::random(&mut rng);
+        let ip_addr = [14u8, 161u8, 38u8, 107u8];
+        let tcp = 30303;
+
+        let mut enr = {
+            let mut builder = EnrBuilder::new("v4");
+            builder.tcp4(tcp);
+            builder.build(&key).unwrap()
+        };
+
+        let encoded = rlp::encode(&(&ip_addr as &[u8])).freeze();
+        let decoded = rlp::decode::<Vec<u8>>(&encoded);
+        assert!(decoded.clone().map_err(|err| EnrError::InvalidRlpData(err.to_string())).is_ok());
+
+
+        if let Ok(d) = decoded {
+            assert!(enr.insert(b"ip", &d.to_vec(), &key).is_ok());
+            assert!(is_valid_ipaddr(b"ip", &encoded));
+        }
     }
 }
