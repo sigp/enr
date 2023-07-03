@@ -484,7 +484,8 @@ impl<K: EnrKey> Enr<K> {
         }
 
         if is_valid_ipv4(key.as_ref(), &*value) {
-            rlp::decode::<Vec<u8>>(&value).map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+            rlp::decode::<Vec<u8>>(&value)
+                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
         }
 
         let previous_value = self.content.insert(key.as_ref().to_vec(), value);
@@ -1049,7 +1050,7 @@ fn is_valid_ipv4(key: &[u8], value: &[u8]) -> bool {
         let mut v = [0_u8; 4];
         v.copy_from_slice(&value[1..5]);
         let ip = Ipv4Addr::from(v);
-        if ip.octets() == value[1..5] {
+        if ip.octets() == v {
             return true;
         }
     }
@@ -1652,8 +1653,10 @@ mod tests {
 
         let encoded = rlp::encode(&(ip_addr as &[u8])).freeze();
         let decoded = rlp::decode::<Vec<u8>>(&encoded);
-        assert!(decoded.clone().map_err(|err| EnrError::InvalidRlpData(err.to_string())).is_ok());
-
+        assert!(decoded
+            .clone()
+            .map_err(|err| EnrError::InvalidRlpData(err.to_string()))
+            .is_ok());
 
         if let Ok(d) = decoded {
             assert!(enr.insert(b"ip", &d.to_vec(), &key).is_ok());
