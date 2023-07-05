@@ -1046,13 +1046,8 @@ const fn is_keyof_u16(key: &[u8]) -> bool {
 }
 
 fn is_valid_ipv4(key: &[u8], value: &[u8]) -> bool {
-    if key.as_ref() == b"ip" && value[0] - 0x80 == 4 {
-        let mut v = [0_u8; 4];
-        v.copy_from_slice(&value[1..5]);
-        let ip = Ipv4Addr::from(v);
-        if ip.octets() == v {
-            return true;
-        }
+    if key.as_ref() == b"ip" && value[0] - 0x80 == 0x04 {
+        return true;
     }
     false
 }
@@ -1659,7 +1654,10 @@ mod tests {
             .is_ok());
 
         if let Ok(d) = decoded {
-            assert!(enr.insert(b"ip", &d.to_vec(), &key).is_ok());
+            enr.insert(b"ip", &d.to_vec(), &key).unwrap();
+            let ip = Ipv4Addr::from(*ip_addr);
+            assert_eq!(enr.ip4().unwrap(), ip);
+            assert!(enr.verify());
             assert!(is_valid_ipv4(b"ip", &encoded));
         }
     }
