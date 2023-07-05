@@ -1690,6 +1690,8 @@ mod tests {
 
         let decoded_key = rlp::decode::<Vec<u8>>(&encoded_key).unwrap();
 
+        assert!(is_valid_secp256k1(b"secp256k1", &encoded_key));
+
         assert!(!enr.insert(b"secp256k1", &decoded_key, &key).is_err());
     }
 }
