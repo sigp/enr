@@ -483,7 +483,12 @@ impl<K: EnrKey> Enr<K> {
             rlp::decode::<u16>(&value).map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
         }
 
-        if is_valid_ipv4(key.as_ref(), &*value) {
+        if is_valid_ipv4(key.as_ref(), &value) {
+            rlp::decode::<Vec<u8>>(&value)
+                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+        }
+
+        if is_valid_secp256k1(key.as_ref(), &value) {
             rlp::decode::<Vec<u8>>(&value)
                 .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
         }
@@ -1046,7 +1051,14 @@ const fn is_keyof_u16(key: &[u8]) -> bool {
 }
 
 fn is_valid_ipv4(key: &[u8], value: &[u8]) -> bool {
-    if key.as_ref() == b"ip" && value[0] - 0x80 == 0x04 {
+    if key == b"ip" && value[0] - 0x80 == 0x04 {
+        return true;
+    }
+    false
+}
+
+fn is_valid_secp256k1(key: &[u8], value: &[u8]) -> bool {
+    if key == b"secp256k1" && value[0] - 0x80 == 0x20 {
         return true;
     }
     false
@@ -1660,5 +1672,24 @@ mod tests {
             assert!(enr.verify());
             assert!(is_valid_ipv4(b"ip", &encoded));
         }
+    }
+
+    #[test]
+    fn test_is_valid_secp256k1() {
+        let mut rng = rand::thread_rng();
+        let key = k256::ecdsa::SigningKey::random(&mut rng);
+
+        let mut enr = {
+            let mut builder = EnrBuilder::new("v4");
+            builder.build(&key).unwrap()
+        };
+
+        let new_key = k256::ecdsa::SigningKey::random(&mut rng);
+
+        let encoded_key = rlp::encode(&(&new_key.to_bytes() as &[u8]));
+
+        let decoded_key = rlp::decode::<Vec<u8>>(&encoded_key).unwrap();
+
+        assert!(!enr.insert(b"secp256k1", &decoded_key, &key).is_err());
     }
 }
