@@ -1058,7 +1058,7 @@ fn is_valid_ipv4(key: &[u8], value: &[u8]) -> bool {
 }
 
 fn is_valid_secp256k1(key: &[u8], value: &[u8]) -> bool {
-    if key == b"secp256k1" && value[0] - 0x80 == 0x20 {
+    if key == b"secp256k1" && value[0] - 0x80 == 0x21 {
         return true;
     }
     false
@@ -1686,7 +1686,7 @@ mod tests {
 
         let new_key = k256::ecdsa::SigningKey::random(&mut rng);
 
-        let encoded_key = rlp::encode(&(&new_key.to_bytes() as &[u8]));
+        let encoded_key = rlp::encode(&(&new_key.public().encode() as &[u8]));
 
         let decoded_key = rlp::decode::<Vec<u8>>(&encoded_key).unwrap();
 
