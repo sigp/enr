@@ -57,12 +57,6 @@ impl<K: EnrKey> EnrBuilder<K> {
         key: impl AsRef<[u8]>,
         rlp: Bytes,
     ) -> Result<&mut Self, EnrError> {
-        // currently only support "v4" identity schemes
-        if key.as_ref() == b"id" && &*rlp != b"v4" {
-            return Err(EnrError::UnsupportedIdentityScheme);
-        }
-
-        // Prevent inserting invalid RLP integers into keys with getters
         if matches!(key.as_ref(), b"tcp" | b"tcp6" | b"udp" | b"udp6") {
             rlp::decode::<u16>(&rlp).map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
         }
