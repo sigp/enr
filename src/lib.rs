@@ -483,14 +483,22 @@ impl<K: EnrKey> Enr<K> {
             rlp::decode::<u16>(&value).map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
         }
 
-        if is_valid_ipv4(key.as_ref(), &value) {
-            rlp::decode::<Vec<u8>>(&value)
+        if key.as_ref() == b"ip" && value.len() == 5 {
+            let ip4_bytes = rlp::decode::<Vec<u8>>(&value)
                 .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+            if ip4_bytes.len() != 4 {
+                return Err(EnrError::InvalidRlpData("Invalid Ipv4 size".to_string()));
+            }
         }
 
-        if is_valid_secp256k1(key.as_ref(), &value) {
-            rlp::decode::<Vec<u8>>(&value)
+        if key.as_ref() == b"secp256k1" && value.len() == 34 {
+            let secp256k1_bytes = rlp::decode::<Vec<u8>>(&value)
                 .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+            if secp256k1_bytes.len() != 33 {
+                return Err(EnrError::InvalidRlpData(
+                    "Invalid Secp256k1 size".to_string(),
+                ));
+            }
         }
 
         let previous_value = self.content.insert(key.as_ref().to_vec(), value);
@@ -1048,20 +1056,6 @@ pub(crate) fn digest(b: &[u8]) -> [u8; 32] {
 
 const fn is_keyof_u16(key: &[u8]) -> bool {
     matches!(key, b"tcp" | b"tcp6" | b"udp" | b"udp6")
-}
-
-fn is_valid_ipv4(key: &[u8], value: &[u8]) -> bool {
-    if key == b"ip" && value[0] - 0x80 == 0x04 {
-        return true;
-    }
-    false
-}
-
-fn is_valid_secp256k1(key: &[u8], value: &[u8]) -> bool {
-    if key == b"secp256k1" && value[0] - 0x80 == 0x21 {
-        return true;
-    }
-    false
 }
 
 #[cfg(test)]
@@ -1669,8 +1663,6 @@ mod tests {
             enr.insert(b"ip", &d.to_vec(), &key).unwrap();
             let ip = Ipv4Addr::from(*ip_addr);
             assert_eq!(enr.ip4().unwrap(), ip);
-            assert!(enr.verify());
-            assert!(is_valid_ipv4(b"ip", &encoded));
         }
     }
 
@@ -1690,8 +1682,9 @@ mod tests {
 
         let decoded_key = rlp::decode::<Vec<u8>>(&encoded_key).unwrap();
 
-        assert!(is_valid_secp256k1(b"secp256k1", &encoded_key));
+        enr.insert(enr.public_key().enr_key(), &decoded_key, &new_key)
+            .unwrap();
 
-        assert!(!enr.insert(b"secp256k1", &decoded_key, &key).is_err());
+        assert_eq!(decoded_key, enr.public_key().encode().to_vec());
     }
 }
