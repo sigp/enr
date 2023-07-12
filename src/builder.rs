@@ -43,12 +43,20 @@ impl<K: EnrKey> EnrBuilder<K> {
     }
 
     /// Adds an arbitrary key-value to the `ENRBuilder`.
-    pub fn add_value<T: Encodable>(&mut self, key: impl AsRef<[u8]>, value: &T) -> Result<&mut Self, EnrError> {
+    pub fn add_value<T: Encodable>(
+        &mut self,
+        key: impl AsRef<[u8]>,
+        value: &T,
+    ) -> Result<&mut Self, EnrError> {
         self.add_value_rlp(key, rlp::encode(value).freeze())
     }
 
     /// Adds an arbitrary key-value where the value is raw RLP encoded bytes.
-    pub fn add_value_rlp(&mut self, key: impl AsRef<[u8]>, rlp: Bytes) -> Result<&mut Self, EnrError> {
+    pub fn add_value_rlp(
+        &mut self,
+        key: impl AsRef<[u8]>,
+        rlp: Bytes,
+    ) -> Result<&mut Self, EnrError> {
         if key.as_ref() == b"ip" && rlp.len() == 5 {
             let ip4_bytes = rlp::decode::<Vec<u8>>(&rlp)
                 .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
@@ -89,17 +97,13 @@ impl<K: EnrKey> EnrBuilder<K> {
 
     /// Adds an `ip` field to the `ENRBuilder`.
     pub fn ip4(&mut self, ip: Ipv4Addr) -> Result<&mut Self, EnrError> {
-        if let Err(e) = self.add_value("ip", &ip.octets().as_ref()) {
-            return Err(e);
-        }
+        self.add_value("ip", &ip.octets().as_ref())?;
         Ok(self)
     }
 
     /// Adds an `ip6` field to the `ENRBuilder`.
     pub fn ip6(&mut self, ip: Ipv6Addr) -> Result<&mut Self, EnrError> {
-        if let Err(e) = self.add_value("ip6", &ip.octets().as_ref()) {
-            return Err(e);
-        }
+        self.add_value("ip", &ip.octets().as_ref())?;
         Ok(self)
     }
 
@@ -116,33 +120,25 @@ impl<K: EnrKey> EnrBuilder<K> {
 
     /// Adds a `tcp` field to the `ENRBuilder`.
     pub fn tcp4(&mut self, tcp: u16) -> Result<&mut Self, EnrError> {
-        if let Err(e) = self.add_value("tcp", &tcp) {
-            return Err(e);
-        }
+        self.add_value("tcp", &tcp)?;
         Ok(self)
     }
 
     /// Adds a `tcp6` field to the `ENRBuilder`.
     pub fn tcp6(&mut self, tcp: u16) -> Result<&mut Self, EnrError> {
-        if let Err(e) = self.add_value("tcp6", &tcp) {
-            return Err(e);
-        }
+        self.add_value("tcp6", &tcp)?;
         Ok(self)
     }
 
     /// Adds a `udp` field to the `ENRBuilder`.
     pub fn udp4(&mut self, udp: u16) -> Result<&mut Self, EnrError> {
-        if let Err(e) = self.add_value("udp", &udp) {
-            return Err(e);
-        }
+        self.add_value("udp", &udp)?;
         Ok(self)
     }
 
     /// Adds a `udp6` field to the `ENRBuilder`.
     pub fn udp6(&mut self, udp: u16) -> Result<&mut Self, EnrError> {
-        if let Err(e) = self.add_value("udp6", &udp) {
-            return Err(e);
-        }
+        self.add_value("udp6", &udp)?;
         Ok(self)
     }
 
@@ -172,7 +168,8 @@ impl<K: EnrKey> EnrBuilder<K> {
 
     /// Adds a public key to the ENR builder.
     fn add_public_key(&mut self, key: &K::PublicKey) -> Result<(), EnrError> {
-        self.add_value(key.enr_key(), &key.encode().as_ref()).map(|_| {})
+        self.add_value(key.enr_key(), &key.encode().as_ref())
+            .map(|_| {})
     }
 
     /// Constructs an ENR from the `EnrBuilder`.
@@ -194,13 +191,10 @@ impl<K: EnrKey> EnrBuilder<K> {
             }
         }
 
-        if let Err(e) = self.add_value_rlp("id", rlp::encode(&self.id.as_bytes()).freeze()) {
-            return Err(e);
-        }
+        self.add_value_rlp("id", rlp::encode(&self.id.as_bytes()).freeze())?;
 
-        if let Err(e) = self.add_public_key(&key.public()) {
-            return Err(e);
-        }
+        self.add_public_key(&key.public())?;
+
         let rlp_content = self.rlp_content();
 
         let signature = self.signature(key)?;
