@@ -1339,8 +1339,8 @@ mod tests {
 
         let enr = {
             let mut builder = EnrBuilder::new("v4");
-            builder.ip(ip.into());
-            builder.tcp4(tcp);
+            builder.ip(ip.into()).unwrap();
+            builder.tcp4(tcp).unwrap();
             builder.build(&key).unwrap()
         };
 
@@ -1391,8 +1391,8 @@ mod tests {
 
         let mut enr = {
             let mut builder = EnrBuilder::new("v4");
-            builder.ip(ip.into());
-            builder.tcp4(tcp);
+            builder.ip(ip.into()).unwrap();
+            builder.tcp4(tcp).unwrap();
             builder.build(&key).unwrap()
         };
 
@@ -1409,7 +1409,7 @@ mod tests {
 
         let mut enr = {
             let mut builder = EnrBuilder::new("v4");
-            builder.tcp4(tcp);
+            builder.tcp4(tcp).unwrap();
             builder.build(&key).unwrap()
         };
 
@@ -1433,9 +1433,9 @@ mod tests {
 
         let mut enr = {
             let mut builder = EnrBuilder::new("v4");
-            builder.ip(ip.into());
-            builder.tcp4(tcp);
-            builder.udp4(udp);
+            builder.ip(ip.into()).unwrap();
+            builder.tcp4(tcp).unwrap();
+            builder.udp4(udp).unwrap();
             builder.build(&key).unwrap()
         };
 
@@ -1504,7 +1504,7 @@ mod tests {
 
         let mut enr = {
             let mut builder = EnrBuilder::new("v4");
-            builder.tcp4(tcp);
+            builder.tcp4(tcp).unwrap();
             builder.build(&key).unwrap()
         };
 
@@ -1549,7 +1549,7 @@ mod tests {
         for tcp in LOW_INT_PORTS {
             let enr = {
                 let mut builder = EnrBuilder::new("v4");
-                builder.tcp4(tcp);
+                builder.tcp4(tcp).unwrap();
                 builder.build(&key).unwrap()
             };
 
@@ -1656,7 +1656,7 @@ mod tests {
 
         let mut enr = {
             let mut builder = EnrBuilder::new("v4");
-            builder.tcp4(tcp);
+            builder.tcp4(tcp).unwrap();
             builder.build(&key).unwrap()
         };
 
