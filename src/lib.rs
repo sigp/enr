@@ -491,6 +491,14 @@ impl<K: EnrKey> Enr<K> {
             }
         }
 
+        if key.as_ref() == b"ip6" && value.len() == 17 {
+            let ip6_bytes = rlp::decode::<Vec<u8>>(&value)
+                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+            if ip6_bytes.len() != 16 {
+                return Err(EnrError::InvalidRlpData("Invalid Ipv6 size".to_string()));
+            }
+        }
+
         if key.as_ref() == b"secp256k1" && value.len() == 34 {
             let secp256k1_bytes = rlp::decode::<Vec<u8>>(&value)
                 .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
