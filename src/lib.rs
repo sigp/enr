@@ -57,7 +57,7 @@
 //! let key = k256::ecdsa::SigningKey::random(&mut rng);
 //!
 //! let ip = Ipv4Addr::new(192,168,0,1);
-//! let enr = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
+//! let enr = EnrBuilder::new("v4").ip4(ip).expect("Not a valid Ipv4 address").tcp4(8000).expect("Not a valid tcp port").build(&key).unwrap();
 //!
 //! assert_eq!(enr.ip4(), Some("192.168.0.1".parse().unwrap()));
 //! assert_eq!(enr.id(), Some("v4".into()));
@@ -80,7 +80,7 @@
 //! let key = CombinedKey::generate_ed25519();
 //!
 //! let ip = Ipv4Addr::new(192,168,0,1);
-//! let enr = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
+//! let enr = EnrBuilder::new("v4").ip4(ip).expect("Not a valid Ipv4 address").tcp4(8000).expect("Not a valid tcp port").build(&key).unwrap();
 //!
 //! assert_eq!(enr.ip4(), Some("192.168.0.1".parse().unwrap()));
 //! assert_eq!(enr.id(), Some("v4".into()));
@@ -105,7 +105,7 @@
 //! let key = SigningKey::random(&mut rng);
 //!
 //! let ip = Ipv4Addr::new(192,168,0,1);
-//! let mut enr = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
+//! let mut enr = EnrBuilder::new("v4").ip4(ip).expect("Not a valid Ipv4 address").tcp4(8000).expect("Not a valid tcp port").build(&key).unwrap();
 //!
 //! enr.set_tcp4(8001, &key);
 //! // set a custom key
@@ -136,14 +136,14 @@
 //! let mut rng = thread_rng();
 //! let key = ecdsa::SigningKey::random(&mut rng);
 //! let ip = Ipv4Addr::new(192,168,0,1);
-//! let enr_secp256k1 = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
+//! let enr_secp256k1 = EnrBuilder::new("v4").ip4(ip).expect("Not a valid Ipv4 address").tcp4(8000).expect("Not a valid tcp port").build(&key).unwrap();
 //!
 //! // encode to base64
 //! let base64_string_secp256k1 = enr_secp256k1.to_base64();
 //!
 //! // generate a random ed25519 key
 //! let key = ed25519::SigningKey::generate(&mut rng);
-//! let enr_ed25519 = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
+//! let enr_ed25519 = EnrBuilder::new("v4").ip4(ip).expect("Not a valid Ipv4 address").tcp4(8000).expect("Not a valid tcp port").build(&key).unwrap();
 //!
 //! // encode to base64
 //! let base64_string_ed25519 = enr_ed25519.to_base64();
@@ -1266,8 +1266,8 @@ mod tests {
 
         let enr = {
             let mut builder = EnrBuilder::new("v4");
-            builder.ip4(ip);
-            builder.tcp4(tcp);
+            builder.ip4(ip).unwrap();
+            builder.tcp4(tcp).unwrap();
             builder.build(&key).unwrap()
         };
 
@@ -1322,7 +1322,13 @@ mod tests {
         let udp = 30303;
 
         let key = secp256k1::SecretKey::from_slice(&key_data).unwrap();
-        let enr = EnrBuilder::new("v4").ip4(ip).udp4(udp).build(&key).unwrap();
+        let enr = EnrBuilder::new("v4")
+            .ip4(ip)
+            .expect("Not a valid Ipv4 address")
+            .udp4(udp)
+            .expect("Not a valid udp port")
+            .build(&key)
+            .unwrap();
         let enr_base64 = enr.to_base64();
         assert_eq!(enr_base64, expected_enr_base64);
 
@@ -1367,8 +1373,8 @@ mod tests {
 
         let enr = {
             let mut builder = EnrBuilder::new("v4");
-            builder.ip4(ip);
-            builder.tcp4(tcp);
+            builder.ip4(ip).unwrap();
+            builder.tcp4(tcp).unwrap();
             builder.build(&key).unwrap()
         };
 
@@ -1458,7 +1464,9 @@ mod tests {
         let ip = Ipv4Addr::new(192, 168, 0, 1);
         let enr_secp256k1 = EnrBuilder::new("v4")
             .ip(ip.into())
+            .expect("Not a valid Ipv4 address")
             .tcp4(8000)
+            .expect("Not a valid tcp port")
             .build(&key)
             .unwrap();
 
@@ -1469,7 +1477,9 @@ mod tests {
         let key = ed25519_dalek::SigningKey::generate(&mut rand::thread_rng());
         let enr_ed25519 = EnrBuilder::new("v4")
             .ip(ip.into())
+            .expect("Not a valid Ipv4 address")
             .tcp4(8000)
+            .expect("Not a valid tcp port")
             .build(&key)
             .unwrap();
 
