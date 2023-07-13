@@ -57,6 +57,14 @@ impl<K: EnrKey> EnrBuilder<K> {
         key: impl AsRef<[u8]>,
         rlp: Bytes,
     ) -> Result<&mut Self, EnrError> {
+        if key.as_ref() == b"id" {
+            let id_bytes = rlp::decode::<Vec<u8>>(&rlp)
+                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+            if id_bytes != b"v4" {
+                return Err(EnrError::UnsupportedIdentityScheme);
+            }
+        }
+
         if matches!(key.as_ref(), b"tcp" | b"tcp6" | b"udp" | b"udp6") {
             rlp::decode::<u16>(&rlp).map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
         }
