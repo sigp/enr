@@ -475,7 +475,8 @@ impl<K: EnrKey> Enr<K> {
     ) -> Result<Option<Bytes>, EnrError> {
         // currently only support "v4" identity schemes
         if key.as_ref() == b"id" {
-            let id_bytes = rlp::decode::<Vec<u8>>(&value).map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+            let id_bytes = rlp::decode::<Vec<u8>>(&value)
+                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
             if id_bytes != b"v4" {
                 return Err(EnrError::UnsupportedIdentityScheme);
             }
