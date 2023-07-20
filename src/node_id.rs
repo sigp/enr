@@ -111,9 +111,6 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
 
-    #[cfg(feature = "serde")]
-    use serde_json;
-
     #[test]
     fn test_eq_node_raw_node() {
         let node = NodeId::random();
@@ -133,7 +130,7 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_serde_as_hashmap_key() {
-        let mut responses: HashMap<NodeId, u8> = Default::default();
+        let mut responses: HashMap<NodeId, u8> = HashMap::default();
         responses.insert(NodeId::random(), 1);
         let _ = serde_json::json!(responses);
     }
