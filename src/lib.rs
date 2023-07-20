@@ -1509,7 +1509,7 @@ mod tests {
         assert_eq!(enr.public_key().encode(), key.public().encode());
     }
 
-    /// | n     | `rlp::encode(n.to_be_bytes`()) | `rlp::encode::`<u16>(n) |
+    /// | n     | `rlp::encode(n.to_be_bytes())` | `rlp::encode::<u16>(n)` |
     /// | ----- | ------------------------------ | ----------------------- |
     /// | 0     | 0x820000                       | 0x80
     /// | 30    | 0x82001e                       | 0x1e
