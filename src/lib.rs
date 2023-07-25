@@ -1067,7 +1067,7 @@ fn check_spec_reserved_keys(key: &[u8], value: &[u8]) -> Result<(), EnrError> {
                 ));
             }
         }
-        _ => return Err(EnrError::UnsupportedIdentityScheme),
+        _ => return Ok(()),
     };
     Ok(())
 }

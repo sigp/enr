@@ -13,13 +13,7 @@ fn test_secp256k1_sign_ecdsa_with_noncedata() {
     let udp = 30303;
 
     let key = secp256k1::SecretKey::from_slice(&key_data).unwrap();
-    let enr = EnrBuilder::new("v4")
-        .ip4(ip)
-        .expect("Not a valid Ipv4 address")
-        .udp4(udp)
-        .expect("Not a valid udp port")
-        .build(&key)
-        .unwrap();
+    let enr = EnrBuilder::new("v4").ip4(ip).udp4(udp).build(&key).unwrap();
     let enr_base64 = enr.to_base64();
     assert_ne!(enr_base64, not_expected_enr_base64);
 
