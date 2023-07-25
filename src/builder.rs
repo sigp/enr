@@ -43,64 +43,18 @@ impl<K: EnrKey> EnrBuilder<K> {
     }
 
     /// Adds an arbitrary key-value to the `ENRBuilder`.
-    pub fn add_value<T: Encodable>(
-        &mut self,
-        key: impl AsRef<[u8]>,
-        value: &T,
-    ) -> Result<&mut Self, EnrError> {
+    pub fn add_value<T: Encodable>(&mut self, key: impl AsRef<[u8]>, value: &T) -> &mut Self {
         self.add_value_rlp(key, rlp::encode(value).freeze())
     }
 
     /// Adds an arbitrary key-value where the value is raw RLP encoded bytes.
-    pub fn add_value_rlp(
-        &mut self,
-        key: impl AsRef<[u8]>,
-        rlp: Bytes,
-    ) -> Result<&mut Self, EnrError> {
-        if key.as_ref() == b"id" {
-            let id_bytes = rlp::decode::<Vec<u8>>(&rlp)
-                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
-            if id_bytes != b"v4" {
-                return Err(EnrError::UnsupportedIdentityScheme);
-            }
-        }
-
-        if matches!(key.as_ref(), b"tcp" | b"tcp6" | b"udp" | b"udp6") {
-            rlp::decode::<u16>(&rlp).map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
-        }
-
-        if key.as_ref() == b"ip" && rlp.len() == 5 {
-            let ip4_bytes = rlp::decode::<Vec<u8>>(&rlp)
-                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
-            if ip4_bytes.len() != 4 {
-                return Err(EnrError::InvalidRlpData("Invalid Ipv4 size".to_string()));
-            }
-        }
-
-        if key.as_ref() == b"ip6" && rlp.len() == 17 {
-            let ip6_bytes = rlp::decode::<Vec<u8>>(&rlp)
-                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
-            if ip6_bytes.len() != 16 {
-                return Err(EnrError::InvalidRlpData("Invalid Ipv6 size".to_string()));
-            }
-        }
-
-        if key.as_ref() == b"secp256k1" && rlp.len() == 34 {
-            let secp256k1_bytes = rlp::decode::<Vec<u8>>(&rlp)
-                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
-            if secp256k1_bytes.len() != 33 {
-                return Err(EnrError::InvalidRlpData(
-                    "Invalid Secp256k1 size".to_string(),
-                ));
-            }
-        }
-
+    pub fn add_value_rlp(&mut self, key: impl AsRef<[u8]>, rlp: Bytes) -> &mut Self {
         self.content.insert(key.as_ref().to_vec(), rlp);
-        Ok(self)
+        self
     }
 
     /// Adds an `ip`/`ip6` field to the `ENRBuilder`.
-    pub fn ip(&mut self, ip: IpAddr) -> Result<&mut Self, EnrError> {
+    pub fn ip(&mut self, ip: IpAddr) -> &mut Self {
         match ip {
             IpAddr::V4(addr) => self.ip4(addr),
             IpAddr::V6(addr) => self.ip6(addr),
@@ -108,15 +62,15 @@ impl<K: EnrKey> EnrBuilder<K> {
     }
 
     /// Adds an `ip` field to the `ENRBuilder`.
-    pub fn ip4(&mut self, ip: Ipv4Addr) -> Result<&mut Self, EnrError> {
-        self.add_value("ip", &ip.octets().as_ref())?;
-        Ok(self)
+    pub fn ip4(&mut self, ip: Ipv4Addr) -> &mut Self {
+        self.add_value("ip", &ip.octets().as_ref());
+        self
     }
 
     /// Adds an `ip6` field to the `ENRBuilder`.
-    pub fn ip6(&mut self, ip: Ipv6Addr) -> Result<&mut Self, EnrError> {
-        self.add_value("ip", &ip.octets().as_ref())?;
-        Ok(self)
+    pub fn ip6(&mut self, ip: Ipv6Addr) -> &mut Self {
+        self.add_value("ip6", &ip.octets().as_ref());
+        self
     }
 
     /*
@@ -131,27 +85,27 @@ impl<K: EnrKey> EnrBuilder<K> {
     */
 
     /// Adds a `tcp` field to the `ENRBuilder`.
-    pub fn tcp4(&mut self, tcp: u16) -> Result<&mut Self, EnrError> {
-        self.add_value("tcp", &tcp)?;
-        Ok(self)
+    pub fn tcp4(&mut self, tcp: u16) -> &mut Self {
+        self.add_value("tcp", &tcp);
+        self
     }
 
     /// Adds a `tcp6` field to the `ENRBuilder`.
-    pub fn tcp6(&mut self, tcp: u16) -> Result<&mut Self, EnrError> {
-        self.add_value("tcp6", &tcp)?;
-        Ok(self)
+    pub fn tcp6(&mut self, tcp: u16) -> &mut Self {
+        self.add_value("tcp6", &tcp);
+        self
     }
 
     /// Adds a `udp` field to the `ENRBuilder`.
-    pub fn udp4(&mut self, udp: u16) -> Result<&mut Self, EnrError> {
-        self.add_value("udp", &udp)?;
-        Ok(self)
+    pub fn udp4(&mut self, udp: u16) -> &mut Self {
+        self.add_value("udp", &udp);
+        self
     }
 
     /// Adds a `udp6` field to the `ENRBuilder`.
-    pub fn udp6(&mut self, udp: u16) -> Result<&mut Self, EnrError> {
-        self.add_value("udp6", &udp)?;
-        Ok(self)
+    pub fn udp6(&mut self, udp: u16) -> &mut Self {
+        self.add_value("udp6", &udp);
+        self
     }
 
     /// Generates the rlp-encoded form of the ENR specified by the builder config.
@@ -179,9 +133,8 @@ impl<K: EnrKey> EnrBuilder<K> {
     }
 
     /// Adds a public key to the ENR builder.
-    fn add_public_key(&mut self, key: &K::PublicKey) -> Result<(), EnrError> {
-        self.add_value(key.enr_key(), &key.encode().as_ref())
-            .map(|_| {})
+    fn add_public_key(&mut self, key: &K::PublicKey) {
+        self.add_value(key.enr_key(), &key.encode().as_ref());
     }
 
     /// Constructs an ENR from the `EnrBuilder`.
@@ -203,10 +156,9 @@ impl<K: EnrKey> EnrBuilder<K> {
             }
         }
 
-        self.add_value_rlp("id", rlp::encode(&self.id.as_bytes()).freeze())?;
+        self.add_value_rlp("id", rlp::encode(&self.id.as_bytes()).freeze());
 
-        self.add_public_key(&key.public())?;
-
+        self.add_public_key(&key.public());
         let rlp_content = self.rlp_content();
 
         let signature = self.signature(key)?;

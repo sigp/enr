@@ -57,7 +57,7 @@
 //! let key = k256::ecdsa::SigningKey::random(&mut rng);
 //!
 //! let ip = Ipv4Addr::new(192,168,0,1);
-//! let enr = EnrBuilder::new("v4").ip4(ip).expect("Not a valid Ipv4 address").tcp4(8000).expect("Not a valid tcp port").build(&key).unwrap();
+//! let enr = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
 //!
 //! assert_eq!(enr.ip4(), Some("192.168.0.1".parse().unwrap()));
 //! assert_eq!(enr.id(), Some("v4".into()));
@@ -80,7 +80,7 @@
 //! let key = CombinedKey::generate_ed25519();
 //!
 //! let ip = Ipv4Addr::new(192,168,0,1);
-//! let enr = EnrBuilder::new("v4").ip4(ip).expect("Not a valid Ipv4 address").tcp4(8000).expect("Not a valid tcp port").build(&key).unwrap();
+//! let enr = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
 //!
 //! assert_eq!(enr.ip4(), Some("192.168.0.1".parse().unwrap()));
 //! assert_eq!(enr.id(), Some("v4".into()));
@@ -105,7 +105,7 @@
 //! let key = SigningKey::random(&mut rng);
 //!
 //! let ip = Ipv4Addr::new(192,168,0,1);
-//! let mut enr = EnrBuilder::new("v4").ip4(ip).expect("Not a valid Ipv4 address").tcp4(8000).expect("Not a valid tcp port").build(&key).unwrap();
+//! let mut enr = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
 //!
 //! enr.set_tcp4(8001, &key);
 //! // set a custom key
@@ -136,14 +136,14 @@
 //! let mut rng = thread_rng();
 //! let key = ecdsa::SigningKey::random(&mut rng);
 //! let ip = Ipv4Addr::new(192,168,0,1);
-//! let enr_secp256k1 = EnrBuilder::new("v4").ip4(ip).expect("Not a valid Ipv4 address").tcp4(8000).expect("Not a valid tcp port").build(&key).unwrap();
+//! let enr_secp256k1 = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
 //!
 //! // encode to base64
 //! let base64_string_secp256k1 = enr_secp256k1.to_base64();
 //!
 //! // generate a random ed25519 key
 //! let key = ed25519::SigningKey::generate(&mut rng);
-//! let enr_ed25519 = EnrBuilder::new("v4").ip4(ip).expect("Not a valid Ipv4 address").tcp4(8000).expect("Not a valid tcp port").build(&key).unwrap();
+//! let enr_ed25519 = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
 //!
 //! // encode to base64
 //! let base64_string_ed25519 = enr_ed25519.to_base64();
@@ -473,45 +473,7 @@ impl<K: EnrKey> Enr<K> {
         value: Bytes,
         enr_key: &K,
     ) -> Result<Option<Bytes>, EnrError> {
-        // currently only support "v4" identity schemes
-        if key.as_ref() == b"id" {
-            let id_bytes = rlp::decode::<Vec<u8>>(&value)
-                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
-            if id_bytes != b"v4" {
-                return Err(EnrError::UnsupportedIdentityScheme);
-            }
-        }
-
-        // Prevent inserting invalid RLP integers into keys with getters
-        if is_keyof_u16(key.as_ref()) {
-            rlp::decode::<u16>(&value).map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
-        }
-
-        if key.as_ref() == b"ip" && value.len() == 5 {
-            let ip4_bytes = rlp::decode::<Vec<u8>>(&value)
-                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
-            if ip4_bytes.len() != 4 {
-                return Err(EnrError::InvalidRlpData("Invalid Ipv4 size".to_string()));
-            }
-        }
-
-        if key.as_ref() == b"ip6" && value.len() == 17 {
-            let ip6_bytes = rlp::decode::<Vec<u8>>(&value)
-                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
-            if ip6_bytes.len() != 16 {
-                return Err(EnrError::InvalidRlpData("Invalid Ipv6 size".to_string()));
-            }
-        }
-
-        if key.as_ref() == b"secp256k1" && value.len() == 34 {
-            let secp256k1_bytes = rlp::decode::<Vec<u8>>(&value)
-                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
-            if secp256k1_bytes.len() != 33 {
-                return Err(EnrError::InvalidRlpData(
-                    "Invalid Secp256k1 size".to_string(),
-                ));
-            }
-        }
+        check_spec_reserved_keys(key.as_ref(), &value)?;
 
         let previous_value = self.content.insert(key.as_ref().to_vec(), value);
         // add the new public key
@@ -1070,10 +1032,51 @@ const fn is_keyof_u16(key: &[u8]) -> bool {
     matches!(key, b"tcp" | b"tcp6" | b"udp" | b"udp6")
 }
 
+fn check_spec_reserved_keys(key: &[u8], value: &[u8]) -> Result<(), EnrError> {
+    match key {
+        b"tcp" | b"tcp6" | b"udp" | b"udp6" => {
+            rlp::decode::<u16>(value).map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+        }
+        b"id" => {
+            let id_bytes = rlp::decode::<Vec<u8>>(value)
+                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+            if id_bytes != b"v4" {
+                return Err(EnrError::UnsupportedIdentityScheme);
+            }
+        }
+        b"ip" => {
+            let ip4_bytes = rlp::decode::<Vec<u8>>(value)
+                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+            if ip4_bytes.len() != 4 {
+                return Err(EnrError::InvalidRlpData("Invalid Ipv4 size".to_string()));
+            }
+        }
+        b"ip6" => {
+            let ip6_bytes = rlp::decode::<Vec<u8>>(value)
+                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+            if ip6_bytes.len() != 16 {
+                return Err(EnrError::InvalidRlpData("Invalid Ipv6 size".to_string()));
+            }
+        }
+        b"secp256k1" => {
+            let secp256k1_bytes = rlp::decode::<Vec<u8>>(value)
+                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+            if secp256k1_bytes.len() != 33 {
+                return Err(EnrError::InvalidRlpData(
+                    "Invalid Secp256k1 size".to_string(),
+                ));
+            }
+        }
+        _ => return Err(EnrError::UnsupportedIdentityScheme),
+    };
+    Ok(())
+}
+
 #[cfg(test)]
 #[cfg(feature = "k256")]
 mod tests {
     use super::*;
+    use std::convert::TryFrom;
     use std::net::Ipv4Addr;
 
     type DefaultEnr = Enr<k256::ecdsa::SigningKey>;
@@ -1270,8 +1273,8 @@ mod tests {
 
         let enr = {
             let mut builder = EnrBuilder::new("v4");
-            builder.ip4(ip).unwrap();
-            builder.tcp4(tcp).unwrap();
+            builder.ip4(ip);
+            builder.tcp4(tcp);
             builder.build(&key).unwrap()
         };
 
@@ -1326,13 +1329,7 @@ mod tests {
         let udp = 30303;
 
         let key = secp256k1::SecretKey::from_slice(&key_data).unwrap();
-        let enr = EnrBuilder::new("v4")
-            .ip4(ip)
-            .expect("Not a valid Ipv4 address")
-            .udp4(udp)
-            .expect("Not a valid udp port")
-            .build(&key)
-            .unwrap();
+        let enr = EnrBuilder::new("v4").ip4(ip).udp4(udp).build(&key).unwrap();
         let enr_base64 = enr.to_base64();
         assert_eq!(enr_base64, expected_enr_base64);
 
@@ -1349,8 +1346,8 @@ mod tests {
 
         let enr = {
             let mut builder = EnrBuilder::new("v4");
-            builder.ip(ip.into()).unwrap();
-            builder.tcp4(tcp).unwrap();
+            builder.ip(ip.into());
+            builder.tcp4(tcp);
             builder.build(&key).unwrap()
         };
 
@@ -1377,8 +1374,8 @@ mod tests {
 
         let enr = {
             let mut builder = EnrBuilder::new("v4");
-            builder.ip4(ip).unwrap();
-            builder.tcp4(tcp).unwrap();
+            builder.ip4(ip);
+            builder.tcp4(tcp);
             builder.build(&key).unwrap()
         };
 
@@ -1401,8 +1398,8 @@ mod tests {
 
         let mut enr = {
             let mut builder = EnrBuilder::new("v4");
-            builder.ip(ip.into()).unwrap();
-            builder.tcp4(tcp).unwrap();
+            builder.ip(ip.into());
+            builder.tcp4(tcp);
             builder.build(&key).unwrap()
         };
 
@@ -1419,7 +1416,7 @@ mod tests {
 
         let mut enr = {
             let mut builder = EnrBuilder::new("v4");
-            builder.tcp4(tcp).unwrap();
+            builder.tcp4(tcp);
             builder.build(&key).unwrap()
         };
 
@@ -1443,9 +1440,9 @@ mod tests {
 
         let mut enr = {
             let mut builder = EnrBuilder::new("v4");
-            builder.ip(ip.into()).unwrap();
-            builder.tcp4(tcp).unwrap();
-            builder.udp4(udp).unwrap();
+            builder.ip(ip.into());
+            builder.tcp4(tcp);
+            builder.udp4(udp);
             builder.build(&key).unwrap()
         };
 
@@ -1468,9 +1465,7 @@ mod tests {
         let ip = Ipv4Addr::new(192, 168, 0, 1);
         let enr_secp256k1 = EnrBuilder::new("v4")
             .ip(ip.into())
-            .expect("Not a valid Ipv4 address")
             .tcp4(8000)
-            .expect("Not a valid tcp port")
             .build(&key)
             .unwrap();
 
@@ -1481,9 +1476,7 @@ mod tests {
         let key = ed25519_dalek::SigningKey::generate(&mut rand::thread_rng());
         let enr_ed25519 = EnrBuilder::new("v4")
             .ip(ip.into())
-            .expect("Not a valid Ipv4 address")
             .tcp4(8000)
-            .expect("Not a valid tcp port")
             .build(&key)
             .unwrap();
 
@@ -1518,7 +1511,7 @@ mod tests {
 
         let mut enr = {
             let mut builder = EnrBuilder::new("v4");
-            builder.tcp4(tcp).unwrap();
+            builder.tcp4(tcp);
             builder.build(&key).unwrap()
         };
 
@@ -1548,12 +1541,12 @@ mod tests {
         assert_eq!(enr.public_key().encode(), key.public().encode());
     }
 
-    /// | n     | rlp::encode(n.to_be_bytes()) | rlp::encode::<u16>(n) |
-    /// | ----- | ---------------------------- | --------------------- |
-    /// | 0     | 0x820000                     | 0x80
-    /// | 30    | 0x82001e                     | 0x1e
-    /// | 255   | 0x8200ff                     | 0x81ff
-    /// | 30303 | 0x82765f                     | 0x82765f
+    /// | n     | `rlp::encode(n.to_be_bytes())` | `rlp::encode::<u16>(n)` |
+    /// | ----- | ------------------------------ | ----------------------- |
+    /// | 0     | 0x820000                       | 0x80
+    /// | 30    | 0x82001e                       | 0x1e
+    /// | 255   | 0x8200ff                       | 0x81ff
+    /// | 30303 | 0x82765f                       | 0x82765f
     const LOW_INT_PORTS: [u16; 4] = [0, 30, 255, 30303];
 
     #[test]
@@ -1563,7 +1556,7 @@ mod tests {
         for tcp in LOW_INT_PORTS {
             let enr = {
                 let mut builder = EnrBuilder::new("v4");
-                builder.tcp4(tcp).unwrap();
+                builder.tcp4(tcp);
                 builder.build(&key).unwrap()
             };
 
@@ -1603,7 +1596,7 @@ mod tests {
             let mut enr = EnrBuilder::new("v4").build(&key).unwrap();
 
             let res = enr.insert(b"tcp", &tcp.to_be_bytes().as_ref(), &key);
-            if tcp <= u8::MAX as u16 {
+            if u8::try_from(tcp).is_ok() {
                 assert_eq!(res.unwrap_err().to_string(), "invalid rlp data");
             } else {
                 res.unwrap(); // integers above 255 are encoded correctly
@@ -1624,7 +1617,7 @@ mod tests {
                 vec![(b"tcp".as_slice(), tcp.to_be_bytes().as_slice())].into_iter(),
                 &key,
             );
-            if tcp <= u8::MAX as u16 {
+            if u8::try_from(tcp).is_ok() {
                 assert_eq!(res.unwrap_err().to_string(), "invalid rlp data");
             } else {
                 res.unwrap(); // integers above 255 are encoded correctly
@@ -1644,7 +1637,7 @@ mod tests {
 
         for (tcp, enr_str) in vectors {
             let res = DefaultEnr::from_str(enr_str);
-            if tcp <= u8::MAX as u16 {
+            if u8::try_from(tcp).is_ok() {
                 assert_eq!(
                     res.unwrap_err().to_string(),
                     "Invalid ENR: RlpInvalidIndirection"
@@ -1659,54 +1652,5 @@ mod tests {
         assert!(enr.verify());
         assert_eq!(enr.get_raw_rlp("tcp").unwrap(), rlp::encode(&tcp).to_vec());
         assert_eq!(enr.tcp4(), Some(tcp));
-    }
-
-    #[test]
-    fn test_is_valid_ipv4() {
-        let mut rng = rand::thread_rng();
-        let key = k256::ecdsa::SigningKey::random(&mut rng);
-        let ip_addr = b"\x7f\x00\x00\x01";
-        let tcp = 30303;
-
-        let mut enr = {
-            let mut builder = EnrBuilder::new("v4");
-            builder.tcp4(tcp).unwrap();
-            builder.build(&key).unwrap()
-        };
-
-        let encoded = rlp::encode(&(ip_addr as &[u8])).freeze();
-        let decoded = rlp::decode::<Vec<u8>>(&encoded);
-        assert!(decoded
-            .clone()
-            .map_err(|err| EnrError::InvalidRlpData(err.to_string()))
-            .is_ok());
-
-        if let Ok(d) = decoded {
-            enr.insert(b"ip", &d.to_vec(), &key).unwrap();
-            let ip = Ipv4Addr::from(*ip_addr);
-            assert_eq!(enr.ip4().unwrap(), ip);
-        }
-    }
-
-    #[test]
-    fn test_is_valid_secp256k1() {
-        let mut rng = rand::thread_rng();
-        let key = k256::ecdsa::SigningKey::random(&mut rng);
-
-        let mut enr = {
-            let mut builder = EnrBuilder::new("v4");
-            builder.build(&key).unwrap()
-        };
-
-        let new_key = k256::ecdsa::SigningKey::random(&mut rng);
-
-        let encoded_key = rlp::encode(&(&new_key.public().encode() as &[u8]));
-
-        let decoded_key = rlp::decode::<Vec<u8>>(&encoded_key).unwrap();
-
-        enr.insert(enr.public_key().enr_key(), &decoded_key, &new_key)
-            .unwrap();
-
-        assert_eq!(decoded_key, enr.public_key().encode().to_vec());
     }
 }
