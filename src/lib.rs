@@ -899,7 +899,7 @@ impl<K: EnrKey> FromStr for Enr<K> {
     }
 }
 
-#[cfg(any(feature = "serde"))]
+#[cfg(feature = "serde")]
 impl<K: EnrKey> Serialize for Enr<K> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -909,7 +909,7 @@ impl<K: EnrKey> Serialize for Enr<K> {
     }
 }
 
-#[cfg(any(feature = "serde"))]
+#[cfg(feature = "serde")]
 impl<'de, K: EnrKey> Deserialize<'de> for Enr<K> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -1044,6 +1044,7 @@ const fn is_keyof_u16(key: &[u8]) -> bool {
 #[cfg(feature = "k256")]
 mod tests {
     use super::*;
+    use std::convert::TryFrom;
     use std::net::Ipv4Addr;
 
     type DefaultEnr = Enr<k256::ecdsa::SigningKey>;
@@ -1508,12 +1509,12 @@ mod tests {
         assert_eq!(enr.public_key().encode(), key.public().encode());
     }
 
-    /// | n     | rlp::encode(n.to_be_bytes()) | rlp::encode::<u16>(n) |
-    /// | ----- | ---------------------------- | --------------------- |
-    /// | 0     | 0x820000                     | 0x80
-    /// | 30    | 0x82001e                     | 0x1e
-    /// | 255   | 0x8200ff                     | 0x81ff
-    /// | 30303 | 0x82765f                     | 0x82765f
+    /// | n     | `rlp::encode(n.to_be_bytes())` | `rlp::encode::<u16>(n)` |
+    /// | ----- | ------------------------------ | ----------------------- |
+    /// | 0     | 0x820000                       | 0x80
+    /// | 30    | 0x82001e                       | 0x1e
+    /// | 255   | 0x8200ff                       | 0x81ff
+    /// | 30303 | 0x82765f                       | 0x82765f
     const LOW_INT_PORTS: [u16; 4] = [0, 30, 255, 30303];
 
     #[test]
@@ -1563,7 +1564,7 @@ mod tests {
             let mut enr = EnrBuilder::new("v4").build(&key).unwrap();
 
             let res = enr.insert(b"tcp", &tcp.to_be_bytes().as_ref(), &key);
-            if tcp <= u8::MAX as u16 {
+            if u8::try_from(tcp).is_ok() {
                 assert_eq!(res.unwrap_err().to_string(), "invalid rlp data");
             } else {
                 res.unwrap(); // integers above 255 are encoded correctly
@@ -1584,7 +1585,7 @@ mod tests {
                 vec![(b"tcp".as_slice(), tcp.to_be_bytes().as_slice())].into_iter(),
                 &key,
             );
-            if tcp <= u8::MAX as u16 {
+            if u8::try_from(tcp).is_ok() {
                 assert_eq!(res.unwrap_err().to_string(), "invalid rlp data");
             } else {
                 res.unwrap(); // integers above 255 are encoded correctly
@@ -1604,7 +1605,7 @@ mod tests {
 
         for (tcp, enr_str) in vectors {
             let res = DefaultEnr::from_str(enr_str);
-            if tcp <= u8::MAX as u16 {
+            if u8::try_from(tcp).is_ok() {
                 assert_eq!(
                     res.unwrap_err().to_string(),
                     "Invalid ENR: RlpInvalidIndirection"
