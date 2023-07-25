@@ -1059,13 +1059,8 @@ fn check_spec_reserved_keys(key: &[u8], value: &[u8]) -> Result<(), EnrError> {
             }
         }
         b"secp256k1" => {
-            let secp256k1_bytes = rlp::decode::<Vec<u8>>(value)
+            rlp::decode::<Enr<k256::ecdsa::SigningKey>>(value)
                 .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
-            if secp256k1_bytes.len() != 33 {
-                return Err(EnrError::InvalidRlpData(
-                    "Invalid Secp256k1 size".to_string(),
-                ));
-            }
         }
         _ => return Ok(()),
     };
