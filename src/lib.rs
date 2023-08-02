@@ -473,15 +473,7 @@ impl<K: EnrKey> Enr<K> {
         value: Bytes,
         enr_key: &K,
     ) -> Result<Option<Bytes>, EnrError> {
-        // currently only support "v4" identity schemes
-        if key.as_ref() == b"id" && &*value != b"v4" {
-            return Err(EnrError::UnsupportedIdentityScheme);
-        }
-
-        // Prevent inserting invalid RLP integers into keys with getters
-        if is_keyof_u16(key.as_ref()) {
-            rlp::decode::<u16>(&value).map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
-        }
+        check_spec_reserved_keys(key.as_ref(), &value)?;
 
         let previous_value = self.content.insert(key.as_ref().to_vec(), value);
         // add the new public key
@@ -1038,6 +1030,41 @@ pub(crate) fn digest(b: &[u8]) -> [u8; 32] {
 
 const fn is_keyof_u16(key: &[u8]) -> bool {
     matches!(key, b"tcp" | b"tcp6" | b"udp" | b"udp6")
+}
+
+fn check_spec_reserved_keys(key: &[u8], value: &[u8]) -> Result<(), EnrError> {
+    match key {
+        b"tcp" | b"tcp6" | b"udp" | b"udp6" => {
+            rlp::decode::<u16>(value).map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+        }
+        b"id" => {
+            let id_bytes = rlp::decode::<Vec<u8>>(value)
+                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+            if id_bytes != b"v4" {
+                return Err(EnrError::UnsupportedIdentityScheme);
+            }
+        }
+        b"ip" => {
+            let ip4_bytes = rlp::decode::<Vec<u8>>(value)
+                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+            if ip4_bytes.len() != 4 {
+                return Err(EnrError::InvalidRlpData("Invalid Ipv4 size".to_string()));
+            }
+        }
+        b"ip6" => {
+            let ip6_bytes = rlp::decode::<Vec<u8>>(value)
+                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+            if ip6_bytes.len() != 16 {
+                return Err(EnrError::InvalidRlpData("Invalid Ipv6 size".to_string()));
+            }
+        }
+        b"secp256k1" => {
+            rlp::decode::<Enr<k256::ecdsa::SigningKey>>(value)
+                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+        }
+        _ => return Ok(()),
+    };
+    Ok(())
 }
 
 #[cfg(test)]
