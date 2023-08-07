@@ -934,6 +934,12 @@ impl<K: EnrKey> rlp::Decodable for Enr<K> {
             return Err(DecoderError::RlpExpectedToBeList);
         }
 
+        // verify there is no extra data
+        let payload_info = rlp.payload_info()?;
+        if rlp.as_raw().len() != payload_info.header_len + payload_info.value_len {
+            return Err(DecoderError::RlpInconsistentLengthAndData);
+        }
+
         let mut rlp_iter = rlp.iter();
 
         if rlp_iter.len() == 0 || rlp_iter.len() % 2 != 0 {
@@ -1230,6 +1236,53 @@ mod tests {
             text.parse::<DefaultEnr>().unwrap_err(),
             "enr exceeds max size"
         );
+    }
+
+    #[cfg(feature = "k256")]
+    #[test]
+    fn test_read_enr_rlp_decoding_reject_extra_data() {
+        // Valid record
+        let record_hex1 = concat!(
+            "f884b8407098ad865b00a582051940cb9cf36836572411a47278783077011599",
+            "ed5cd16b76f2635f4e234738f30813a89eb9137e3e3df5266e3a1f11df72ecf1",
+            "145ccb9c01826964827634826970847f00000189736563703235366b31a103ca",
+            "634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd313883",
+            "75647082765f"
+        );
+        // Invalid record
+        // Replaces prefix "f884" with "f883", items payload length in bytes: 0x84 -> 0x83
+        let record_hex2 = concat!(
+            "f883b8407098ad865b00a582051940cb9cf36836572411a47278783077011599",
+            "ed5cd16b76f2635f4e234738f30813a89eb9137e3e3df5266e3a1f11df72ecf1",
+            "145ccb9c01826964827634826970847f00000189736563703235366b31a103ca",
+            "634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd313883",
+            "75647082765f"
+        );
+        // Invalid record
+        // Appends one byte 252 (0xfc), 1-byte extra data
+        let record_hex3 = concat!(
+            "f884b8407098ad865b00a582051940cb9cf36836572411a47278783077011599",
+            "ed5cd16b76f2635f4e234738f30813a89eb9137e3e3df5266e3a1f11df72ecf1",
+            "145ccb9c01826964827634826970847f00000189736563703235366b31a103ca",
+            "634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd313883",
+            "75647082765ffc"
+        );
+
+        let valid_record = hex::decode(record_hex1).unwrap();
+        let expected_pubkey =
+            hex::decode("03ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd3138")
+                .unwrap();
+
+        let enr = rlp::decode::<DefaultEnr>(&valid_record).unwrap();
+        let pubkey = enr.public_key().encode();
+        assert_eq!(pubkey.to_vec(), expected_pubkey);
+        assert!(enr.verify());
+
+        let invalid_record = hex::decode(record_hex2).unwrap();
+        rlp::decode::<DefaultEnr>(&invalid_record).expect_err("should reject extra data");
+
+        let invalid_record = hex::decode(record_hex3).unwrap();
+        rlp::decode::<DefaultEnr>(&invalid_record).expect_err("should reject extra data");
     }
 
     /// Tests that RLP integers decoding rejects any item with leading zeroes.
