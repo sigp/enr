@@ -2,6 +2,7 @@
 
 use super::{EnrKey, EnrKeyUnambiguous, EnrPublicKey, SigningError};
 use crate::Key;
+use alloy_rlp::{Decodable, Error as DecoderError};
 use bytes::Bytes;
 use k256::{
     ecdsa::{
@@ -16,7 +17,6 @@ use k256::{
     AffinePoint, CompressedPoint, EncodedPoint,
 };
 use rand::rngs::OsRng;
-use rlp::DecoderError;
 use sha3::{Digest, Keccak256};
 use std::{collections::BTreeMap, convert::TryFrom};
 
@@ -46,9 +46,9 @@ impl EnrKey for SigningKey {
             .ok_or(DecoderError::Custom("Unknown signature"))?;
 
         // Decode the RLP
-        let pubkey_bytes = rlp::Rlp::new(pubkey_bytes).data()?;
+        let pubkey_bytes = Vec::<u8>::decode(&mut pubkey_bytes.to_vec().as_slice())?;
 
-        Self::decode_public(pubkey_bytes)
+        Self::decode_public(pubkey_bytes.as_slice())
     }
 }
 
