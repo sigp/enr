@@ -4,8 +4,6 @@
 use crate::{digest, keys::EnrPublicKey, Enr, EnrKey};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "serde")]
-use serde_hex::{SerHex, StrictPfx};
 
 type RawNodeId = [u8; 32];
 
@@ -13,7 +11,7 @@ type RawNodeId = [u8; 32];
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 /// The `NodeId` of an ENR (a 32 byte identifier).
 pub struct NodeId {
-    #[cfg_attr(feature = "serde", serde(with = "SerHex::<StrictPfx>"))]
+    #[cfg_attr(feature = "serde", serde(with = "serde_hex_prfx"))]
     raw: RawNodeId,
 }
 
@@ -103,6 +101,34 @@ impl std::fmt::Display for NodeId {
 impl std::fmt::Debug for NodeId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "0x{}", hex::encode(self.raw))
+    }
+}
+
+/// Serialize with the 0x prefix.
+#[cfg(feature = "serde")]
+mod serde_hex_prfx {
+    pub fn serialize<T: AsRef<[u8]> + hex::ToHex, S: serde::Serializer>(
+        data: &T,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        let dst = format!("0x{}", hex::encode(data));
+        serializer.serialize_str(&dst)
+    }
+
+    /// Deserialize with the 0x prefix.
+    pub fn deserialize<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+        T: hex::FromHex,
+        <T as hex::FromHex>::Error: std::fmt::Display,
+    {
+        let raw: &[u8] = serde::Deserialize::deserialize(deserializer)?;
+        let src = if raw.starts_with(b"0x") {
+            &raw[2..]
+        } else {
+            &raw[..]
+        };
+        hex::FromHex::from_hex(src).map_err(serde::de::Error::custom)
     }
 }
 
