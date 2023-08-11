@@ -46,9 +46,9 @@ impl EnrKey for SigningKey {
             .ok_or(DecoderError::Custom("Unknown signature"))?;
 
         // Decode the RLP
-        let pubkey_bytes = Vec::<u8>::decode(&mut pubkey_bytes.to_vec().as_slice())?;
+        let pubkey_bytes = Bytes::decode(&mut pubkey_bytes.to_vec().as_slice())?;
 
-        Self::decode_public(pubkey_bytes.as_slice())
+        Self::decode_public(pubkey_bytes.to_vec().as_slice())
     }
 }
 
