@@ -772,17 +772,18 @@ impl<K: EnrKey> Enr<K> {
 
     /// Evaluates the RLP-encoding of the content of the ENR record.
     fn rlp_content(&self) -> BytesMut {
-        let mut list = Vec::<u8>::with_capacity(MAX_ENR_SIZE);
-        let mut seq = vec![0];
-        seq.append(&mut alloy_rlp::encode(self.seq));
-        list.append(&mut seq);
+        let mut list = BytesMut::with_capacity(MAX_ENR_SIZE);
+        list.extend_from_slice(&alloy_rlp::encode(self.seq));
         for (k, v) in &self.content {
             // Keys are bytes
-            list.append(&mut alloy_rlp::encode(k.to_vec().as_slice()));
+            list.extend_from_slice(&alloy_rlp::encode(k.as_slice()));
             // Values are raw RLP encoded data
-            list.append(&mut v.to_vec());
+            list.extend_from_slice(v.to_vec().as_slice());
         }
-        encoded_list(&list)
+        let encoded = alloy_rlp::encode(&mut list);
+        let mut out = BytesMut::with_capacity(encoded.len());
+        out.extend_from_slice(&encoded);
+        out
     }
 
     /// Signs the ENR record based on the identity scheme. Currently only "v4" is supported.
@@ -953,28 +954,11 @@ impl<K: EnrKey> Decodable for Enr<K> {
             let key = Bytes::decode(payload)?;
 
             match key.to_vec().as_slice() {
-                b"id" => {
-                    let value = Bytes::decode(payload)?;
-                    if value.to_vec().as_slice() != b"v4" {
-                        return Err(DecoderError::Custom("Wrong value"));
-                    }
-                    content.insert(
-                        key.to_vec(),
-                        Bytes::copy_from_slice(&alloy_rlp::encode(value)),
-                    );
-                }
                 b"tcp" | b"tcp6" | b"udp" | b"udp6" => {
                     let port = u16::decode(payload)?;
                     content.insert(
                         key.to_vec(),
                         Bytes::copy_from_slice(&alloy_rlp::encode(port)),
-                    );
-                }
-                b"secp256k1" => {
-                    let value = Bytes::decode(payload)?;
-                    content.insert(
-                        key.to_vec(),
-                        Bytes::copy_from_slice(&alloy_rlp::encode(value)),
                     );
                 }
                 _ => {
