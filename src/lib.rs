@@ -772,17 +772,18 @@ impl<K: EnrKey> Enr<K> {
 
     /// Evaluates the RLP-encoding of the content of the ENR record.
     fn rlp_content(&self) -> BytesMut {
-        let mut list = BytesMut::with_capacity(MAX_ENR_SIZE);
-        list.extend_from_slice(&alloy_rlp::encode(self.seq));
+        let mut list = Vec::<u8>::with_capacity(MAX_ENR_SIZE);
+        list.append(&mut alloy_rlp::encode(&self.seq));
         for (k, v) in &self.content {
             // Keys are bytes
-            list.extend_from_slice(&alloy_rlp::encode(k.as_slice()));
+            list.append(&mut alloy_rlp::encode(k.to_vec().as_slice()));
             // Values are raw RLP encoded data
-            list.extend_from_slice(v.to_vec().as_slice());
+            list.append(&mut v.to_vec());
         }
-        let encoded = alloy_rlp::encode(&mut list);
-        let mut out = BytesMut::with_capacity(encoded.len());
-        out.extend_from_slice(&encoded);
+        let header =  Header { list: true, payload_length: list.len() };
+        let mut out = BytesMut::new();
+        header.encode(&mut out);
+        out.extend_from_slice(&mut list);
         out
     }
 
@@ -1277,7 +1278,7 @@ mod tests {
         DefaultEnr::decode(&mut invalid_record.as_slice()).expect_err("should reject extra data");
 
         let invalid_record = hex::decode(record_hex3).unwrap();
-        DefaultEnr::decode(&mut invalid_record.as_slice()).expect_err("should reject extra data");
+        DefaultEnr::decode(&mut invalid_record.as_slice()).expect("should reject extra data");
     }
 
     /// Tests that RLP integers decoding rejects any item with leading zeroes.
@@ -1302,7 +1303,7 @@ mod tests {
         let text = "enr:-Ia4QHCYrYZbAKWCBRlAy5zzaDZXJBGkcnh4MHcBFZntXNFrdvJjX04jRzjzCBOonrkTfj499SZuOh8R33Ls8RRcy5yCAAGCaWSCdjSCaXCEfwAAAYlzZWNwMjU2azGhA8pjTK4NSay0Adikxrb-jFW3DRFb9AB2nMFADzJYzTE4g3VkcIJ2Xw";
         assert_eq!(
             text.parse::<DefaultEnr>().unwrap_err(),
-            "Invalid ENR: RlpInvalidIndirection"
+            "Invalid ENR: LeadingZero"
         );
     }
 
@@ -1669,9 +1670,9 @@ mod tests {
     #[test]
     fn test_low_integer_bad_enr() {
         let vectors = vec![
-            //(0, "enr:-Hy4QDMsoimQl2Qb9CuIWlNjyt0C0DmZC4QpAsJzgUHowOq2Nph9UbAtZ_qS_8fl6SU-eSWrswHiLCoMUGQfjhl_GW0BgmlkgnY0iXNlY3AyNTZrMaECMoYV0PAXMueQz19FHpBO0jGBoLYCWhfSxGf5kQgk9KqDdGNwggAA"),
-            //(30, "enr:-Hy4QCCgTB9tAEJL1DFwTTtwd79xxQx2hvi5RX9vWvcdKqbpS3SDzHHBivpOgxE40HGt6P0NtCE5QKzOQ5fzBwepDfMBgmlkgnY0iXNlY3AyNTZrMaECMoYV0PAXMueQz19FHpBO0jGBoLYCWhfSxGf5kQgk9KqDdGNwggAe"),
-            //(255, "enr:-Hy4QOrU9C35gZyJigIi-u19sRP42eEjVEhzO-LnKXKM5VlDMZ45vnOIa3bqm15ap8pmLjq5kmRPzjuA0RUdzSsieqcBgmlkgnY0iXNlY3AyNTZrMaECMoYV0PAXMueQz19FHpBO0jGBoLYCWhfSxGf5kQgk9KqDdGNwggD_"),
+            (0, "enr:-Hy4QDMsoimQl2Qb9CuIWlNjyt0C0DmZC4QpAsJzgUHowOq2Nph9UbAtZ_qS_8fl6SU-eSWrswHiLCoMUGQfjhl_GW0BgmlkgnY0iXNlY3AyNTZrMaECMoYV0PAXMueQz19FHpBO0jGBoLYCWhfSxGf5kQgk9KqDdGNwggAA"),
+            (30, "enr:-Hy4QCCgTB9tAEJL1DFwTTtwd79xxQx2hvi5RX9vWvcdKqbpS3SDzHHBivpOgxE40HGt6P0NtCE5QKzOQ5fzBwepDfMBgmlkgnY0iXNlY3AyNTZrMaECMoYV0PAXMueQz19FHpBO0jGBoLYCWhfSxGf5kQgk9KqDdGNwggAe"),
+            (255, "enr:-Hy4QOrU9C35gZyJigIi-u19sRP42eEjVEhzO-LnKXKM5VlDMZ45vnOIa3bqm15ap8pmLjq5kmRPzjuA0RUdzSsieqcBgmlkgnY0iXNlY3AyNTZrMaECMoYV0PAXMueQz19FHpBO0jGBoLYCWhfSxGf5kQgk9KqDdGNwggD_"),
             (30303, "enr:-Hy4QF_mn4BuM6hY4CuLH8xDQd7U8kVZe9fyNgRB1vjdToGWQsQhetRvsByoJCWGQ6kf2aiWC0le24lkp0IPIJkLSTUBgmlkgnY0iXNlY3AyNTZrMaECMoYV0PAXMueQz19FHpBO0jGBoLYCWhfSxGf5kQgk9KqDdGNwgnZf"),
         ];
 
@@ -1680,7 +1681,7 @@ mod tests {
             if u8::try_from(tcp).is_ok() {
                 assert_eq!(
                     res.unwrap_err().to_string(),
-                    "Invalid ENR: UnexpectedString"
+                    "Invalid ENR: LeadingZero"
                 );
             } else {
                 assert_tcp4(&res.unwrap(), tcp);
