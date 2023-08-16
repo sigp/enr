@@ -1,5 +1,5 @@
-use crate::{encoded_list, Enr, EnrError, EnrKey, EnrPublicKey, Key, NodeId, MAX_ENR_SIZE};
-use alloy_rlp::{Decodable, Encodable};
+use crate::{Enr, EnrError, EnrKey, EnrPublicKey, Key, NodeId, MAX_ENR_SIZE};
+use alloy_rlp::{Decodable, Encodable, Header};
 use bytes::{Bytes, BytesMut};
 use std::{
     collections::BTreeMap,
@@ -44,10 +44,9 @@ impl<K: EnrKey> EnrBuilder<K> {
 
     /// Adds an arbitrary key-value to the `ENRBuilder`.
     pub fn add_value<T: Encodable>(&mut self, key: impl AsRef<[u8]>, value: &T) -> &mut Self {
-        self.add_value_rlp(
-            key,
-            Bytes::copy_from_slice(alloy_rlp::encode(value).as_slice()),
-        )
+        let mut out = BytesMut::new();
+        value.encode(&mut out);
+        self.add_value_rlp(key, Bytes::copy_from_slice(out.to_vec().as_slice()))
     }
 
     /// Adds an arbitrary key-value where the value is raw RLP encoded bytes.
@@ -114,14 +113,21 @@ impl<K: EnrKey> EnrBuilder<K> {
     /// Generates the rlp-encoded form of the ENR specified by the builder config.
     fn rlp_content(&self) -> BytesMut {
         let mut list = Vec::<u8>::with_capacity(MAX_ENR_SIZE);
-        list.append(&mut self.seq.to_ne_bytes().to_vec());
+        list.append(&mut alloy_rlp::encode(self.seq));
         for (k, v) in &self.content {
             // Keys are bytes
-            list.append(&mut k.as_slice().to_vec());
+            list.append(&mut alloy_rlp::encode(k.as_slice()));
             // Values are raw RLP encoded data
             list.append(&mut v.to_vec());
         }
-        encoded_list(&list)
+        let header = Header {
+            list: true,
+            payload_length: list.len(),
+        };
+        let mut out = BytesMut::new();
+        header.encode(&mut out);
+        out.extend_from_slice(&list);
+        out
     }
 
     /// Signs record based on the identity scheme. Currently only "v4" is supported.
@@ -152,21 +158,16 @@ impl<K: EnrKey> EnrBuilder<K> {
 
         // Sanitize all data, ensuring all RLP data is correctly formatted.
         for (key, value) in &self.content {
-            if Vec::<u8>::decode(&mut key.as_slice()).is_err() {
+            if Bytes::decode(&mut value.to_vec().as_slice()).is_err() {
                 return Err(EnrError::InvalidRlpData(
                     String::from_utf8_lossy(key).into(),
-                ));
-            }
-            if Vec::<u8>::decode(&mut value.to_vec().as_slice()).is_err() {
-                return Err(EnrError::InvalidRlpData(
-                    String::from_utf8_lossy(value).into(),
                 ));
             }
         }
 
         self.add_value_rlp(
             "id",
-            Bytes::copy_from_slice(alloy_rlp::encode(self.id.as_bytes()).as_slice()),
+            Bytes::copy_from_slice(&alloy_rlp::encode(self.id.as_bytes())),
         );
 
         self.add_public_key(&key.public());
