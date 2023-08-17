@@ -109,7 +109,7 @@
 //!
 //! enr.set_tcp4(8001, &key);
 //! // set a custom key
-//! enr.insert("custom_key", &vec![0,0,1], &key);
+//! enr.insert("custom_key", &vec![0,0,1].as_slice(), &key);
 //!
 //! // encode to base64
 //! let base_64_string = enr.to_base64();
@@ -120,7 +120,7 @@
 //! assert_eq!(decoded_enr.ip4(), Some("192.168.0.1".parse().unwrap()));
 //! assert_eq!(decoded_enr.id(), Some("v4".into()));
 //! assert_eq!(decoded_enr.tcp4(), Some(8001));
-//! assert_eq!(decoded_enr.get("custom_key"), Some(vec![0,0,1].as_slice()));
+//! assert_eq!(decoded_enr.get("custom_key"), Some(vec![0,0,1]));
 //! ```
 //!
 //! ### Encoding/Decoding ENR's of various key types
@@ -182,7 +182,7 @@ mod error;
 mod keys;
 mod node_id;
 use alloy_rlp::{Decodable, Encodable, Error as DecoderError, Header};
-use bytes::{Bytes, BytesMut};
+use bytes::{Buf, Bytes, BytesMut};
 use std::{
     collections::BTreeMap,
     hash::{Hash, Hasher},
@@ -978,7 +978,19 @@ impl<K: EnrKey> Decodable for Enr<K> {
         while !payload.is_empty() {
             let key = Bytes::decode(payload)?;
 
+            if prev.is_some() && prev >= Some(key.to_vec().clone()) {
+                return Err(DecoderError::Custom("Unsorted keys"));
+            }
+            prev = Some(key.to_vec().clone());
+
             match key.to_vec().as_slice() {
+                b"id" => {
+                    let id = Bytes::decode(payload)?;
+                    if id.to_vec() != b"v4" {
+                        return Err(DecoderError::Custom("Unsupported identity scheme"));
+                    }
+                    content.insert(key.to_vec(), Bytes::copy_from_slice(&alloy_rlp::encode(id)));
+                }
                 b"tcp" | b"tcp6" | b"udp" | b"udp6" => {
                     let port = u16::decode(payload)?;
                     content.insert(
@@ -986,19 +998,47 @@ impl<K: EnrKey> Decodable for Enr<K> {
                         Bytes::copy_from_slice(&alloy_rlp::encode(port)),
                     );
                 }
+                b"ip" => {
+                    let ip = Ipv4Addr::decode(payload)?;
+                    content.insert(key.to_vec(), Bytes::copy_from_slice(&alloy_rlp::encode(ip)));
+                }
+                b"ip6" => {
+                    let ip6 = Ipv6Addr::decode(payload)?;
+                    content.insert(
+                        key.to_vec(),
+                        Bytes::copy_from_slice(&alloy_rlp::encode(ip6)),
+                    );
+                }
+                b"secp256k1" | b"ed25519" => {
+                    let keys = Bytes::decode(payload)?;
+                    content.insert(
+                        key.to_vec(),
+                        Bytes::copy_from_slice(&alloy_rlp::encode(keys)),
+                    );
+                }
+                b"eth" => {
+                    let eth_header = Header::decode(payload)?;
+                    let value = &mut &payload[..eth_header.payload_length];
+                    payload.advance(eth_header.payload_length);
+                    let val_header = Header {
+                        list: true,
+                        payload_length: value.len(),
+                    };
+                    let mut out = BytesMut::new();
+                    val_header.encode(&mut out);
+                    out.extend_from_slice(value);
+                    content.insert(key.to_vec(), Bytes::copy_from_slice(&out));
+                }
                 _ => {
-                    let value = Bytes::decode(payload)?;
+                    let other_header = Header::decode(payload)?;
+                    let value = &mut &payload[..other_header.payload_length];
+                    payload.advance(other_header.payload_length);
                     content.insert(
                         key.to_vec(),
                         Bytes::copy_from_slice(&alloy_rlp::encode(value)),
                     );
                 }
             };
-
-            if prev.is_some() && prev >= Some(key.to_vec().clone()) {
-                return Err(DecoderError::Custom("Unsorted keys"));
-            }
-            prev = Some(key.to_vec().clone());
         }
 
         // verify we know the signature type
@@ -1447,8 +1487,9 @@ mod tests {
             builder.build(&key).unwrap()
         };
 
-        let encoded_enr = alloy_rlp::encode(&enr);
-        let decoded_enr = Enr::<CombinedKey>::decode(&mut encoded_enr.as_slice()).unwrap();
+        let mut out = BytesMut::new();
+        enr.encode(&mut out);
+        let decoded_enr = Enr::<CombinedKey>::decode(&mut out.to_vec().as_slice()).unwrap();
 
         assert_eq!(decoded_enr.id(), Some("v4".into()));
         assert_eq!(decoded_enr.ip4(), Some(ip));
