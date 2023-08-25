@@ -255,6 +255,9 @@ impl<K: EnrKey> Enr<K> {
         self.seq
     }
 
+    /// # Panics
+    /// 
+    /// Will panic if data is not sanitized
     /// Reads a custom key from the record if it exists, decoded as data.
     pub fn get(&self, key: impl AsRef<[u8]>) -> Option<Vec<u8>> {
         // It's ok to decode any valid RLP value as data
@@ -398,7 +401,9 @@ impl<K: EnrKey> Enr<K> {
     pub fn signature(&self) -> &[u8] {
         &self.signature
     }
-
+    /// # Panics
+    /// 
+    /// Will panic if the content does not has a public key
     /// Returns the public key of the ENR record.
     #[must_use]
     pub fn public_key(&self) -> K::PublicKey {
@@ -884,7 +889,7 @@ impl<K: EnrKey> std::fmt::Debug for Enr<K> {
             .field("IpV4 TCP Socket", &self.tcp4_socket())
             .field("IpV6 TCP Socket", &self.tcp6_socket())
             .field("Other Pairs", &OtherPairs(&self.content))
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
