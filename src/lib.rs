@@ -256,7 +256,7 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// # Panics
-    /// 
+    ///
     /// Will panic if data is not sanitized
     /// Reads a custom key from the record if it exists, decoded as data.
     pub fn get(&self, key: impl AsRef<[u8]>) -> Option<Vec<u8>> {
@@ -402,7 +402,7 @@ impl<K: EnrKey> Enr<K> {
         &self.signature
     }
     /// # Panics
-    /// 
+    ///
     /// Will panic if the content does not has a public key
     /// Returns the public key of the ENR record.
     #[must_use]
