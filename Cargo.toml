@@ -35,7 +35,6 @@ serde_json = { version = "1.0.95" }
 default = ["serde", "k256"]
 ed25519 = ["ed25519-dalek"]
 rust-secp256k1 = ["secp256k1"]
-serde = ["dep:serde", "hex/serde"]
 
 [lib]
 name = "enr"

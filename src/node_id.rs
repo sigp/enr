@@ -123,11 +123,7 @@ mod serde_hex_prfx {
         <T as hex::FromHex>::Error: std::fmt::Display,
     {
         let raw: &[u8] = serde::Deserialize::deserialize(deserializer)?;
-        let src = if raw.starts_with(b"0x") {
-            &raw[2..]
-        } else {
-            raw
-        };
+        let src = raw.strip_prefix(b"0x").unwrap_or(raw);
         hex::FromHex::from_hex(src).map_err(serde::de::Error::custom)
     }
 }
