@@ -258,6 +258,7 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Reads a custom key from the record if it exists, decoded as data.
+    #[allow(clippy::missing_panics_doc)]
     pub fn get(&self, key: impl AsRef<[u8]>) -> Option<&[u8]> {
         // It's ok to decode any valid RLP value as data
         self.get_raw_rlp(key).map(|rlp_data| {
@@ -401,6 +402,9 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Returns the public key of the ENR record.
+    /// # Panics
+    ///
+    /// Will panic if the public key is not supported.
     #[must_use]
     pub fn public_key(&self) -> K::PublicKey {
         K::enr_to_public(&self.content).expect("ENR's can only be created with supported keys")
@@ -830,6 +834,7 @@ impl<K: EnrKey> std::fmt::Display for Enr<K> {
     }
 }
 
+#[allow(clippy::missing_fields_in_debug)]
 impl<K: EnrKey> std::fmt::Debug for Enr<K> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         struct OtherPairs<'a>(&'a BTreeMap<Key, Bytes>);
