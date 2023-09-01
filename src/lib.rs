@@ -1046,6 +1046,8 @@ impl<K: EnrKey> Decodable for Enr<K> {
             };
         }
 
+        buf.clone_from(payload);
+
         // verify we know the signature type
         let public_key = K::enr_to_public(&content)?;
 
