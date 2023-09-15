@@ -4,8 +4,6 @@
 use crate::{digest, keys::EnrPublicKey, Enr, EnrKey};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "serde")]
-use serde_hex::{SerHex, StrictPfx};
 
 type RawNodeId = [u8; 32];
 
@@ -13,7 +11,7 @@ type RawNodeId = [u8; 32];
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 /// The `NodeId` of an ENR (a 32 byte identifier).
 pub struct NodeId {
-    #[cfg_attr(feature = "serde", serde(with = "SerHex::<StrictPfx>"))]
+    #[cfg_attr(feature = "serde", serde(with = "serde_hex_prfx"))]
     raw: RawNodeId,
 }
 
@@ -106,6 +104,30 @@ impl std::fmt::Debug for NodeId {
     }
 }
 
+/// Serialize with the 0x prefix.
+#[cfg(feature = "serde")]
+mod serde_hex_prfx {
+    pub fn serialize<T: AsRef<[u8]> + hex::ToHex, S: serde::Serializer>(
+        data: &T,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        let dst = format!("0x{}", hex::encode(data));
+        serializer.serialize_str(&dst)
+    }
+
+    /// Deserialize with the 0x prefix.
+    pub fn deserialize<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+        T: hex::FromHex,
+        <T as hex::FromHex>::Error: std::fmt::Display,
+    {
+        let raw: &[u8] = serde::Deserialize::deserialize(deserializer)?;
+        let src = raw.strip_prefix(b"0x").unwrap_or(raw);
+        hex::FromHex::from_hex(src).map_err(serde::de::Error::custom)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -125,6 +147,23 @@ mod tests {
         let node = NodeId::random();
         let json_string = serde_json::to_string(&node).unwrap();
         assert_eq!(node, serde_json::from_str::<NodeId>(&json_string).unwrap());
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_serde_0x() {
+        let raw = [
+            154, 95, 80, 100, 224, 32, 222, 137, 157, 219, 197, 24, 45, 143, 90, 106, 99, 12, 9,
+            93, 44, 66, 196, 203, 35, 233, 26, 59, 50, 128, 168, 180,
+        ];
+        let node = NodeId::parse(&raw).unwrap();
+        let json_string = serde_json::to_string(&node).unwrap();
+        assert_eq!(
+            json_string,
+            "\"0x9a5f5064e020de899ddbc5182d8f5a6a630c095d2c42c4cb23e91a3b3280a8b4\""
+        );
+        let snode = serde_json::from_str::<NodeId>(&json_string).unwrap();
+        assert_eq!(node, snode);
     }
 
     #[cfg(feature = "serde")]
