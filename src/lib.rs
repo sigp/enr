@@ -509,7 +509,7 @@ impl<K: EnrKey> Enr<K> {
             }
             // revert the content
             if let Some(prev_value) = previous_value {
-                self.content.insert(raw_key.clone(), prev_value);
+                self.content.insert(raw_key, prev_value);
             } else {
                 self.content.remove(key.as_ref());
             }
@@ -1003,10 +1003,7 @@ impl<K: EnrKey> Decodable for Enr<K> {
                 }
                 b"tcp" | b"tcp6" | b"udp" | b"udp6" => {
                     let port = u16::decode(payload)?;
-                    content.insert(
-                        raw_key,
-                        Bytes::copy_from_slice(&alloy_rlp::encode(port)),
-                    );
+                    content.insert(raw_key, Bytes::copy_from_slice(&alloy_rlp::encode(port)));
                 }
                 b"ip" => {
                     let ip = Ipv4Addr::decode(payload)?;
@@ -1014,17 +1011,11 @@ impl<K: EnrKey> Decodable for Enr<K> {
                 }
                 b"ip6" => {
                     let ip6 = Ipv6Addr::decode(payload)?;
-                    content.insert(
-                        raw_key,
-                        Bytes::copy_from_slice(&alloy_rlp::encode(ip6)),
-                    );
+                    content.insert(raw_key, Bytes::copy_from_slice(&alloy_rlp::encode(ip6)));
                 }
                 b"secp256k1" | b"ed25519" => {
                     let keys = Bytes::decode(payload)?;
-                    content.insert(
-                        raw_key,
-                        Bytes::copy_from_slice(&alloy_rlp::encode(keys)),
-                    );
+                    content.insert(raw_key, Bytes::copy_from_slice(&alloy_rlp::encode(keys)));
                 }
                 b"eth" => {
                     let eth_header = Header::decode(payload)?;
@@ -1043,10 +1034,7 @@ impl<K: EnrKey> Decodable for Enr<K> {
                     let other_header = Header::decode(payload)?;
                     let value = &mut &payload[..other_header.payload_length];
                     payload.advance(other_header.payload_length);
-                    content.insert(
-                        raw_key,
-                        Bytes::copy_from_slice(&alloy_rlp::encode(value)),
-                    );
+                    content.insert(raw_key, Bytes::copy_from_slice(&alloy_rlp::encode(value)));
                 }
             };
         }
