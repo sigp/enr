@@ -767,11 +767,9 @@ impl<K: EnrKey> Enr<K> {
 
     // Private Functions //
 
-    /// Encodes the ENR's content (sequence number + ordered (key, value) pairs) into the stream.
+    /// Encodes the ENR's content (signature(optional) + sequence number + ordered (key, value) pairs) into the stream.
     fn append_rlp_content(&self, stream: &mut RlpStream, include_signature: bool) {
-        // signature(optional) + sequence number + (key, value) pairs
-        let content_pairs = self.content.len() * 2;
-        let item_count = include_signature.then_some(1).unwrap_or(0) + 1 + content_pairs;
+        let item_count = include_signature.then_some(1).unwrap_or(0) + 1 + self.content.len() * 2;
         stream.begin_list(item_count);
         if include_signature {
             stream.append(&self.signature);
