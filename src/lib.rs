@@ -616,7 +616,7 @@ impl<K: EnrKey> Enr<K> {
         let (prev_ip, prev_port) = match socket.ip() {
             IpAddr::V4(addr) => {
                 let mut ip = BytesMut::new();
-                addr.octets().encode(&mut ip);
+                addr.encode(&mut ip);
                 let mut port = BytesMut::new();
                 socket.port().encode(&mut port);
                 (
@@ -628,7 +628,7 @@ impl<K: EnrKey> Enr<K> {
             }
             IpAddr::V6(addr) => {
                 let mut ip6 = BytesMut::new();
-                addr.octets().encode(&mut ip6);
+                addr.encode(&mut ip6);
                 let mut port = BytesMut::new();
                 socket.port().encode(&mut port);
                 (
