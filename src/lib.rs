@@ -791,10 +791,10 @@ impl<K: EnrKey> Enr<K> {
     /// Evaluates the RLP-encoding of the content of the ENR record.
     fn rlp_content(&self) -> BytesMut {
         let mut list = Vec::<u8>::with_capacity(MAX_ENR_SIZE);
-        list.append(&mut alloy_rlp::encode(self.seq));
+        self.seq.encode(&mut list);
         for (k, v) in &self.content {
             // Keys are bytes
-            list.append(&mut alloy_rlp::encode(k.as_slice()));
+            k.as_slice().encode(&mut list);
             // Values are raw RLP encoded data
             list.extend_from_slice(v);
         }
@@ -947,10 +947,10 @@ impl<'de, K: EnrKey> Deserialize<'de> for Enr<K> {
 impl<K: EnrKey> Encodable for Enr<K> {
     fn encode(&self, out: &mut dyn bytes::BufMut) {
         let mut list = Vec::<u8>::new();
-        list.append(&mut alloy_rlp::encode(self.signature.as_slice()));
-        list.append(&mut alloy_rlp::encode(self.seq));
+        self.signature.as_slice().encode(&mut list);
+        self.seq.encode(&mut list);
         for (k, v) in &self.content {
-            list.append(&mut alloy_rlp::encode(k.as_slice()));
+            k.as_slice().encode(&mut list);
             list.extend_from_slice(v);
         }
         let header = Header {
