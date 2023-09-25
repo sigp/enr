@@ -769,7 +769,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Encodes the ENR's content (signature(optional) + sequence number + ordered (key, value) pairs) into the stream.
     fn append_rlp_content(&self, stream: &mut RlpStream, include_signature: bool) {
-        let item_count = include_signature.then_some(1).unwrap_or(0) + 1 + self.content.len() * 2;
+        let item_count = usize::from(include_signature) + 1 + self.content.len() * 2;
         stream.begin_list(item_count);
         if include_signature {
             stream.append(&self.signature);
@@ -930,7 +930,7 @@ impl<'de, K: EnrKey> Deserialize<'de> for Enr<K> {
 impl<K: EnrKey> rlp::Encodable for Enr<K> {
     fn rlp_append(&self, stream: &mut RlpStream) {
         let include_signature = true;
-        self.append_rlp_content(stream, include_signature)
+        self.append_rlp_content(stream, include_signature);
     }
 }
 
