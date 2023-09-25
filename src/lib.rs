@@ -488,8 +488,8 @@ impl<K: EnrKey> Enr<K> {
         enr_key: &K,
     ) -> Result<Option<Bytes>, EnrError> {
         check_spec_reserved_keys(key.as_ref(), &value)?;
-
-        let previous_value = self.content.insert(key.as_ref().to_vec(), value);
+        let raw_key = key.as_ref().to_vec();
+        let previous_value = self.content.insert(raw_key.clone(), value);
         // add the new public key
         let public_key = enr_key.public();
         let mut pubkey = BytesMut::new();
@@ -509,7 +509,7 @@ impl<K: EnrKey> Enr<K> {
             }
             // revert the content
             if let Some(prev_value) = previous_value {
-                self.content.insert(key.as_ref().to_vec(), prev_value);
+                self.content.insert(raw_key.clone(), prev_value);
             } else {
                 self.content.remove(key.as_ref());
             }
@@ -796,7 +796,7 @@ impl<K: EnrKey> Enr<K> {
             // Keys are bytes
             list.append(&mut alloy_rlp::encode(k.as_slice()));
             // Values are raw RLP encoded data
-            list.append(&mut v.to_vec());
+            list.extend_from_slice(v);
         }
         let header = Header {
             list: true,
@@ -951,7 +951,7 @@ impl<K: EnrKey> Encodable for Enr<K> {
         list.append(&mut alloy_rlp::encode(self.seq));
         for (k, v) in &self.content {
             list.append(&mut alloy_rlp::encode(k.as_slice()));
-            list.append(&mut v.to_vec());
+            list.extend_from_slice(v);
         }
         let header = Header {
             list: true,
@@ -987,42 +987,42 @@ impl<K: EnrKey> Decodable for Enr<K> {
         let mut prev: Option<Vec<u8>> = None;
         while !payload.is_empty() {
             let key = Bytes::decode(payload)?;
-
-            if prev.is_some() && prev >= Some(key.to_vec().clone()) {
+            let raw_key = key.to_vec();
+            if prev.is_some() && prev >= Some(raw_key.clone()) {
                 return Err(DecoderError::Custom("Unsorted keys"));
             }
-            prev = Some(key.to_vec().clone());
+            prev = Some(raw_key.clone());
 
-            match key.to_vec().as_slice() {
+            match raw_key.as_slice() {
                 b"id" => {
                     let id = Bytes::decode(payload)?;
                     if id.to_vec() != b"v4" {
                         return Err(DecoderError::Custom("Unsupported identity scheme"));
                     }
-                    content.insert(key.to_vec(), Bytes::copy_from_slice(&alloy_rlp::encode(id)));
+                    content.insert(raw_key, Bytes::copy_from_slice(&alloy_rlp::encode(id)));
                 }
                 b"tcp" | b"tcp6" | b"udp" | b"udp6" => {
                     let port = u16::decode(payload)?;
                     content.insert(
-                        key.to_vec(),
+                        raw_key,
                         Bytes::copy_from_slice(&alloy_rlp::encode(port)),
                     );
                 }
                 b"ip" => {
                     let ip = Ipv4Addr::decode(payload)?;
-                    content.insert(key.to_vec(), Bytes::copy_from_slice(&alloy_rlp::encode(ip)));
+                    content.insert(raw_key, Bytes::copy_from_slice(&alloy_rlp::encode(ip)));
                 }
                 b"ip6" => {
                     let ip6 = Ipv6Addr::decode(payload)?;
                     content.insert(
-                        key.to_vec(),
+                        raw_key,
                         Bytes::copy_from_slice(&alloy_rlp::encode(ip6)),
                     );
                 }
                 b"secp256k1" | b"ed25519" => {
                     let keys = Bytes::decode(payload)?;
                     content.insert(
-                        key.to_vec(),
+                        raw_key,
                         Bytes::copy_from_slice(&alloy_rlp::encode(keys)),
                     );
                 }
@@ -1037,14 +1037,14 @@ impl<K: EnrKey> Decodable for Enr<K> {
                     let mut out = BytesMut::new();
                     val_header.encode(&mut out);
                     out.extend_from_slice(value);
-                    content.insert(key.to_vec(), Bytes::copy_from_slice(&out));
+                    content.insert(raw_key, Bytes::copy_from_slice(&out));
                 }
                 _ => {
                     let other_header = Header::decode(payload)?;
                     let value = &mut &payload[..other_header.payload_length];
                     payload.advance(other_header.payload_length);
                     content.insert(
-                        key.to_vec(),
+                        raw_key,
                         Bytes::copy_from_slice(&alloy_rlp::encode(value)),
                     );
                 }

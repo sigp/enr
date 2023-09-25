@@ -46,7 +46,7 @@ impl<K: EnrKey> EnrBuilder<K> {
     pub fn add_value<T: Encodable>(&mut self, key: impl AsRef<[u8]>, value: &T) -> &mut Self {
         let mut out = BytesMut::new();
         value.encode(&mut out);
-        self.add_value_rlp(key, Bytes::copy_from_slice(out.to_vec().as_slice()))
+        self.add_value_rlp(key, Bytes::copy_from_slice(&out))
     }
 
     /// Adds an arbitrary key-value where the value is raw RLP encoded bytes.
@@ -118,7 +118,7 @@ impl<K: EnrKey> EnrBuilder<K> {
             // Keys are bytes
             list.append(&mut alloy_rlp::encode(k.as_slice()));
             // Values are raw RLP encoded data
-            list.append(&mut v.to_vec());
+            list.extend_from_slice(v);
         }
         let header = Header {
             list: true,
