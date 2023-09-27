@@ -28,6 +28,8 @@ secp256k1 = { version = "0.27", optional = true, default-features = false, featu
 ] }
 libp2p-core = { version = "0.40.1", optional = true }
 libp2p-identity = { version = "0.2.3", optional = true, features = ["peerid", "secp256k1", "ed25519"] }
+ssz_types = {version = "0.5.4", optional = true }
+ethereum_ssz = { version = "0.5.3", optional = true }
 
 [dev-dependencies]
 secp256k1 = { features = ["rand-std"], version = "0.27" }
@@ -39,6 +41,7 @@ ed25519 = ["ed25519-dalek"]
 rust-secp256k1 = ["secp256k1"]
 quic = []
 libp2p = ["libp2p-core", "libp2p-identity"]
+eth2 = ["ssz_types", "ethereum_ssz"]
 
 [lib]
 name = "enr"

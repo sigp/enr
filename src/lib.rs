@@ -216,6 +216,10 @@ pub use keys::{ed25519_dalek, CombinedKey, CombinedPublicKey};
 use libp2p_core::multiaddr::{Multiaddr, Protocol};
 #[cfg(feature = "libp2p")]
 use libp2p_identity::PeerId;
+#[cfg(feature = "eth2")]
+use ssz::Decode;
+#[cfg(feature = "eth2")]
+use ssz_types::{typenum::Unsigned, BitVector};
 
 pub use keys::{EnrKey, EnrKeyUnambiguous, EnrPublicKey};
 pub use node_id::NodeId;
@@ -240,6 +244,15 @@ pub const UDP6_ENR_KEY: &str = "udp6";
 pub const QUIC_ENR_KEY: &str = "quic";
 #[cfg(feature = "quic")]
 pub const QUIC6_ENR_KEY: &str = "quic6";
+/// The ENR field specifying the fork id.
+#[cfg(feature = "eth2")]
+pub const ETH2_ENR_KEY: &str = "eth2";
+/// The ENR field specifying the attestation subnet bitfield.
+#[cfg(feature = "eth2")]
+pub const ATTESTATION_BITFIELD_ENR_KEY: &str = "attnets";
+/// The ENR field specifying the sync committee subnet bitfield.
+#[cfg(feature = "eth2")]
+pub const SYNC_COMMITTEE_BITFIELD_ENR_KEY: &str = "syncnets";
 
 /// The ENR, allowing for arbitrary signing algorithms.
 ///
@@ -1011,6 +1024,38 @@ impl<K: EnrKey> Enr<K> {
     #[must_use]
     pub fn quic6(&self) -> Option<u16> {
         self.get_decodable(QUIC6_ENR_KEY).and_then(Result::ok)
+    }
+
+    /// The attestation subnet bitfield associated with the ENR.
+    #[cfg(feature = "eth2")]
+    pub fn attestation_bitfield<N: Clone + Unsigned>(&self) -> Result<BitVector<N>, &'static str> {
+        let bitfield_bytes = self
+            .get(ATTESTATION_BITFIELD_ENR_KEY)
+            .ok_or("ENR attestation bitfield non-existent")?;
+
+        BitVector::<N>::from_ssz_bytes(bitfield_bytes)
+            .map_err(|_| "Could not decode the ENR attnets bitfield")
+    }
+
+    /// The sync committee subnet bitfield associated with the ENR.
+    #[cfg(feature = "eth2")]
+    pub fn sync_committee_bitfield<N: Clone + Unsigned>(
+        &self,
+    ) -> Result<BitVector<N>, &'static str> {
+        let bitfield_bytes = self
+            .get(SYNC_COMMITTEE_BITFIELD_ENR_KEY)
+            .ok_or("ENR sync committee bitfield non-existent")?;
+
+        BitVector::<N>::from_ssz_bytes(bitfield_bytes)
+            .map_err(|_| "Could not decode the ENR syncnets bitfield")
+    }
+
+    /// Returns the field that represents an `ENRForkId`. Users must make the type conversion externally.
+    #[cfg(feature = "eth2")]
+    pub fn eth2(&self) -> Result<Vec<u8>, &'static str> {
+        self.get(ETH2_ENR_KEY)
+            .map(<[u8]>::to_vec)
+            .ok_or("ENR has no eth2 field")
     }
 }
 
