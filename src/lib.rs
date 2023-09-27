@@ -767,10 +767,13 @@ impl<K: EnrKey> Enr<K> {
 
     // Private Functions //
 
-    /// Evaluates the RLP-encoding of the content of the ENR record.
-    fn rlp_content(&self) -> BytesMut {
-        let mut stream = RlpStream::new_with_buffer(BytesMut::with_capacity(MAX_ENR_SIZE));
-        stream.begin_list(self.content.len() * 2 + 1);
+    /// Encodes the ENR's content (signature(optional) + sequence number + ordered (key, value) pairs) into the stream.
+    fn append_rlp_content(&self, stream: &mut RlpStream, include_signature: bool) {
+        let item_count = usize::from(include_signature) + 1 + self.content.len() * 2;
+        stream.begin_list(item_count);
+        if include_signature {
+            stream.append(&self.signature);
+        }
         stream.append(&self.seq);
         for (k, v) in &self.content {
             // Keys are bytes
@@ -778,6 +781,13 @@ impl<K: EnrKey> Enr<K> {
             // Values are raw RLP encoded data
             stream.append_raw(v, 1);
         }
+    }
+
+    /// Encodes the ENR's content (sequence number + ordered (key, value) pairs).
+    fn rlp_content(&self) -> BytesMut {
+        let mut stream = RlpStream::new_with_buffer(BytesMut::with_capacity(MAX_ENR_SIZE));
+        let include_signature = false;
+        self.append_rlp_content(&mut stream, include_signature);
         stream.out()
     }
 
@@ -918,17 +928,9 @@ impl<'de, K: EnrKey> Deserialize<'de> for Enr<K> {
 }
 
 impl<K: EnrKey> rlp::Encodable for Enr<K> {
-    fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(self.content.len() * 2 + 2);
-        s.append(&self.signature);
-        s.append(&self.seq);
-        // must use rlp_content to preserve ordering.
-        for (k, v) in &self.content {
-            // Keys are byte data
-            s.append(k);
-            // Values are raw RLP encoded data
-            s.append_raw(v, 1);
-        }
+    fn rlp_append(&self, stream: &mut RlpStream) {
+        let include_signature = true;
+        self.append_rlp_content(stream, include_signature);
     }
 }
 
