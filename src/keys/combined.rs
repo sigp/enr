@@ -12,6 +12,11 @@ use zeroize::Zeroize;
 
 use crate::Key;
 
+#[cfg(feature = "libp2p")]
+use libp2p_identity::{
+    ed25519 as libp2p_ed25519, secp256k1 as libp2p_secp256k1, PeerId, PublicKey,
+};
+
 /// A standard implementation of the `EnrKey` trait used to sign and modify ENR records. The variants here represent the currently
 /// supported in-built signing schemes.
 pub enum CombinedKey {
@@ -164,6 +169,29 @@ impl EnrPublicKey for CombinedPublicKey {
         match self {
             Self::Secp256k1(key) => key.enr_key(),
             Self::Ed25519(key) => key.enr_key(),
+        }
+    }
+
+    /// Converts the publickey into a peer id, without consuming the key.
+    ///
+    /// This is only available with the `libp2p` feature flag.
+    #[cfg(feature = "libp2p")]
+    fn as_peer_id(&self) -> PeerId {
+        match self {
+            Self::Secp256k1(pk) => {
+                let pk_bytes = pk.to_sec1_bytes();
+                let libp2p_pk: PublicKey = libp2p_secp256k1::PublicKey::try_from_bytes(&pk_bytes)
+                    .expect("valid public key")
+                    .into();
+                PeerId::from_public_key(&libp2p_pk)
+            }
+            Self::Ed25519(pk) => {
+                let pk_bytes = pk.to_bytes();
+                let libp2p_pk: PublicKey = libp2p_ed25519::PublicKey::try_from_bytes(&pk_bytes)
+                    .expect("valid public key")
+                    .into();
+                PeerId::from_public_key(&libp2p_pk)
+            }
         }
     }
 }

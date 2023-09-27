@@ -34,6 +34,9 @@
 //! - `ed25519`: Provides support for `ed25519_dalek` keypair types.
 //! - `k256`: Uses `k256` for secp256k1 keys.
 //! - `rust-secp256k1`: Uses `rust-secp256k1` for secp256k1 keys.
+//! - `libp2p`: Adds libp2p functionality like peer-id from an ENR.
+//! - `quic`: Adds extra fields that support the QUIC transport.
+//! - `eth2`: Adds extra fields that support the Ethereum consensus layer.
 //!
 //! These can be enabled via adding the feature flag in your `Cargo.toml`
 //!
@@ -209,6 +212,10 @@ pub use keys::k256;
 pub use keys::secp256k1;
 #[cfg(all(feature = "ed25519", feature = "k256"))]
 pub use keys::{ed25519_dalek, CombinedKey, CombinedPublicKey};
+#[cfg(feature = "libp2p")]
+use libp2p_core::multiaddr::{Multiaddr, Protocol};
+#[cfg(feature = "libp2p")]
+use libp2p_identity::PeerId;
 
 pub use keys::{EnrKey, EnrKeyUnambiguous, EnrPublicKey};
 pub use node_id::NodeId;
@@ -219,6 +226,20 @@ type Key = Vec<u8>;
 type PreviousRlpEncodedValues = Vec<Option<Bytes>>;
 
 const MAX_ENR_SIZE: usize = 300;
+
+// Constants used for fields
+const ID_ENR_KEY: &str = "id";
+const ENR_VERSION: &str = "v4";
+pub const IP_ENR_KEY: &str = "ip";
+pub const IP6_ENR_KEY: &str = "ip6";
+pub const TCP_ENR_KEY: &str = "tcp";
+pub const TCP6_ENR_KEY: &str = "tcp6";
+pub const UDP_ENR_KEY: &str = "udp";
+pub const UDP6_ENR_KEY: &str = "udp6";
+#[cfg(feature = "quic")]
+pub const QUIC_ENR_KEY: &str = "quic";
+#[cfg(feature = "quic")]
+pub const QUIC6_ENR_KEY: &str = "quic6";
 
 /// The ENR, allowing for arbitrary signing algorithms.
 ///
@@ -289,7 +310,7 @@ impl<K: EnrKey> Enr<K> {
     /// Returns the IPv4 address of the ENR record if it is defined.
     #[must_use]
     pub fn ip4(&self) -> Option<Ipv4Addr> {
-        if let Some(ip_bytes) = self.get("ip") {
+        if let Some(ip_bytes) = self.get(IP_ENR_KEY) {
             return match ip_bytes.len() {
                 4 => {
                     let mut ip = [0_u8; 4];
@@ -305,7 +326,7 @@ impl<K: EnrKey> Enr<K> {
     /// Returns the IPv6 address of the ENR record if it is defined.
     #[must_use]
     pub fn ip6(&self) -> Option<Ipv6Addr> {
-        if let Some(ip_bytes) = self.get("ip6") {
+        if let Some(ip_bytes) = self.get(IP6_ENR_KEY) {
             return match ip_bytes.len() {
                 16 => {
                     let mut ip = [0_u8; 16];
@@ -321,7 +342,7 @@ impl<K: EnrKey> Enr<K> {
     /// The `id` of ENR record if it is defined.
     #[must_use]
     pub fn id(&self) -> Option<String> {
-        if let Some(id_bytes) = self.get("id") {
+        if let Some(id_bytes) = self.get(ID_ENR_KEY) {
             return Some(String::from_utf8_lossy(id_bytes).to_string());
         }
         None
@@ -330,25 +351,25 @@ impl<K: EnrKey> Enr<K> {
     /// The TCP port of ENR record if it is defined.
     #[must_use]
     pub fn tcp4(&self) -> Option<u16> {
-        self.get_decodable("tcp").and_then(Result::ok)
+        self.get_decodable(TCP_ENR_KEY).and_then(Result::ok)
     }
 
     /// The IPv6-specific TCP port of ENR record if it is defined.
     #[must_use]
     pub fn tcp6(&self) -> Option<u16> {
-        self.get_decodable("tcp6").and_then(Result::ok)
+        self.get_decodable(TCP6_ENR_KEY).and_then(Result::ok)
     }
 
     /// The UDP port of ENR record if it is defined.
     #[must_use]
     pub fn udp4(&self) -> Option<u16> {
-        self.get_decodable("udp").and_then(Result::ok)
+        self.get_decodable(UDP_ENR_KEY).and_then(Result::ok)
     }
 
     /// The IPv6-specific UDP port of ENR record if it is defined.
     #[must_use]
     pub fn udp6(&self) -> Option<u16> {
-        self.get_decodable("udp6").and_then(Result::ok)
+        self.get_decodable(UDP6_ENR_KEY).and_then(Result::ok)
     }
 
     /// Provides a socket (based on the UDP port), if the IPv4 and UDP fields are specified.
@@ -415,7 +436,9 @@ impl<K: EnrKey> Enr<K> {
     pub fn verify(&self) -> bool {
         let pubkey = self.public_key();
         match self.id() {
-            Some(ref id) if id == "v4" => pubkey.verify_v4(&self.rlp_content(), &self.signature),
+            Some(ref id) if id == ENR_VERSION => {
+                pubkey.verify_v4(&self.rlp_content(), &self.signature)
+            }
             // unsupported identity schemes
             _ => false,
         }
@@ -570,7 +593,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets the `tcp` field of the ENR. Returns any pre-existing tcp port in the record.
     pub fn set_tcp4(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, EnrError> {
-        if let Some(tcp_bytes) = self.insert("tcp", &tcp, key)? {
+        if let Some(tcp_bytes) = self.insert(TCP_ENR_KEY, &tcp, key)? {
             return Ok(rlp::decode(&tcp_bytes).ok());
         }
         Ok(None)
@@ -578,7 +601,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets the `tcp6` field of the ENR. Returns any pre-existing tcp6 port in the record.
     pub fn set_tcp6(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, EnrError> {
-        if let Some(tcp_bytes) = self.insert("tcp6", &tcp, key)? {
+        if let Some(tcp_bytes) = self.insert(TCP6_ENR_KEY, &tcp, key)? {
             return Ok(rlp::decode(&tcp_bytes).ok());
         }
         Ok(None)
@@ -597,15 +620,15 @@ impl<K: EnrKey> Enr<K> {
     /// Helper function for `set_tcp_socket()` and `set_udp_socket`.
     fn set_socket(&mut self, socket: SocketAddr, key: &K, is_tcp: bool) -> Result<(), EnrError> {
         let (port_string, port_v6_string): (Key, Key) = if is_tcp {
-            ("tcp".into(), "tcp6".into())
+            (TCP_ENR_KEY.into(), TCP6_ENR_KEY.into())
         } else {
-            ("udp".into(), "udp6".into())
+            (UDP_ENR_KEY.into(), UDP6_ENR_KEY.into())
         };
 
         let (prev_ip, prev_port) = match socket.ip() {
             IpAddr::V4(addr) => (
                 self.content.insert(
-                    "ip".into(),
+                    IP_ENR_KEY.into(),
                     rlp::encode(&(&addr.octets() as &[u8])).freeze(),
                 ),
                 self.content
@@ -613,7 +636,7 @@ impl<K: EnrKey> Enr<K> {
             ),
             IpAddr::V6(addr) => (
                 self.content.insert(
-                    "ip6".into(),
+                    IP6_ENR_KEY.into(),
                     rlp::encode(&(&addr.octets() as &[u8])).freeze(),
                 ),
                 self.content
@@ -640,9 +663,9 @@ impl<K: EnrKey> Enr<K> {
             match socket.ip() {
                 IpAddr::V4(_) => {
                     if let Some(ip) = prev_ip {
-                        self.content.insert("ip".into(), ip);
+                        self.content.insert(IP_ENR_KEY.into(), ip);
                     } else {
-                        self.content.remove(b"ip".as_ref());
+                        self.content.remove(IP_ENR_KEY.as_bytes().as_ref());
                     }
                     if let Some(udp) = prev_port {
                         self.content.insert(port_string, udp);
@@ -652,9 +675,9 @@ impl<K: EnrKey> Enr<K> {
                 }
                 IpAddr::V6(_) => {
                     if let Some(ip) = prev_ip {
-                        self.content.insert("ip6".into(), ip);
+                        self.content.insert(IP_ENR_KEY.into(), ip);
                     } else {
-                        self.content.remove(b"ip6".as_ref());
+                        self.content.remove(IP6_ENR_KEY.as_bytes().as_ref());
                     }
                     if let Some(udp) = prev_port {
                         self.content.insert(port_v6_string, udp);
@@ -710,29 +733,41 @@ impl<K: EnrKey> Enr<K> {
         let mut inserted = Vec::new();
         for (key, value) in insert_key_values {
             // currently only support "v4" identity schemes
-            if key.as_ref() == b"id" && value != b"v4" {
+            if key.as_ref() == ID_ENR_KEY.as_bytes() && value != ENR_VERSION.as_bytes() {
                 *self = enr_backup;
                 return Err(EnrError::UnsupportedIdentityScheme);
             }
 
             let value = rlp::encode(&(value)).freeze();
             // Prevent inserting invalid RLP integers
-            if is_keyof_u16(key.as_ref()) {
-                rlp::decode::<u16>(&value)
-                    .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+            if let Err(e) = check_spec_reserved_keys(key.as_ref(), &value) {
+                {
+                    // Revert the ENR and return the error
+                    *self = enr_backup;
+                    return Err(e);
+                }
             }
 
             inserted.push(self.content.insert(key.as_ref().to_vec(), value));
         }
 
         // increment the sequence number
-        self.seq = self
+        if let Err(e) = self
             .seq
             .checked_add(1)
-            .ok_or(EnrError::SequenceNumberTooHigh)?;
+            .ok_or(EnrError::SequenceNumberTooHigh)
+        {
+            // Revert the ENR and return the error
+            *self = enr_backup;
+            return Err(e);
+        }
 
         // sign the record
-        self.sign(enr_key)?;
+        if let Err(e) = self.sign(enr_key) {
+            // Revert the ENR and return the error
+            *self = enr_backup;
+            return Err(e);
+        }
 
         // update the node id
         self.node_id = NodeId::from(enr_key.public());
@@ -785,7 +820,7 @@ impl<K: EnrKey> Enr<K> {
     fn sign(&mut self, key: &K) -> Result<(), EnrError> {
         self.signature = {
             match self.id() {
-                Some(ref id) if id == "v4" => key
+                Some(ref id) if id == ENR_VERSION => key
                     .sign_v4(&self.rlp_content())
                     .map_err(|_| EnrError::SigningError)?,
                 // other identity schemes are unsupported
@@ -793,6 +828,179 @@ impl<K: EnrKey> Enr<K> {
             }
         };
         Ok(())
+    }
+
+    // Libp2p features
+    /// The libp2p `PeerId` for the record.
+    #[cfg(feature = "libp2p")]
+    pub fn peer_id(&self) -> PeerId {
+        self.public_key().as_peer_id()
+    }
+
+    /// Returns a list of multiaddrs if the ENR has an `ip` and either a `tcp`, `quic` or `udp` key **or** an `ip6` and either a `tcp6` `quic6` or `udp6`.
+    /// The vector remains empty if these fields are not defined.
+    #[cfg(feature = "libp2p")]
+    pub fn multiaddr(&self) -> Vec<Multiaddr> {
+        let mut multiaddrs: Vec<Multiaddr> = Vec::new();
+        if let Some(ip) = self.ip4() {
+            if let Some(udp) = self.udp4() {
+                let mut multiaddr: Multiaddr = ip.into();
+                multiaddr.push(Protocol::Udp(udp));
+                multiaddrs.push(multiaddr);
+            }
+            #[cfg(feature = "quic")]
+            if let Some(quic) = self.quic4() {
+                let mut multiaddr: Multiaddr = ip.into();
+                multiaddr.push(Protocol::Udp(quic));
+                multiaddr.push(Protocol::QuicV1);
+                multiaddrs.push(multiaddr);
+            }
+
+            if let Some(tcp) = self.tcp4() {
+                let mut multiaddr: Multiaddr = ip.into();
+                multiaddr.push(Protocol::Tcp(tcp));
+                multiaddrs.push(multiaddr);
+            }
+        }
+        if let Some(ip6) = self.ip6() {
+            if let Some(udp6) = self.udp6() {
+                let mut multiaddr: Multiaddr = ip6.into();
+                multiaddr.push(Protocol::Udp(udp6));
+                multiaddrs.push(multiaddr);
+            }
+
+            #[cfg(feature = "quic")]
+            if let Some(quic6) = self.quic6() {
+                let mut multiaddr: Multiaddr = ip6.into();
+                multiaddr.push(Protocol::Udp(quic6));
+                multiaddr.push(Protocol::QuicV1);
+                multiaddrs.push(multiaddr);
+            }
+
+            if let Some(tcp6) = self.tcp6() {
+                let mut multiaddr: Multiaddr = ip6.into();
+                multiaddr.push(Protocol::Tcp(tcp6));
+                multiaddrs.push(multiaddr);
+            }
+        }
+        multiaddrs
+    }
+
+    /// Returns a list of multiaddrs with the `PeerId` prepended.
+    #[cfg(feature = "libp2p")]
+    pub fn multiaddr_p2p(&self) -> Vec<Multiaddr> {
+        let peer_id = self.peer_id();
+        self.multiaddr()
+            .into_iter()
+            .map(|mut multiaddr| {
+                multiaddr.push(Protocol::P2p(peer_id));
+                multiaddr
+            })
+            .collect()
+    }
+
+    /// Returns any multiaddrs that contain the TCP protocol with the `PeerId` prepended.
+    #[cfg(feature = "libp2p")]
+    pub fn multiaddr_p2p_tcp(&self) -> Vec<Multiaddr> {
+        let peer_id = self.peer_id();
+        self.multiaddr_tcp()
+            .into_iter()
+            .map(|mut multiaddr| {
+                multiaddr.push(Protocol::P2p(peer_id));
+                multiaddr
+            })
+            .collect()
+    }
+
+    /// Returns any multiaddrs that contain the UDP protocol with the `PeerId` prepended.
+    #[cfg(feature = "libp2p")]
+    pub fn multiaddr_p2p_udp(&self) -> Vec<Multiaddr> {
+        let peer_id = self.peer_id();
+        self.multiaddr_udp()
+            .into_iter()
+            .map(|mut multiaddr| {
+                multiaddr.push(Protocol::P2p(peer_id));
+                multiaddr
+            })
+            .collect()
+    }
+
+    /// Returns any multiaddrs that contain the TCP protocol.
+    /// Returns a list of multiaddrs if the ENR has an `ip` and a `tcp` key **or** an `ip6` and a `tcp6` field.
+    #[cfg(feature = "libp2p")]
+    pub fn multiaddr_tcp(&self) -> Vec<Multiaddr> {
+        let mut multiaddrs: Vec<Multiaddr> = Vec::new();
+        if let Some(ip) = self.ip4() {
+            if let Some(tcp) = self.tcp4() {
+                let mut multiaddr: Multiaddr = ip.into();
+                multiaddr.push(Protocol::Tcp(tcp));
+                multiaddrs.push(multiaddr);
+            }
+        }
+        if let Some(ip6) = self.ip6() {
+            if let Some(tcp6) = self.tcp6() {
+                let mut multiaddr: Multiaddr = ip6.into();
+                multiaddr.push(Protocol::Tcp(tcp6));
+                multiaddrs.push(multiaddr);
+            }
+        }
+        multiaddrs
+    }
+
+    /// Returns a list of multiaddrs if the ENR has an `ip` and a `udp` key **or** an `ip6` and a `udp6` field.
+    #[cfg(feature = "libp2p")]
+    pub fn multiaddr_udp(&self) -> Vec<Multiaddr> {
+        let mut multiaddrs: Vec<Multiaddr> = Vec::new();
+        if let Some(ip) = self.ip4() {
+            if let Some(udp) = self.udp4() {
+                let mut multiaddr: Multiaddr = ip.into();
+                multiaddr.push(Protocol::Udp(udp));
+                multiaddrs.push(multiaddr);
+            }
+        }
+        if let Some(ip6) = self.ip6() {
+            if let Some(udp6) = self.udp6() {
+                let mut multiaddr: Multiaddr = ip6.into();
+                multiaddr.push(Protocol::Udp(udp6));
+                multiaddrs.push(multiaddr);
+            }
+        }
+        multiaddrs
+    }
+
+    /// Returns a list of multiaddrs if the ENR has an `ip` and a `quic` key **or** an `ip6` and a `quic6`.
+    #[cfg(all(feature = "libp2p", feature = "quic"))]
+    pub fn multiaddr_quic(&self) -> Vec<Multiaddr> {
+        let mut multiaddrs: Vec<Multiaddr> = Vec::new();
+        if let Some(quic_port) = self.quic4() {
+            if let Some(ip) = self.ip4() {
+                let mut multiaddr: Multiaddr = ip.into();
+                multiaddr.push(Protocol::Udp(quic_port));
+                multiaddr.push(Protocol::QuicV1);
+                multiaddrs.push(multiaddr);
+            }
+        }
+
+        if let Some(quic6_port) = self.quic6() {
+            if let Some(ip6) = self.ip6() {
+                let mut multiaddr: Multiaddr = ip6.into();
+                multiaddr.push(Protocol::Udp(quic6_port));
+                multiaddr.push(Protocol::QuicV1);
+                multiaddrs.push(multiaddr);
+            }
+        }
+        multiaddrs
+    }
+
+    /// Returns the quic port if one is set.
+    #[cfg(feature = "quic")]
+    pub fn quic4(&self) -> Option<u16> {
+        self.get_decodable(QUIC_ENR_KEY).and_then(Result::ok)
+    }
+    /// Returns the quic6 port if one is set.
+    #[cfg(feature = "quic")]
+    pub fn quic6(&self) -> Option<u16> {
+        self.get_decodable(QUIC6_ENR_KEY).and_then(Result::ok)
     }
 }
 
@@ -847,9 +1055,17 @@ impl<K: EnrKey> std::fmt::Debug for Enr<K> {
                             .iter()
                             .filter(|(key, _)| {
                                 // skip all pairs already covered as fields
-                                !["id", "ip", "ip6", "udp", "udp6", "tcp", "tcp6"]
-                                    .iter()
-                                    .any(|k| k.as_bytes() == key.as_slice())
+                                ![
+                                    ID_ENR_KEY,
+                                    IP_ENR_KEY,
+                                    IP6_ENR_KEY,
+                                    UDP_ENR_KEY,
+                                    UDP6_ENR_KEY,
+                                    TCP_ENR_KEY,
+                                    TCP6_ENR_KEY,
+                                ]
+                                .iter()
+                                .any(|k| k.as_bytes() == key.as_slice())
                             })
                             .map(|(key, val)| (String::from_utf8_lossy(key), hex::encode(val))),
                     )
@@ -858,7 +1074,7 @@ impl<K: EnrKey> std::fmt::Debug for Enr<K> {
         }
 
         f.debug_struct("Enr")
-            .field("id", &self.id())
+            .field(ID_ENR_KEY, &self.id())
             .field("seq", &self.seq())
             .field("NodeId", &self.node_id())
             .field("signature", &hex::encode(&self.signature))
@@ -969,13 +1185,11 @@ impl<K: EnrKey> rlp::Decodable for Enr<K> {
                 .next()
                 .ok_or(DecoderError::Custom("List not a multiple of 2"))?;
 
-            // Sanitize the data
-            if is_keyof_u16(key) {
-                item.as_val::<u16>()?;
-            } else {
-                item.data()?;
-            }
             let value = item.as_raw();
+
+            // Sanitize the data
+            check_spec_reserved_keys(key, value)
+                .map_err(|_| DecoderError::Custom("Invalid data/encoding in reserved key."))?;
 
             if prev.is_some() && prev >= Some(key) {
                 return Err(DecoderError::Custom("Unsorted keys"));
@@ -1039,41 +1253,42 @@ pub(crate) fn digest(b: &[u8]) -> [u8; 32] {
     output
 }
 
-const fn is_keyof_u16(key: &[u8]) -> bool {
-    matches!(key, b"tcp" | b"tcp6" | b"udp" | b"udp6")
-}
-
 fn check_spec_reserved_keys(key: &[u8], value: &[u8]) -> Result<(), EnrError> {
-    match key {
-        b"tcp" | b"tcp6" | b"udp" | b"udp6" => {
-            rlp::decode::<u16>(value).map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
-        }
-        b"id" => {
-            let id_bytes = rlp::decode::<Vec<u8>>(value)
-                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
-            if id_bytes != b"v4" {
-                return Err(EnrError::UnsupportedIdentityScheme);
+    match std::str::from_utf8(key) {
+        Err(_) => return Ok(()), // Ignore if the key is not a string format
+        Ok(key_string) => match key_string {
+            TCP_ENR_KEY | TCP6_ENR_KEY | UDP_ENR_KEY | UDP6_ENR_KEY => {
+                rlp::decode::<u16>(value)
+                    .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
             }
-        }
-        b"ip" => {
-            let ip4_bytes = rlp::decode::<Vec<u8>>(value)
-                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
-            if ip4_bytes.len() != 4 {
-                return Err(EnrError::InvalidRlpData("Invalid Ipv4 size".to_string()));
+            ID_ENR_KEY => {
+                let id_bytes = rlp::decode::<Vec<u8>>(value)
+                    .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+                if id_bytes != b"v4" {
+                    return Err(EnrError::UnsupportedIdentityScheme);
+                }
             }
-        }
-        b"ip6" => {
-            let ip6_bytes = rlp::decode::<Vec<u8>>(value)
-                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
-            if ip6_bytes.len() != 16 {
-                return Err(EnrError::InvalidRlpData("Invalid Ipv6 size".to_string()));
+            IP_ENR_KEY => {
+                let ip4_bytes = rlp::decode::<Vec<u8>>(value)
+                    .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+                if ip4_bytes.len() != 4 {
+                    return Err(EnrError::InvalidRlpData("Invalid Ipv4 size".to_string()));
+                }
             }
-        }
-        b"secp256k1" => {
-            rlp::decode::<Enr<k256::ecdsa::SigningKey>>(value)
-                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
-        }
-        _ => return Ok(()),
+            IP6_ENR_KEY => {
+                let ip6_bytes = rlp::decode::<Vec<u8>>(value)
+                    .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+                if ip6_bytes.len() != 16 {
+                    return Err(EnrError::InvalidRlpData("Invalid Ipv6 size".to_string()));
+                }
+            }
+            #[cfg(feature = "quic")]
+            QUIC_ENR_KEY | QUIC6_ENR_KEY => {
+                rlp::decode::<u16>(value)
+                    .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+            }
+            _ => return Ok(()),
+        },
     };
     Ok(())
 }
@@ -1106,6 +1321,12 @@ mod tests {
         assert_eq!(enr.tcp4(), None);
         assert_eq!(enr.signature(), &signature[..]);
         assert_eq!(pubkey.to_vec(), expected_pubkey);
+        #[cfg(feature = "libp2p")]
+        assert_eq!(
+            enr.peer_id(),
+            PeerId::from_str("16Uiu2HAmSH2XVgZqYHWucap5kuPzLnt2TsNQkoppVxB5eJGvaXwm").unwrap()
+        );
+
         assert!(enr.verify());
     }
 
@@ -1133,6 +1354,11 @@ mod tests {
         assert_eq!(enr.signature(), &signature[..]);
         assert_eq!(pubkey.to_vec(), expected_pubkey);
         assert_eq!(enr.node_id().raw().to_vec(), expected_node_id);
+        #[cfg(feature = "libp2p")]
+        assert_eq!(
+            enr.peer_id(),
+            PeerId::from_str("16Uiu2HAmSH2XVgZqYHWucap5kuPzLnt2TsNQkoppVxB5eJGvaXwm").unwrap()
+        );
 
         assert!(enr.verify());
     }
@@ -1161,7 +1387,11 @@ mod tests {
         assert_eq!(enr.signature(), &signature[..]);
         assert_eq!(pubkey.to_vec(), expected_pubkey);
         assert_eq!(enr.node_id().raw().to_vec(), expected_node_id);
-
+        #[cfg(feature = "libp2p")]
+        assert_eq!(
+            enr.peer_id(),
+            PeerId::from_str("16Uiu2HAmSH2XVgZqYHWucap5kuPzLnt2TsNQkoppVxB5eJGvaXwm").unwrap()
+        );
         assert!(enr.verify());
     }
 
@@ -1182,6 +1412,11 @@ mod tests {
         assert_eq!(enr.seq(), 40);
         assert_eq!(enr.signature(), &signature[..]);
         assert_eq!(enr.public_key().encode().to_vec(), expected_pubkey);
+        #[cfg(feature = "libp2p")]
+        assert_eq!(
+            enr.peer_id(),
+            PeerId::from_str("16Uiu2HAkypNfuZjWngxLrod9Buxz3foropE3WYZe78ZFgGeHfapb").unwrap()
+        );
 
         assert!(enr.verify());
     }
@@ -1282,6 +1517,12 @@ mod tests {
         let pubkey = enr.public_key().encode();
         assert_eq!(pubkey.to_vec(), expected_pubkey);
         assert!(enr.verify());
+
+        #[cfg(feature = "libp2p")]
+        assert_eq!(
+            enr.peer_id(),
+            PeerId::from_str("16Uiu2HAmSH2XVgZqYHWucap5kuPzLnt2TsNQkoppVxB5eJGvaXwm").unwrap()
+        );
 
         let invalid_record = hex::decode(record_hex2).unwrap();
         rlp::decode::<DefaultEnr>(&invalid_record).expect_err("should reject extra data");
@@ -1387,6 +1628,11 @@ mod tests {
         assert_eq!(enr_base64, expected_enr_base64);
 
         let enr = enr_base64.parse::<Enr<secp256k1::SecretKey>>().unwrap();
+        #[cfg(feature = "libp2p")]
+        assert_eq!(
+            enr.peer_id(),
+            PeerId::from_str("16Uiu2HAmSH2XVgZqYHWucap5kuPzLnt2TsNQkoppVxB5eJGvaXwm").unwrap()
+        );
         assert!(enr.verify());
     }
 
@@ -1548,6 +1794,8 @@ mod tests {
             .parse()
             .expect("Can decode both secp");
         let _decoded_enr: Enr<CombinedKey> = base64_string_ed25519.parse().unwrap();
+        #[cfg(feature = "libp2p")]
+        _decoded_enr.peer_id(); // Check that the peer-id can be decoded
     }
 
     #[test]
@@ -1648,6 +1896,7 @@ mod tests {
         for tcp in LOW_INT_PORTS {
             let mut enr = EnrBuilder::new("v4").build(&key).unwrap();
 
+            println!("Inserting: {}", tcp);
             let res = enr.insert(b"tcp", &tcp.to_be_bytes().as_ref(), &key);
             if u8::try_from(tcp).is_ok() {
                 assert_eq!(res.unwrap_err().to_string(), "invalid rlp data");
@@ -1665,6 +1914,7 @@ mod tests {
         for tcp in LOW_INT_PORTS {
             let mut enr = EnrBuilder::new("v4").build(&key).unwrap();
 
+            println!("Inserting: {}", tcp);
             let res = enr.remove_insert(
                 vec![b"none"].iter(),
                 vec![(b"tcp".as_slice(), tcp.to_be_bytes().as_slice())].into_iter(),
@@ -1691,10 +1941,7 @@ mod tests {
         for (tcp, enr_str) in vectors {
             let res = DefaultEnr::from_str(enr_str);
             if u8::try_from(tcp).is_ok() {
-                assert_eq!(
-                    res.unwrap_err().to_string(),
-                    "Invalid ENR: RlpInvalidIndirection"
-                );
+                assert!(res.is_err()); // Should fail trying to input low integers
             } else {
                 assert_tcp4(&res.unwrap(), tcp);
             }

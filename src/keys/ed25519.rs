@@ -7,6 +7,9 @@ use bytes::Bytes;
 use rlp::DecoderError;
 use std::{collections::BTreeMap, convert::TryFrom};
 
+#[cfg(feature = "libp2p")]
+use libp2p_identity::{ed25519 as libp2p_ed25519, PeerId, PublicKey};
+
 /// The ENR key that stores the public key in the ENR record.
 pub const ENR_KEY: &str = "ed25519";
 
@@ -71,5 +74,17 @@ impl EnrPublicKey for ed25519::VerifyingKey {
     /// Generates the ENR public key string associated with the ed25519 key type.
     fn enr_key(&self) -> Key {
         ENR_KEY.into()
+    }
+
+    /// Converts the publickey into a peer id, without consuming the key.
+    ///
+    /// This is only available with the `libp2p` feature flag.
+    #[cfg(feature = "libp2p")]
+    fn as_peer_id(&self) -> PeerId {
+        let pk_bytes = self.to_bytes();
+        let libp2p_pk: PublicKey = libp2p_ed25519::PublicKey::try_from_bytes(&pk_bytes)
+            .expect("valid public key")
+            .into();
+        PeerId::from_public_key(&libp2p_pk)
     }
 }

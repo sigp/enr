@@ -20,6 +20,8 @@ pub use combined::{CombinedKey, CombinedPublicKey};
 pub use ed25519_dalek;
 #[cfg(feature = "k256")]
 pub use k256;
+#[cfg(feature = "libp2p")]
+use libp2p_identity::PeerId;
 #[cfg(feature = "rust-secp256k1")]
 pub use secp256k1;
 
@@ -75,6 +77,12 @@ pub trait EnrPublicKey: Clone + Debug + Send + Sync + Unpin + 'static {
     /// Returns the ENR key identifier for the public key type. For `secp256k1` keys this
     /// is `secp256k1`.
     fn enr_key(&self) -> Key;
+
+    /// Converts the PublicKey into a peer id, without consuming the key.
+    ///
+    /// This is only available with the `libp2p` feature flag.
+    #[cfg(feature = "libp2p")]
+    fn as_peer_id(&self) -> PeerId;
 }
 
 /// An error during signing of a message.

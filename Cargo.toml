@@ -26,6 +26,8 @@ ed25519-dalek = { version = "2.0.0", optional = true, features = ["rand_core"] }
 secp256k1 = { version = "0.27", optional = true, default-features = false, features = [
     "global-context",
 ] }
+libp2p-core = { version = "0.40.1", optional = true }
+libp2p-identity = { version = "0.2.3", optional = true, features = ["peerid", "secp256k1", "ed25519"] }
 
 [dev-dependencies]
 secp256k1 = { features = ["rand-std"], version = "0.27" }
@@ -35,6 +37,8 @@ serde_json = { version = "1.0.95" }
 default = ["serde", "k256"]
 ed25519 = ["ed25519-dalek"]
 rust-secp256k1 = ["secp256k1"]
+quic = []
+libp2p = ["libp2p-core", "libp2p-identity"]
 
 [lib]
 name = "enr"
