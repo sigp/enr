@@ -78,7 +78,7 @@ pub trait EnrPublicKey: Clone + Debug + Send + Sync + Unpin + 'static {
     /// is `secp256k1`.
     fn enr_key(&self) -> Key;
 
-    /// Converts the PublicKey into a peer id, without consuming the key.
+    /// Converts the `PublicKey` into a peer id, without consuming the key.
     ///
     /// This is only available with the `libp2p` feature flag.
     #[cfg(feature = "libp2p")]

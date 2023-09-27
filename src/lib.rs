@@ -833,6 +833,7 @@ impl<K: EnrKey> Enr<K> {
     // Libp2p features
     /// The libp2p `PeerId` for the record.
     #[cfg(feature = "libp2p")]
+    #[must_use]
     pub fn peer_id(&self) -> PeerId {
         self.public_key().as_peer_id()
     }
@@ -840,6 +841,7 @@ impl<K: EnrKey> Enr<K> {
     /// Returns a list of multiaddrs if the ENR has an `ip` and either a `tcp`, `quic` or `udp` key **or** an `ip6` and either a `tcp6` `quic6` or `udp6`.
     /// The vector remains empty if these fields are not defined.
     #[cfg(feature = "libp2p")]
+    #[must_use]
     pub fn multiaddr(&self) -> Vec<Multiaddr> {
         let mut multiaddrs: Vec<Multiaddr> = Vec::new();
         if let Some(ip) = self.ip4() {
@@ -888,6 +890,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Returns a list of multiaddrs with the `PeerId` prepended.
     #[cfg(feature = "libp2p")]
+    #[must_use]
     pub fn multiaddr_p2p(&self) -> Vec<Multiaddr> {
         let peer_id = self.peer_id();
         self.multiaddr()
@@ -901,6 +904,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Returns any multiaddrs that contain the TCP protocol with the `PeerId` prepended.
     #[cfg(feature = "libp2p")]
+    #[must_use]
     pub fn multiaddr_p2p_tcp(&self) -> Vec<Multiaddr> {
         let peer_id = self.peer_id();
         self.multiaddr_tcp()
@@ -914,6 +918,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Returns any multiaddrs that contain the UDP protocol with the `PeerId` prepended.
     #[cfg(feature = "libp2p")]
+    #[must_use]
     pub fn multiaddr_p2p_udp(&self) -> Vec<Multiaddr> {
         let peer_id = self.peer_id();
         self.multiaddr_udp()
@@ -928,6 +933,7 @@ impl<K: EnrKey> Enr<K> {
     /// Returns any multiaddrs that contain the TCP protocol.
     /// Returns a list of multiaddrs if the ENR has an `ip` and a `tcp` key **or** an `ip6` and a `tcp6` field.
     #[cfg(feature = "libp2p")]
+    #[must_use]
     pub fn multiaddr_tcp(&self) -> Vec<Multiaddr> {
         let mut multiaddrs: Vec<Multiaddr> = Vec::new();
         if let Some(ip) = self.ip4() {
@@ -949,6 +955,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Returns a list of multiaddrs if the ENR has an `ip` and a `udp` key **or** an `ip6` and a `udp6` field.
     #[cfg(feature = "libp2p")]
+    #[must_use]
     pub fn multiaddr_udp(&self) -> Vec<Multiaddr> {
         let mut multiaddrs: Vec<Multiaddr> = Vec::new();
         if let Some(ip) = self.ip4() {
@@ -970,6 +977,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Returns a list of multiaddrs if the ENR has an `ip` and a `quic` key **or** an `ip6` and a `quic6`.
     #[cfg(all(feature = "libp2p", feature = "quic"))]
+    #[must_use]
     pub fn multiaddr_quic(&self) -> Vec<Multiaddr> {
         let mut multiaddrs: Vec<Multiaddr> = Vec::new();
         if let Some(quic_port) = self.quic4() {
@@ -994,11 +1002,13 @@ impl<K: EnrKey> Enr<K> {
 
     /// Returns the quic port if one is set.
     #[cfg(feature = "quic")]
+    #[must_use]
     pub fn quic4(&self) -> Option<u16> {
         self.get_decodable(QUIC_ENR_KEY).and_then(Result::ok)
     }
     /// Returns the quic6 port if one is set.
     #[cfg(feature = "quic")]
+    #[must_use]
     pub fn quic6(&self) -> Option<u16> {
         self.get_decodable(QUIC6_ENR_KEY).and_then(Result::ok)
     }
