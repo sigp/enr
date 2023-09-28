@@ -232,27 +232,27 @@ type PreviousRlpEncodedValues = Vec<Option<Bytes>>;
 const MAX_ENR_SIZE: usize = 300;
 
 // Constants used for fields
-const ID_ENR_KEY: &str = "id";
-const ENR_VERSION: &str = "v4";
-pub const IP_ENR_KEY: &str = "ip";
-pub const IP6_ENR_KEY: &str = "ip6";
-pub const TCP_ENR_KEY: &str = "tcp";
-pub const TCP6_ENR_KEY: &str = "tcp6";
-pub const UDP_ENR_KEY: &str = "udp";
-pub const UDP6_ENR_KEY: &str = "udp6";
+const ID_ENR_KEY: &[u8] = b"id";
+const ENR_VERSION: &[u8] = b"v4";
+pub const IP_ENR_KEY: &[u8] = b"ip";
+pub const IP6_ENR_KEY: &[u8] = b"ip6";
+pub const TCP_ENR_KEY: &[u8] = b"tcp";
+pub const TCP6_ENR_KEY: &[u8] = b"tcp6";
+pub const UDP_ENR_KEY: &[u8] = b"udp";
+pub const UDP6_ENR_KEY: &[u8] = b"udp6";
 #[cfg(feature = "quic")]
-pub const QUIC_ENR_KEY: &str = "quic";
+pub const QUIC_ENR_KEY: &[u8] = b"quic";
 #[cfg(feature = "quic")]
-pub const QUIC6_ENR_KEY: &str = "quic6";
+pub const QUIC6_ENR_KEY: &[u8] = b"quic6";
 /// The ENR field specifying the fork id.
 #[cfg(feature = "eth2")]
-pub const ETH2_ENR_KEY: &str = "eth2";
+pub const ETH2_ENR_KEY: &[u8] = b"eth2";
 /// The ENR field specifying the attestation subnet bitfield.
 #[cfg(feature = "eth2")]
-pub const ATTESTATION_BITFIELD_ENR_KEY: &str = "attnets";
+pub const ATTESTATION_BITFIELD_ENR_KEY: &[u8] = b"attnets";
 /// The ENR field specifying the sync committee subnet bitfield.
 #[cfg(feature = "eth2")]
-pub const SYNC_COMMITTEE_BITFIELD_ENR_KEY: &str = "syncnets";
+pub const SYNC_COMMITTEE_BITFIELD_ENR_KEY: &[u8] = b"syncnets";
 
 /// The ENR, allowing for arbitrary signing algorithms.
 ///
@@ -449,7 +449,7 @@ impl<K: EnrKey> Enr<K> {
     pub fn verify(&self) -> bool {
         let pubkey = self.public_key();
         match self.id() {
-            Some(ref id) if id == ENR_VERSION => {
+            Some(ref id) if id.as_bytes() == ENR_VERSION => {
                 pubkey.verify_v4(&self.rlp_content(), &self.signature)
             }
             // unsupported identity schemes
@@ -678,7 +678,7 @@ impl<K: EnrKey> Enr<K> {
                     if let Some(ip) = prev_ip {
                         self.content.insert(IP_ENR_KEY.into(), ip);
                     } else {
-                        self.content.remove(IP_ENR_KEY.as_bytes().as_ref());
+                        self.content.remove(IP_ENR_KEY.as_ref());
                     }
                     if let Some(udp) = prev_port {
                         self.content.insert(port_string, udp);
@@ -690,7 +690,7 @@ impl<K: EnrKey> Enr<K> {
                     if let Some(ip) = prev_ip {
                         self.content.insert(IP_ENR_KEY.into(), ip);
                     } else {
-                        self.content.remove(IP6_ENR_KEY.as_bytes().as_ref());
+                        self.content.remove(IP6_ENR_KEY.as_ref());
                     }
                     if let Some(udp) = prev_port {
                         self.content.insert(port_v6_string, udp);
@@ -746,7 +746,7 @@ impl<K: EnrKey> Enr<K> {
         let mut inserted = Vec::new();
         for (key, value) in insert_key_values {
             // currently only support "v4" identity schemes
-            if key.as_ref() == ID_ENR_KEY.as_bytes() && value != ENR_VERSION.as_bytes() {
+            if key.as_ref() == ID_ENR_KEY && value != ENR_VERSION {
                 *self = enr_backup;
                 return Err(EnrError::UnsupportedIdentityScheme);
             }
@@ -833,7 +833,7 @@ impl<K: EnrKey> Enr<K> {
     fn sign(&mut self, key: &K) -> Result<(), EnrError> {
         self.signature = {
             match self.id() {
-                Some(ref id) if id == ENR_VERSION => key
+                Some(ref id) if id.as_bytes() == ENR_VERSION => key
                     .sign_v4(&self.rlp_content())
                     .map_err(|_| EnrError::SigningError)?,
                 // other identity schemes are unsupported
@@ -1119,8 +1119,7 @@ impl<K: EnrKey> std::fmt::Debug for Enr<K> {
                                     TCP_ENR_KEY,
                                     TCP6_ENR_KEY,
                                 ]
-                                .iter()
-                                .any(|k| k.as_bytes() == key.as_slice())
+                                .contains(&key.as_slice())
                             })
                             .map(|(key, val)| (String::from_utf8_lossy(key), hex::encode(val))),
                     )
@@ -1129,7 +1128,7 @@ impl<K: EnrKey> std::fmt::Debug for Enr<K> {
         }
 
         f.debug_struct("Enr")
-            .field(ID_ENR_KEY, &self.id())
+            .field("id", &self.id())
             .field("seq", &self.seq())
             .field("NodeId", &self.node_id())
             .field("signature", &hex::encode(&self.signature))
@@ -1309,42 +1308,37 @@ pub(crate) fn digest(b: &[u8]) -> [u8; 32] {
 }
 
 fn check_spec_reserved_keys(key: &[u8], value: &[u8]) -> Result<(), EnrError> {
-    match std::str::from_utf8(key) {
-        Err(_) => return Ok(()), // Ignore if the key is not a string format
-        Ok(key_string) => match key_string {
-            TCP_ENR_KEY | TCP6_ENR_KEY | UDP_ENR_KEY | UDP6_ENR_KEY => {
-                rlp::decode::<u16>(value)
-                    .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+    match key {
+        TCP_ENR_KEY | TCP6_ENR_KEY | UDP_ENR_KEY | UDP6_ENR_KEY => {
+            rlp::decode::<u16>(value).map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+        }
+        ID_ENR_KEY => {
+            let id_bytes = rlp::decode::<Vec<u8>>(value)
+                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+            if id_bytes != b"v4" {
+                return Err(EnrError::UnsupportedIdentityScheme);
             }
-            ID_ENR_KEY => {
-                let id_bytes = rlp::decode::<Vec<u8>>(value)
-                    .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
-                if id_bytes != b"v4" {
-                    return Err(EnrError::UnsupportedIdentityScheme);
-                }
+        }
+        IP_ENR_KEY => {
+            let ip4_bytes = rlp::decode::<Vec<u8>>(value)
+                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+            if ip4_bytes.len() != 4 {
+                return Err(EnrError::InvalidRlpData("Invalid Ipv4 size".to_string()));
             }
-            IP_ENR_KEY => {
-                let ip4_bytes = rlp::decode::<Vec<u8>>(value)
-                    .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
-                if ip4_bytes.len() != 4 {
-                    return Err(EnrError::InvalidRlpData("Invalid Ipv4 size".to_string()));
-                }
+        }
+        IP6_ENR_KEY => {
+            let ip6_bytes = rlp::decode::<Vec<u8>>(value)
+                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+            if ip6_bytes.len() != 16 {
+                return Err(EnrError::InvalidRlpData("Invalid Ipv6 size".to_string()));
             }
-            IP6_ENR_KEY => {
-                let ip6_bytes = rlp::decode::<Vec<u8>>(value)
-                    .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
-                if ip6_bytes.len() != 16 {
-                    return Err(EnrError::InvalidRlpData("Invalid Ipv6 size".to_string()));
-                }
-            }
-            #[cfg(feature = "quic")]
-            QUIC_ENR_KEY | QUIC6_ENR_KEY => {
-                rlp::decode::<u16>(value)
-                    .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
-            }
-            _ => return Ok(()),
-        },
-    };
+        }
+        #[cfg(feature = "quic")]
+        QUIC_ENR_KEY | QUIC6_ENR_KEY => {
+            rlp::decode::<u16>(value).map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+        }
+        _ => return Ok(()),
+    }
     Ok(())
 }
 
