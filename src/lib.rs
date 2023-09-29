@@ -181,6 +181,7 @@ mod builder;
 mod error;
 mod keys;
 mod node_id;
+mod update;
 
 use bytes::{Bytes, BytesMut};
 use log::debug;
@@ -243,6 +244,9 @@ pub struct Enr<K: EnrKey> {
 }
 
 impl<K: EnrKey> Enr<K> {
+    pub fn update(&mut self) -> update::Guard<'_, K> {
+        update::Guard::noop(self)
+    }
     // getters //
 
     /// The `NodeId` for the record.
@@ -255,6 +259,11 @@ impl<K: EnrKey> Enr<K> {
     #[must_use]
     pub const fn seq(&self) -> u64 {
         self.seq
+    }
+
+    /// Create a v4 enr builder.
+    pub fn builder() -> EnrBuilder<K> {
+        EnrBuilder::new("v4")
     }
 
     /// Reads a custom key from the record if it exists, decoded as data.
