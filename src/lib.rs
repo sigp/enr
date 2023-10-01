@@ -244,9 +244,6 @@ pub struct Enr<K: EnrKey> {
 }
 
 impl<K: EnrKey> Enr<K> {
-    pub fn update(&mut self) -> update::Guard<'_, K> {
-        update::Guard::noop(self)
-    }
     // getters //
 
     /// The `NodeId` for the record.
@@ -694,7 +691,7 @@ impl<K: EnrKey> Enr<K> {
     /// one sequence number update. An `EnrKey` is required to re-sign the record once modified.
     /// Reverts whole ENR record on error.
     ///
-    /// Returns the previous values as rlp encoded bytes if they exist for the removed and added/
+    /// Returns the/set previous values as rlp encoded bytes if they exist for the removed and added/
     /// overwritten keys.
     pub fn remove_insert<'a>(
         &mut self,
@@ -800,17 +797,19 @@ impl<K: EnrKey> Enr<K> {
         stream.out()
     }
 
+    fn compute_signature(&self, key: &K) -> Result<Vec<u8>, EnrError> {
+        match self.id() {
+            Some(ref id) if id == "v4" => key
+                .sign_v4(&self.rlp_content())
+                .map_err(|_| EnrError::SigningError),
+            // other identity schemes are unsupported
+            _ => return Err(EnrError::UnsupportedIdentityScheme),
+        }
+    }
+
     /// Signs the ENR record based on the identity scheme. Currently only "v4" is supported.
     fn sign(&mut self, key: &K) -> Result<(), EnrError> {
-        self.signature = {
-            match self.id() {
-                Some(ref id) if id == "v4" => key
-                    .sign_v4(&self.rlp_content())
-                    .map_err(|_| EnrError::SigningError)?,
-                // other identity schemes are unsupported
-                _ => return Err(EnrError::SigningError),
-            }
-        };
+        self.signature = self.compute_signature(key)?;
         Ok(())
     }
 }
@@ -1046,7 +1045,8 @@ impl<K: EnrKey> IntoIterator for Enr<K> {
 
 pub(crate) fn digest(b: &[u8]) -> [u8; 32] {
     let mut output = [0_u8; 32];
-    output.copy_from_slice(&Keccak256::digest(b));
+    let x = Keccak256::digest(b);
+    output.copy_from_slice(&x);
     output
 }
 
