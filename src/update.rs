@@ -6,7 +6,7 @@ use rlp::Encodable;
 use crate::{Enr, EnrKey, EnrPublicKey, Key, NodeId, MAX_ENR_SIZE};
 
 /// An update operation.
-// The most user facing type: this simply states an intent and is not validated.
+// NOTE: The most user facing type: this simply states an intent and is not validated.
 pub enum Update {
     /// Insert a key and RLP data.
     Insert {
@@ -19,6 +19,7 @@ pub enum Update {
 }
 
 impl Update {
+    /// Create an insert operation that adds an [`Encodable`] object to the given key.
     pub fn insert(key: impl AsRef<[u8]>, value: &impl Encodable) -> Self {
         let content = rlp::encode(value).freeze();
         Update::Insert {
@@ -28,6 +29,8 @@ impl Update {
         }
     }
 
+    /// Create an insert operation where the raw rlp is provided. Due to implementation contrains, this
+    /// only accepts rlp strings, but not lists.
     pub fn insert_raw(key: impl AsRef<[u8]>, content: Bytes) -> Self {
         Update::Insert {
             key: key.as_ref().to_vec(),
@@ -36,15 +39,75 @@ impl Update {
         }
     }
 
+    /// Create a remove operation.
     pub fn remove(key: impl AsRef<[u8]>) -> Self {
         Update::Remove {
             key: key.as_ref().to_vec(),
         }
     }
+
+    /// Validate the update operation.
+    fn to_valid_op(self) -> Result<Op, Error> {
+        match self {
+            Update::Insert {
+                key,
+                content,
+                trust_valid_rlp,
+            } => {
+                if !trust_valid_rlp {
+                    // TODO(@divma): this verification only checks that the rlp header is valid, it's unlikely
+                    // we can fully verify in depth the data but at least we coudl verify the payload size
+                    //
+                    // also, this only verifies that this has a  "valid" payload if a rlp string, but the data
+                    // could be a list as well so rejecting this is probably wrong in some cases
+                    //
+                    // rlp sucks
+                    rlp::Rlp::new(content.as_ref())
+                        .data()
+                        .map_err(Error::InvalidRlpData)?;
+                }
+                match key.as_slice() {
+                    b"tcp" | b"tcp6" | b"udp" | b"udp6" => {
+                        if rlp::decode::<u16>(&content).is_err() {
+                            return Err(Error::InvalidReservedKeyData(key));
+                        }
+                    }
+                    b"id" => {
+                        let id_bytes =
+                            rlp::decode::<Vec<u8>>(&content).map_err(Error::InvalidRlpData)?;
+                        if id_bytes != b"v4" {
+                            return Err(Error::UnsupportedIdentityScheme);
+                        }
+                    }
+                    b"ip" => {
+                        let ip4_bytes =
+                            rlp::decode::<Vec<u8>>(&content).map_err(Error::InvalidRlpData)?;
+                        if ip4_bytes.len() != 4 {
+                            return Err(Error::InvalidReservedKeyData(key));
+                        }
+                    }
+                    b"ip6" => {
+                        let ip6_bytes =
+                            rlp::decode::<Vec<u8>>(&content).map_err(Error::InvalidRlpData)?;
+                        if ip6_bytes.len() != 16 {
+                            return Err(Error::InvalidReservedKeyData(key));
+                        }
+                    }
+                    _ => {}
+                };
+
+                Ok(Op::Insert { key, content })
+            }
+            Update::Remove { key } => match key.as_slice() {
+                b"id" => Err(Error::InvalidReservedKeyData(key)),
+                _ => Ok(Op::Remove { key }),
+            },
+        }
+    }
 }
 
 /// A valid update operation over the [`Enr`]. This is the result of validating an [`Update`].
-pub enum Op {
+enum Op {
     /// Insert a key and RLP data.
     Insert { key: Key, content: Bytes },
     /// Remove a key.
@@ -52,71 +115,25 @@ pub enum Op {
 }
 
 impl Op {
-    /// Create an insert operation that adds an [`Encodable`] object to the given key.
-    pub fn insert(key: impl AsRef<[u8]>, value: &impl Encodable) -> Result<Self, Error> {
-        let encoded = rlp::encode(value).freeze();
-        // we just encoded the data, we can trust is valid Rlp
-        Self::insert_raw_trusted(key, encoded)
-    }
-
-    /// Create an insert operation where the raw rlp is provided. Due to implementation contrains, this
-    /// only accepts rlp strings, but not lists.
-    pub fn insert_raw(key: impl AsRef<[u8]>, value: Bytes) -> Result<Self, Error> {
-        // TODO(@divma): this verification only checks that the rlp header is valid, it's unlikely
-        // we can fully verify in depth the data but at least we coudl verify the payload size
-        //
-        // also, this only verifies that this has a  "valid" payload if a rlp string, but the data
-        // could be a list as well so rejecting this is probably wrong in some cases
-        //
-        // rlp sucks
-        rlp::Rlp::new(value.as_ref())
-            .data()
-            .map_err(Error::InvalidRlpData)?;
-        Self::insert_raw_trusted(key, value)
-    }
-
-    /// Create a remove operation.
-    pub fn remove(key: impl AsRef<[u8]>) -> Result<Self, Error> {
-        let key = key.as_ref().to_vec();
-        match key.as_slice() {
-            b"id" => Err(Error::InvalidReservedKeyData(key)),
-            _ => Ok(Op::Remove { key }),
+    /// Applies the operation and returns the inverse.
+    fn apply_and_invert<K: EnrKey>(self, enr: &mut Enr<K>) -> Op {
+        match self {
+            Op::Insert { key, content } => match enr.content.insert(key.clone(), content) {
+                Some(content) => Op::Insert { key, content },
+                None => Op::Remove { key },
+            },
+            Op::Remove { key } => match enr.content.remove(&key) {
+                Some(content) => Op::Insert { key, content },
+                None => Op::Remove { key },
+            },
         }
     }
 
-    /// Create an insert operation where data is trusted to be valid rlp.
-    ///
-    /// This verifies that for spec reserved keys, the data can be decoded as the expected type.
-    fn insert_raw_trusted(key: impl AsRef<[u8]>, content: Bytes) -> Result<Self, Error> {
-        let key = key.as_ref().to_vec();
-        match key.as_slice() {
-            b"tcp" | b"tcp6" | b"udp" | b"udp6" => {
-                if rlp::decode::<u16>(&content).is_err() {
-                    return Err(Error::InvalidReservedKeyData(key));
-                }
-            }
-            b"id" => {
-                let id_bytes = rlp::decode::<Vec<u8>>(&content).map_err(Error::InvalidRlpData)?;
-                if id_bytes != b"v4" {
-                    return Err(Error::UnsupportedIdentityScheme);
-                }
-            }
-            b"ip" => {
-                let ip4_bytes = rlp::decode::<Vec<u8>>(&content).map_err(Error::InvalidRlpData)?;
-                if ip4_bytes.len() != 4 {
-                    return Err(Error::InvalidReservedKeyData(key));
-                }
-            }
-            b"ip6" => {
-                let ip6_bytes = rlp::decode::<Vec<u8>>(&content).map_err(Error::InvalidRlpData)?;
-                if ip6_bytes.len() != 16 {
-                    return Err(Error::InvalidReservedKeyData(key));
-                }
-            }
-            _ => {}
+    fn apply<K: EnrKey>(self, enr: &mut Enr<K>) {
+        match self {
+            Op::Insert { key, content } => enr.content.insert(key, content),
+            Op::Remove { key } => enr.content.remove(&key),
         };
-
-        Ok(Op::Insert { key, content })
     }
 }
 
@@ -160,6 +177,8 @@ impl<I> RevertOps<I> {
 }
 
 /// An update guard over the [`Enr`].
+/// The inverses are set as a generic to allow optimizing for single updates, multiple updates with
+/// a known count of updates and arbitrary updates.
 pub struct Guard<'a, K: EnrKey, I> {
     /// [`Enr`] with update [`Op`]s already applied.
     enr: &'a mut Enr<K>,
@@ -170,13 +189,53 @@ pub struct Guard<'a, K: EnrKey, I> {
     inverses: I,
 }
 
-impl<'a, K: EnrKey, I> Guard<'a, K, I> {
-    pub fn noop(enr: &'a mut Enr<K>) -> Self {
-        todo!()
+impl<'a, K: EnrKey> Guard<'a, K, Op> {
+    pub fn single_update(enr: &'a mut Enr<K>, update: Update) -> Result<Self, Error> {
+        let op = update.to_valid_op()?;
+        let inverse = op.apply_and_invert(enr);
+        Ok(Guard {
+            enr,
+            inverses: inverse,
+        })
+    }
+}
+
+impl<'a, K: EnrKey> Guard<'a, K, (Op, Op)> {
+    /// Two updates.
+    /// NOTE: doing this because it's the one case we actually need. To be very general we could:
+    /// - use a macro to generate the n-tuple implementations
+    /// - add a const N [Op, N] implementation (here we pay the price of the pointer)
+    pub fn tuple_update(enr: &'a mut Enr<K>, first: Update, second: Update) -> Result<Self, Error> {
+        let op1 = first.to_valid_op()?;
+        let op2 = second.to_valid_op()?;
+        let inverse1 = op1.apply_and_invert(enr);
+        let inverse2 = op2.apply_and_invert(enr);
+        Ok(Guard {
+            enr,
+            inverses: (inverse1, inverse2),
+        })
+    }
+}
+
+/// Allows batch updating and [`Enr`].
+struct BatchUpdate<'a, K: EnrKey> {
+    updates: Vec<Update>,
+    enr: &'a mut Enr<K>,
+}
+
+impl<'a, K: EnrKey> Guard<'a, K, Vec<Op>> {
+    /// Arbitrary number of updates. Pays the cost of a vector.
+    pub fn new(enr: &'a mut Enr<K>) -> Self {
+        Ok(Guard {
+            enr,
+            inverses: Vec::default(),
+        })
     }
 
-    fn mark_update(self) {}
+    // pub fn update(&mut self, update:)
+}
 
+impl<'a, K: EnrKey, I> Guard<'a, K, I> {
     pub fn finish(self, signing_key: &K) -> Result<I, Revert<'a, K, I>> {
         let Guard { enr, inverses } = self;
         let mut revert = RevertOps::new(inverses);
