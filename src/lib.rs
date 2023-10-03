@@ -470,6 +470,7 @@ impl<K: EnrKey> Enr<K> {
         value: &T,
         enr_key: &K,
     ) -> Result<Option<Bytes>, EnrError> {
+        // TODO self.update_guard().insert().finish()
         self.insert_raw_rlp(key, rlp::encode(value).freeze(), enr_key)
     }
 
@@ -483,6 +484,7 @@ impl<K: EnrKey> Enr<K> {
         value: Bytes,
         enr_key: &K,
     ) -> Result<Option<Bytes>, EnrError> {
+        // TODO self.update_guard().insert_raw().finish()
         check_spec_reserved_keys(key.as_ref(), &value)?;
 
         let previous_value = self.content.insert(key.as_ref().to_vec(), value);
@@ -532,6 +534,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets the `ip` field of the ENR. Returns any pre-existing IP address in the record.
     pub fn set_ip(&mut self, ip: IpAddr, key: &K) -> Result<Option<IpAddr>, EnrError> {
+        // TODO: self.update_guard().insert().finish()
         match ip {
             IpAddr::V4(addr) => {
                 let prev_value = self.insert("ip", &addr.octets().as_ref(), key)?;
@@ -560,6 +563,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets the `udp` field of the ENR. Returns any pre-existing UDP port in the record.
     pub fn set_udp4(&mut self, udp: u16, key: &K) -> Result<Option<u16>, EnrError> {
+        // TODO: self.update_guard().insert().finish()
         if let Some(udp_bytes) = self.insert("udp", &udp, key)? {
             return Ok(rlp::decode(&udp_bytes).ok());
         }
@@ -568,6 +572,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets the `udp6` field of the ENR. Returns any pre-existing UDP port in the record.
     pub fn set_udp6(&mut self, udp: u16, key: &K) -> Result<Option<u16>, EnrError> {
+        // TODO: self.update_guard().insert().finish()
         if let Some(udp_bytes) = self.insert("udp6", &udp, key)? {
             return Ok(rlp::decode(&udp_bytes).ok());
         }
@@ -576,6 +581,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets the `tcp` field of the ENR. Returns any pre-existing tcp port in the record.
     pub fn set_tcp4(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, EnrError> {
+        // TODO: self.update_guard().insert().finish()
         if let Some(tcp_bytes) = self.insert("tcp", &tcp, key)? {
             return Ok(rlp::decode(&tcp_bytes).ok());
         }
@@ -584,6 +590,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets the `tcp6` field of the ENR. Returns any pre-existing tcp6 port in the record.
     pub fn set_tcp6(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, EnrError> {
+        // TODO: self.update_guard().insert().finish()
         if let Some(tcp_bytes) = self.insert("tcp6", &tcp, key)? {
             return Ok(rlp::decode(&tcp_bytes).ok());
         }
@@ -602,6 +609,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Helper function for `set_tcp_socket()` and `set_udp_socket`.
     fn set_socket(&mut self, socket: SocketAddr, key: &K, is_tcp: bool) -> Result<(), EnrError> {
+        // TODO self.update_guard().insert(ip).insert(port).finish()
         let (port_string, port_v6_string): (Key, Key) = if is_tcp {
             ("tcp".into(), "tcp6".into())
         } else {

@@ -6,7 +6,7 @@ use rlp::Encodable;
 use crate::{Enr, EnrKey, EnrPublicKey, Key, NodeId, MAX_ENR_SIZE};
 
 /// An update operation.
-// NOTE: The most user facing type: this simply states an intent and is not validated.
+// NOTE: The most user facing type: this simply states an intent and it's not validated.
 pub enum Update {
     /// Insert a key and RLP data.
     Insert {
@@ -234,6 +234,15 @@ impl<'a, K: EnrKey> Guard<'a, K, Vec<Op>> {
 
     // pub fn update(&mut self, update:)
 }
+
+/*
+ * let (prev_val0, prev_val1, removed_val) = enr
+ *   .update_guard()
+ *   .insert(k0, v0)
+ *   .insert(k1, v1)
+ *   .remove(k2)
+ *   .finish()?
+ * */
 
 impl<'a, K: EnrKey, I> Guard<'a, K, I> {
     pub fn finish(self, signing_key: &K) -> Result<I, Revert<'a, K, I>> {
