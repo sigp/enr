@@ -421,6 +421,12 @@ impl<K: EnrKey> Enr<K> {
         }
     }
 
+    /// Compare if the content of 2 Enr's match.
+    #[must_use]
+    pub fn compare_content(&self, other: &Self) -> bool {
+        self.rlp_content() == other.rlp_content()
+    }
+
     /// Provides the URL-safe base64 encoded "text" version of the ENR prefixed by "enr:".
     #[must_use]
     pub fn to_base64(&self) -> String {
@@ -1701,6 +1707,35 @@ mod tests {
                 assert_tcp4(&res.unwrap(), tcp);
             }
         }
+    }
+
+    #[test]
+    fn test_compare_content() {
+        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+        let ip = Ipv4Addr::new(10, 0, 0, 1);
+        let tcp = 30303;
+
+        let enr1 = {
+            let mut builder = EnrBuilder::new("v4");
+            builder.ip4(ip);
+            builder.tcp4(tcp);
+            builder.build(&key).unwrap()
+        };
+
+        let mut enr2 = enr1.clone();
+        enr2.set_seq(1, &key).unwrap();
+        let mut enr3 = enr1.clone();
+        enr3.set_seq(2, &key).unwrap();
+
+        // Enr 1 & 2 should be equal, secpk256k1 should have different signatures for the same Enr content
+        assert_ne!(enr1.signature(), enr2.signature());
+        assert!(enr1.compare_content(&enr2));
+        assert_ne!(enr1, enr2);
+
+        // Enr 1 & 3 should not be equal, and have different signatures
+        assert_ne!(enr1.signature(), enr3.signature());
+        assert!(!enr1.compare_content(&enr3));
+        assert_ne!(enr1, enr3);
     }
 
     fn assert_tcp4(enr: &DefaultEnr, tcp: u16) {
