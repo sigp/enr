@@ -423,7 +423,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Compare if the content of 2 Enr's match.
     #[must_use]
-    pub fn compare_content(&self, other: &Enr<K>) -> bool {
+    pub fn compare_content(&self, other: &Self) -> bool {
         self.rlp_content() == other.rlp_content()
     }
 
