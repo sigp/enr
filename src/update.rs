@@ -176,6 +176,61 @@ impl<I> RevertOps<I> {
     }
 }
 
+/// Struct that batches updates without applying them.
+pub struct PreUpdate<'a, K: EnrKey, U> {
+    /// The enr to which updates will be applied.
+    enr: &'a mut Enr<K>,
+    /// The batched updates, unapplied.
+    updates: U,
+}
+
+impl<'a, K: EnrKey> PreUpdate<'a, K, ()> {
+    /// Create an insert operation that adds an [`Encodable`] object to the given key.
+    pub fn insert(
+        self,
+        key: impl AsRef<[u8]>,
+        value: &impl Encodable,
+    ) -> PreUpdate<'a, K, (Update,)> {
+        let PreUpdate { enr, updates } = self;
+        let () = updates;
+        let content = rlp::encode(value).freeze();
+        let new_update = Update::Insert {
+            key: key.as_ref().to_vec(),
+            content,
+            trust_valid_rlp: true,
+        };
+        let updates = (new_update,);
+        PreUpdate { enr, updates }
+    }
+
+    /// Create an insert operation where the raw rlp is provided. Due to implementation contrains, this
+    /// only accepts rlp strings, but not lists.
+    pub fn insert_raw(self, key: impl AsRef<[u8]>, content: Bytes) -> PreUpdate<'a, K, (Update,)> {
+        let PreUpdate { enr, updates } = self;
+        let () = updates;
+        let new_update = Update::Insert {
+            key: key.as_ref().to_vec(),
+            content,
+            trust_valid_rlp: false,
+        };
+
+        let updates = (new_update,);
+        PreUpdate { enr, updates }
+    }
+
+    /// Create a remove operation.
+    pub fn remove(self, key: impl AsRef<[u8]>) -> PreUpdate<'a, K, (Update,)> {
+        let PreUpdate { enr, updates } = self;
+        let () = updates;
+        let new_update = Update::Remove {
+            key: key.as_ref().to_vec(),
+        };
+
+        let updates = (new_update,);
+        PreUpdate { enr, updates }
+    }
+}
+
 /// An update guard over the [`Enr`].
 /// The inverses are set as a generic to allow optimizing for single updates, multiple updates with
 /// a known count of updates and arbitrary updates.
