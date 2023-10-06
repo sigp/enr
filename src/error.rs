@@ -14,8 +14,10 @@ pub enum EnrError {
     SigningError,
     /// The identity scheme is not supported.
     UnsupportedIdentityScheme,
+    /// Data is valid RLP but the contents do not represent the expected type for the key.
+    InvalidReservedKeyData(&'static str),
     /// The entered RLP data is invalid.
-    InvalidRlpData(String),
+    InvalidRlpData(rlp::DecoderError),
 }
 
 impl fmt::Display for EnrError {
@@ -26,6 +28,7 @@ impl fmt::Display for EnrError {
             Self::SigningError => write!(f, "signing error"),
             Self::UnsupportedIdentityScheme => write!(f, "unsupported identity scheme"),
             Self::InvalidRlpData(_rlp) => write!(f, "invalid rlp data"),
+            Self::InvalidReservedKeyData(key) => write!(f, "invalid data for reserved key {}", key),
         }
     }
 }

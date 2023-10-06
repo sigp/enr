@@ -732,8 +732,7 @@ impl<K: EnrKey> Enr<K> {
             let value = rlp::encode(&(value)).freeze();
             // Prevent inserting invalid RLP integers
             if is_keyof_u16(key.as_ref()) {
-                rlp::decode::<u16>(&value)
-                    .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+                rlp::decode::<u16>(&value).map_err(EnrError::InvalidRlpData)?;
             }
 
             inserted.push(self.content.insert(key.as_ref().to_vec(), value));
@@ -1065,32 +1064,28 @@ const fn is_keyof_u16(key: &[u8]) -> bool {
 fn check_spec_reserved_keys(key: &[u8], value: &[u8]) -> Result<(), EnrError> {
     match key {
         b"tcp" | b"tcp6" | b"udp" | b"udp6" => {
-            rlp::decode::<u16>(value).map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+            rlp::decode::<u16>(value).map_err(EnrError::InvalidRlpData)?;
         }
         b"id" => {
-            let id_bytes = rlp::decode::<Vec<u8>>(value)
-                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+            let id_bytes = rlp::decode::<Vec<u8>>(value).map_err(EnrError::InvalidRlpData)?;
             if id_bytes != b"v4" {
                 return Err(EnrError::UnsupportedIdentityScheme);
             }
         }
         b"ip" => {
-            let ip4_bytes = rlp::decode::<Vec<u8>>(value)
-                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+            let ip4_bytes = rlp::decode::<Vec<u8>>(value).map_err(EnrError::InvalidRlpData)?;
             if ip4_bytes.len() != 4 {
-                return Err(EnrError::InvalidRlpData("Invalid Ipv4 size".to_string()));
+                return Err(EnrError::InvalidReservedKeyData("ip"));
             }
         }
         b"ip6" => {
-            let ip6_bytes = rlp::decode::<Vec<u8>>(value)
-                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+            let ip6_bytes = rlp::decode::<Vec<u8>>(value).map_err(EnrError::InvalidRlpData)?;
             if ip6_bytes.len() != 16 {
-                return Err(EnrError::InvalidRlpData("Invalid Ipv6 size".to_string()));
+                return Err(EnrError::InvalidReservedKeyData("ip6"));
             }
         }
         b"secp256k1" => {
-            rlp::decode::<Enr<k256::ecdsa::SigningKey>>(value)
-                .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
+            rlp::decode::<Enr<k256::ecdsa::SigningKey>>(value).map_err(EnrError::InvalidRlpData)?;
         }
         _ => return Ok(()),
     };

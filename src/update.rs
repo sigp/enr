@@ -2,11 +2,12 @@
 
 use bytes::Bytes;
 
-use crate::{Enr, EnrKey, EnrPublicKey, Key, NodeId, MAX_ENR_SIZE};
+use crate::{Enr, EnrKey, EnrPublicKey, NodeId, MAX_ENR_SIZE};
 
 mod ops;
 
-use ops::{Op, Update, UpdatesT, ValidUpdatesT};
+pub use ops::Update;
+use ops::{UpdatesT, ValidUpdatesT};
 
 /// An update guard over the [`Enr`].
 /// The inverses are set as a generic to allow optimizing for single updates, multiple updates with
@@ -107,21 +108,6 @@ impl<'a, K: EnrKey, Up: UpdatesT> Guard<'a, K, Up> {
         } = revert;
         Ok(content_inverses)
     }
-}
-
-pub enum Error {
-    /// The ENR is too large.
-    ExceedsMaxSize,
-    /// The sequence number is too large.
-    SequenceNumberTooHigh,
-    /// There was an error with signing an ENR record.
-    SigningError,
-    /// The identity scheme is not supported.
-    UnsupportedIdentityScheme,
-    /// Data is valid RLP but the contents do not represent the expected type for the key.
-    InvalidReservedKeyData(Key),
-    /// The entered RLP data is invalid.
-    InvalidRlpData(rlp::DecoderError),
 }
 
 /// Helper struct that handles recovering the modified [`Enr`] to it's original state.
