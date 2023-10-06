@@ -117,7 +117,7 @@ pub(super) enum Op {
 
 impl Op {
     /// Applies the operation and returns the inverse.
-    pub fn apply_and_invert<K: EnrKey>(self, enr: &mut Enr<K>) -> Op {
+    pub fn apply_with_inverse<K: EnrKey>(self, enr: &mut Enr<K>) -> Op {
         match self {
             Op::Insert { key, content } => match enr.content.insert(key.clone(), content) {
                 Some(content) => Op::Insert { key, content },
@@ -131,10 +131,138 @@ impl Op {
     }
 
     /// Applies the operation to the [`Enr`].
-    pub fn apply<K: EnrKey>(self, enr: &mut Enr<K>) {
+    pub fn irrecoverable_apply<K: EnrKey>(self, enr: &mut Enr<K>) {
         match self {
             Op::Insert { key, content } => enr.content.insert(key, content),
             Op::Remove { key } => enr.content.remove(&key),
         };
     }
 }
+
+/*
+ * Helper traits to expand the definition of Update to tuples of Updates and vectors
+ */
+
+pub(crate) trait UpdatesT {
+    type ValidatedUpdates: ValidUpdatesT;
+    fn to_valid(self) -> Result<Self::ValidatedUpdates, Error>;
+}
+
+pub(crate) trait ValidUpdatesT {
+    fn apply_and_invert<K: EnrKey>(self, enr: &mut Enr<K>) -> Self;
+    fn apply_as_inverse<K: EnrKey>(self, enr: &mut Enr<K>);
+}
+
+/*
+ * implementation for a single update
+ */
+
+impl UpdatesT for Update {
+    type ValidatedUpdates = Op;
+
+    fn to_valid(self) -> Result<Self::ValidatedUpdates, Error> {
+        self.to_valid_op()
+    }
+}
+impl ValidUpdatesT for Op {
+    fn apply_and_invert<K: EnrKey>(self, enr: &mut Enr<K>) -> Self {
+        self.apply_with_inverse(enr)
+    }
+
+    fn apply_as_inverse<K: EnrKey>(self, enr: &mut Enr<K>) {
+        self.irrecoverable_apply(enr)
+    }
+}
+
+/*
+ * implementation for an arbitrary number of updates
+ */
+impl UpdatesT for Vec<Update> {
+    type ValidatedUpdates = Vec<Op>;
+
+    fn to_valid(self) -> Result<Self::ValidatedUpdates, Error> {
+        self.into_iter().map(Update::to_valid_op).collect()
+    }
+}
+
+impl ValidUpdatesT for Vec<Op> {
+    fn apply_and_invert<K: EnrKey>(self, enr: &mut Enr<K>) -> Self {
+        self.into_iter()
+            .map(|op| op.apply_with_inverse(enr))
+            .rev()
+            .collect()
+    }
+
+    fn apply_as_inverse<K: EnrKey>(self, enr: &mut Enr<K>) {
+        self.into_iter().for_each(|op| op.irrecoverable_apply(enr))
+    }
+}
+
+/*
+ * implementation for tuples
+ */
+
+/// Map an identifier inside a macro to a type
+macro_rules! map_to_type {
+    ($in: ident, $out: ident) => {
+        $out
+    };
+}
+
+/// Generates the implementation of PreUpdate::apply to a tuple of 2 or more. The macro arguments
+/// are the number of variables needed to map Update intents to valid operations.
+///
+/// A valid call of this macro looks like
+/// `gen_impl!(up0, up1)`
+///
+/// This generates the implementation for `PreUpdate<'a, K, (Update, Update)>`
+/// containing the function
+/// `pub fn apply(self) -> Result<Guard<'a, K, (Op, Op)>, Error> { .. }`
+macro_rules! gen_impl {
+    ($($up: ident,)*) => {
+
+        impl UpdatesT for ($(map_to_type!($up, Update),)*) {
+            type ValidatedUpdates = ($(map_to_type!($up, Op),)*);
+
+            fn to_valid(self) -> Result<Self::ValidatedUpdates, Error> {
+                // destructure the tuple using the identifiers
+                let ($($up,)*) = self;
+                // obtain the valid version of each update
+                Ok(($($up.to_valid_op()?,)*))
+            }
+
+
+        }
+
+        impl ValidUpdatesT for ($(map_to_type!($up, Op),)*) {
+
+            fn apply_and_invert<K: EnrKey>(self, enr: &mut Enr<K>) -> Self {
+                // destructure the tuple using the identifiers
+                let ($($up,)*) = self;
+                let mut as_array = [$($up.apply_with_inverse(enr),)*];
+                // apply and reverse the expresions order to get the correct inverse tuple
+                as_array.reverse();
+                as_array.into()
+            }
+
+            fn apply_as_inverse<K: EnrKey>(self, enr: &mut Enr<K>) {
+                // destructure the tuple using the identifiers
+                let ($($up,)*) = self;
+                $($up.irrecoverable_apply(enr);)*
+            }
+        }
+
+    };
+}
+
+/// Calls `gen_impl` for all tuples of size in the range [2; N], where N is the number
+/// of identifies received.
+macro_rules! gen_ntuple_impls {
+    ($up: ident, $($tokens: tt)+) => {
+        gen_impl!($up, $($tokens)*);
+        gen_ntuple_impls!($($tokens)*);
+    };
+    ($up: ident,) => {};
+}
+
+gen_ntuple_impls!(up0, up1, up2, up3, up4, up5, up6,);

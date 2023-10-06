@@ -6,106 +6,35 @@ use crate::{Enr, EnrKey, EnrPublicKey, Key, NodeId, MAX_ENR_SIZE};
 
 mod ops;
 
-use ops::{Op, Update};
+use ops::{Op, Update, UpdatesT, ValidUpdatesT};
 
 /// An update guard over the [`Enr`].
 /// The inverses are set as a generic to allow optimizing for single updates, multiple updates with
 /// a known count of updates and arbitrary updates.
-pub struct Guard<'a, K: EnrKey, I> {
+pub(crate) struct Guard<'a, K: EnrKey, Up: UpdatesT> {
     /// [`Enr`] with update [`Op`]s already applied.
     enr: &'a mut Enr<K>,
     /// Inverses that would need to be applied to the [`Enr`] to restore [`Enr::content`].
     ///
     /// Inverses must be in the order in which they were obtained, so that applying them in
     /// reserved order produces the original content.
-    inverses: I,
+    inverses: Up::ValidatedUpdates,
 }
 
 /// Implementation for a single update
-impl<'a, K: EnrKey> Guard<'a, K, Op> {
+impl<'a, K: EnrKey, Up: UpdatesT> Guard<'a, K, Up> {
     /// Create a new guard verifying the update and applying it to the the [`Enr`].
     /// If validation fails, it's guaranteed that the [`Enr`] has not been changed with
     /// an error returned.
     // NOTE: this is expanded to n-tuples via macros
-    pub fn new(enr: &'a mut Enr<K>, update: Update) -> Result<Self, Error> {
+    pub fn new(enr: &'a mut Enr<K>, updates: Up) -> Result<Self, Error> {
         // validate the update
-        let update = update.to_valid_op()?;
+        let updates = updates.to_valid()?;
         // apply the valid operation to the enr and create the inverse
-        let inverses = update.apply_and_invert(enr);
+        let inverses = updates.apply_and_invert(enr);
         Ok(Self { enr, inverses })
     }
-}
 
-/// Implementation for an arbitrary number of updates.
-impl<'a, K: EnrKey> Guard<'a, K, Vec<Op>> {
-    /// Create a new guard verifying the updates and applying them to the the [`Enr`].
-    /// If validation fails, it's guaranteed that the [`Enr`] has not been changed with
-    /// an error returned.
-    pub fn new(enr: &'a mut Enr<K>, updates: Vec<Update>) -> Result<Self, Error> {
-        // validate all operations before applying any
-        let valid = updates
-            .into_iter()
-            .map(Update::to_valid_op)
-            .collect::<Result<Vec<Op>, Error>>()?;
-        // apply the valid operations to the enr and create a tuple with the inverses in
-        // case they need to be reverted
-        let inverses = valid
-            .into_iter()
-            .map(|update| update.apply_and_invert(enr))
-            .collect();
-        Ok(Self { enr, inverses })
-    }
-}
-
-/* Implementation for tuples*/
-
-/// Map an identifier inside a macro to a type
-macro_rules! map_to_type {
-    ($in: ident, $out: ident) => {
-        $out
-    };
-}
-/// Generates the implementation of PreUpdate::apply to a tuple of 2 or more. The macro arguments
-/// are the number of variables needed to map Update intents to valid operations.
-///
-/// A valid call of this macro looks like
-/// `gen_pre_update_impl!(up0, up1)`
-///
-/// This generates the implementation for `PreUpdate<'a, K, (Update, Update)>`
-/// containing the function
-/// `pub fn apply(self) -> Result<Guard<'a, K, (Op, Op)>, Error> { .. }`
-macro_rules! gen_pre_update_impl {
-    ($($up: ident,)*) => {
-        impl<'a, K: EnrKey> Guard<'a, K, ($(map_to_type!($up, Op),)*)> {
-            /// Verify all updates and apply them to the enr, returning a [`Guard`]. If validation
-            /// of any update fails, it's guaranteed that the [`Enr`] has not been changed.
-            pub fn new(enr: &'a mut Enr<K>, updates: ($(map_to_type!($up, Update),)*)) -> Result<Self, Error> {
-                // destructure the tuple using the identifiers
-                let ($($up,)*) = updates;
-                // reasing to the identifiers the valid version of each update
-                let ($($up,)*) = ($($up.to_valid_op()?,)*);
-                // apply the valid operations to the enr and create a tuple with the inverses in
-                // case they need to be reverted
-                let inverses = ($($up.apply_and_invert(enr),)*);
-                Ok(Self { enr, inverses })
-            }
-        }
-    };
-}
-
-/// Calls `gen_pre_update_impl` for all tuples of size in the range [2; N], where N is the number
-/// of identifies received.
-macro_rules! gen_ntuple_pre_update_impls {
-    ($up: ident, $($tokens: tt)+) => {
-        gen_pre_update_impl!($up, $($tokens)*);
-        gen_ntuple_pre_update_impls!($($tokens)*);
-    };
-    ($up: ident,) => {};
-}
-
-gen_ntuple_pre_update_impls!(up0, up1, up2,);
-
-impl<'a, K: EnrKey, I> Guard<'a, K, I> {
     /// Applies the remaining operations in a valid [`Enr`] update:
     ///
     /// 1. Add the public key matching the signing key to the contents.
@@ -116,7 +45,10 @@ impl<'a, K: EnrKey, I> Guard<'a, K, I> {
     ///
     /// If any of these steps fails, a [`Revert`] object is returned that allows to reset the
     /// [`Enr`] and obtain the error that occurred.
-    pub fn finish(self, signing_key: &K) -> Result<I, Revert<'a, K, I>> {
+    pub fn finish(
+        self,
+        signing_key: &K,
+    ) -> Result<Up::ValidatedUpdates, Revert<'a, K, Up::ValidatedUpdates>> {
         let Guard { enr, inverses } = self;
         let mut revert = RevertOps::new(inverses);
 
@@ -177,7 +109,6 @@ impl<'a, K: EnrKey, I> Guard<'a, K, I> {
     }
 }
 
-
 pub enum Error {
     /// The ENR is too large.
     ExceedsMaxSize,
@@ -193,13 +124,17 @@ pub enum Error {
     InvalidRlpData(rlp::DecoderError),
 }
 
-///
-pub struct Revert<'a, K: EnrKey, I> {
+/// Helper struct that handles recovering the modified [`Enr`] to it's original state.
+pub(crate) struct Revert<'a, K: EnrKey, I: ValidUpdatesT> {
+    /// Dirt [`Enr`] to recover.
     enr: &'a mut Enr<K>,
+    /// Operations to apply to the [`Enr`] to restore to it's original state.
     pending: RevertOps<I>,
+    /// Error that occurred in [`Guard::finish`]
     error: Error,
 }
 
+/// Keeps track of operations that need to be applied to the [`Enr`] to restore it.
 pub struct RevertOps<I> {
     content_inverses: I,
     key: Option<Bytes>,
@@ -215,5 +150,23 @@ impl<I> RevertOps<I> {
             seq: None,
             signature: None,
         }
+    }
+}
+
+impl<'a, K: EnrKey, I: ValidUpdatesT> Revert<'a, K, I> {
+    fn recover(self) -> Error {
+        let Revert {
+            enr,
+            pending:
+                RevertOps {
+                    content_inverses,
+                    key,
+                    seq,
+                    signature,
+                },
+            error,
+        } = self;
+
+        error
     }
 }
