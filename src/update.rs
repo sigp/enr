@@ -1,235 +1,12 @@
 //! Update operations over the [`Enr`].
 
 use bytes::Bytes;
-use rlp::Encodable;
 
 use crate::{Enr, EnrKey, EnrPublicKey, Key, NodeId, MAX_ENR_SIZE};
 
-/// An update operation.
-// NOTE: The most user facing type: this simply states an intent and it's not validated.
-pub enum Update {
-    /// Insert a key and RLP data.
-    Insert {
-        key: Key,
-        content: Bytes,
-        trust_valid_rlp: bool,
-    },
-    /// Remove a key.
-    Remove { key: Key },
-}
+mod ops;
 
-impl Update {
-    /// Create an insert operation that adds an [`Encodable`] object to the given key.
-    pub fn insert(key: impl AsRef<[u8]>, value: &impl Encodable) -> Self {
-        let content = rlp::encode(value).freeze();
-        Update::Insert {
-            key: key.as_ref().to_vec(),
-            content,
-            trust_valid_rlp: true,
-        }
-    }
-
-    /// Create an insert operation where the raw rlp is provided. Due to implementation contrains, this
-    /// only accepts rlp strings, but not lists.
-    pub fn insert_raw(key: impl AsRef<[u8]>, content: Bytes) -> Self {
-        Update::Insert {
-            key: key.as_ref().to_vec(),
-            content,
-            trust_valid_rlp: false,
-        }
-    }
-
-    /// Create a remove operation.
-    pub fn remove(key: impl AsRef<[u8]>) -> Self {
-        Update::Remove {
-            key: key.as_ref().to_vec(),
-        }
-    }
-
-    /// Validate the update operation.
-    fn to_valid_op(self) -> Result<Op, Error> {
-        match self {
-            Update::Insert {
-                key,
-                content,
-                trust_valid_rlp,
-            } => {
-                if !trust_valid_rlp {
-                    // TODO(@divma): this verification only checks that the rlp header is valid, it's unlikely
-                    // we can fully verify in depth the data but at least we coudl verify the payload size
-                    //
-                    // also, this only verifies that this has a  "valid" payload if a rlp string, but the data
-                    // could be a list as well so rejecting this is probably wrong in some cases
-                    //
-                    // rlp sucks
-                    rlp::Rlp::new(content.as_ref())
-                        .data()
-                        .map_err(Error::InvalidRlpData)?;
-                }
-                match key.as_slice() {
-                    b"tcp" | b"tcp6" | b"udp" | b"udp6" => {
-                        if rlp::decode::<u16>(&content).is_err() {
-                            return Err(Error::InvalidReservedKeyData(key));
-                        }
-                    }
-                    b"id" => {
-                        let id_bytes =
-                            rlp::decode::<Vec<u8>>(&content).map_err(Error::InvalidRlpData)?;
-                        if id_bytes != b"v4" {
-                            return Err(Error::UnsupportedIdentityScheme);
-                        }
-                    }
-                    b"ip" => {
-                        let ip4_bytes =
-                            rlp::decode::<Vec<u8>>(&content).map_err(Error::InvalidRlpData)?;
-                        if ip4_bytes.len() != 4 {
-                            return Err(Error::InvalidReservedKeyData(key));
-                        }
-                    }
-                    b"ip6" => {
-                        let ip6_bytes =
-                            rlp::decode::<Vec<u8>>(&content).map_err(Error::InvalidRlpData)?;
-                        if ip6_bytes.len() != 16 {
-                            return Err(Error::InvalidReservedKeyData(key));
-                        }
-                    }
-                    _ => {}
-                };
-
-                Ok(Op::Insert { key, content })
-            }
-            Update::Remove { key } => match key.as_slice() {
-                b"id" => Err(Error::InvalidReservedKeyData(key)),
-                _ => Ok(Op::Remove { key }),
-            },
-        }
-    }
-}
-
-/// A valid update operation over the [`Enr`]. This is the result of validating an [`Update`].
-enum Op {
-    /// Insert a key and RLP data.
-    Insert { key: Key, content: Bytes },
-    /// Remove a key.
-    Remove { key: Key },
-}
-
-impl Op {
-    /// Applies the operation and returns the inverse.
-    fn apply_and_invert<K: EnrKey>(self, enr: &mut Enr<K>) -> Op {
-        match self {
-            Op::Insert { key, content } => match enr.content.insert(key.clone(), content) {
-                Some(content) => Op::Insert { key, content },
-                None => Op::Remove { key },
-            },
-            Op::Remove { key } => match enr.content.remove(&key) {
-                Some(content) => Op::Insert { key, content },
-                None => Op::Remove { key },
-            },
-        }
-    }
-
-    fn apply<K: EnrKey>(self, enr: &mut Enr<K>) {
-        match self {
-            Op::Insert { key, content } => enr.content.insert(key, content),
-            Op::Remove { key } => enr.content.remove(&key),
-        };
-    }
-}
-
-pub enum Error {
-    /// The ENR is too large.
-    ExceedsMaxSize,
-    /// The sequence number is too large.
-    SequenceNumberTooHigh,
-    /// There was an error with signing an ENR record.
-    SigningError,
-    /// The identity scheme is not supported.
-    UnsupportedIdentityScheme,
-    /// Data is valid RLP but the contents do not represent the expected type for the key.
-    InvalidReservedKeyData(Key),
-    /// The entered RLP data is invalid.
-    InvalidRlpData(rlp::DecoderError),
-}
-
-pub struct Revert<'a, K: EnrKey, I> {
-    enr: &'a mut Enr<K>,
-    pending: RevertOps<I>,
-    error: Error,
-}
-
-pub struct RevertOps<I> {
-    content_inverses: I,
-    key: Option<Bytes>,
-    seq: Option<u64>,
-    signature: Option<Vec<u8>>,
-}
-
-impl<I> RevertOps<I> {
-    fn new(content_inverses: I) -> Self {
-        RevertOps {
-            content_inverses,
-            key: None,
-            seq: None,
-            signature: None,
-        }
-    }
-}
-
-/// Struct that batches updates without applying them.
-pub struct PreUpdate<'a, K: EnrKey, U> {
-    /// The enr to which updates will be applied.
-    enr: &'a mut Enr<K>,
-    /// The batched updates, unapplied.
-    updates: U,
-}
-
-impl<'a, K: EnrKey> PreUpdate<'a, K, ()> {
-    /// Create an insert operation that adds an [`Encodable`] object to the given key.
-    pub fn insert(
-        self,
-        key: impl AsRef<[u8]>,
-        value: &impl Encodable,
-    ) -> PreUpdate<'a, K, (Update,)> {
-        let PreUpdate { enr, updates } = self;
-        let () = updates;
-        let content = rlp::encode(value).freeze();
-        let new_update = Update::Insert {
-            key: key.as_ref().to_vec(),
-            content,
-            trust_valid_rlp: true,
-        };
-        let updates = (new_update,);
-        PreUpdate { enr, updates }
-    }
-
-    /// Create an insert operation where the raw rlp is provided. Due to implementation contrains, this
-    /// only accepts rlp strings, but not lists.
-    pub fn insert_raw(self, key: impl AsRef<[u8]>, content: Bytes) -> PreUpdate<'a, K, (Update,)> {
-        let PreUpdate { enr, updates } = self;
-        let () = updates;
-        let new_update = Update::Insert {
-            key: key.as_ref().to_vec(),
-            content,
-            trust_valid_rlp: false,
-        };
-
-        let updates = (new_update,);
-        PreUpdate { enr, updates }
-    }
-
-    /// Create a remove operation.
-    pub fn remove(self, key: impl AsRef<[u8]>) -> PreUpdate<'a, K, (Update,)> {
-        let PreUpdate { enr, updates } = self;
-        let () = updates;
-        let new_update = Update::Remove {
-            key: key.as_ref().to_vec(),
-        };
-
-        let updates = (new_update,);
-        PreUpdate { enr, updates }
-    }
-}
+use ops::{Op, Update};
 
 /// An update guard over the [`Enr`].
 /// The inverses are set as a generic to allow optimizing for single updates, multiple updates with
@@ -244,62 +21,101 @@ pub struct Guard<'a, K: EnrKey, I> {
     inverses: I,
 }
 
+/// Implementation for a single update
 impl<'a, K: EnrKey> Guard<'a, K, Op> {
-    pub fn single_update(enr: &'a mut Enr<K>, update: Update) -> Result<Self, Error> {
-        let op = update.to_valid_op()?;
-        let inverse = op.apply_and_invert(enr);
-        Ok(Guard {
-            enr,
-            inverses: inverse,
-        })
+    /// Create a new guard verifying the update and applying it to the the [`Enr`].
+    /// If validation fails, it's guaranteed that the [`Enr`] has not been changed with
+    /// an error returned.
+    // NOTE: this is expanded to n-tuples via macros
+    pub fn new(enr: &'a mut Enr<K>, update: Update) -> Result<Self, Error> {
+        // validate the update
+        let update = update.to_valid_op()?;
+        // apply the valid operation to the enr and create the inverse
+        let inverses = update.apply_and_invert(enr);
+        Ok(Self { enr, inverses })
     }
 }
 
-impl<'a, K: EnrKey> Guard<'a, K, (Op, Op)> {
-    /// Two updates.
-    /// NOTE: doing this because it's the one case we actually need. To be very general we could:
-    /// - use a macro to generate the n-tuple implementations
-    /// - add a const N [Op, N] implementation (here we pay the price of the pointer)
-    pub fn tuple_update(enr: &'a mut Enr<K>, first: Update, second: Update) -> Result<Self, Error> {
-        let op1 = first.to_valid_op()?;
-        let op2 = second.to_valid_op()?;
-        let inverse1 = op1.apply_and_invert(enr);
-        let inverse2 = op2.apply_and_invert(enr);
-        Ok(Guard {
-            enr,
-            inverses: (inverse1, inverse2),
-        })
-    }
-}
-
-/// Allows batch updating and [`Enr`].
-struct BatchUpdate<'a, K: EnrKey> {
-    updates: Vec<Update>,
-    enr: &'a mut Enr<K>,
-}
-
+/// Implementation for an arbitrary number of updates.
 impl<'a, K: EnrKey> Guard<'a, K, Vec<Op>> {
-    /// Arbitrary number of updates. Pays the cost of a vector.
-    pub fn new(enr: &'a mut Enr<K>) -> Self {
-        Ok(Guard {
-            enr,
-            inverses: Vec::default(),
-        })
+    /// Create a new guard verifying the updates and applying them to the the [`Enr`].
+    /// If validation fails, it's guaranteed that the [`Enr`] has not been changed with
+    /// an error returned.
+    pub fn new(enr: &'a mut Enr<K>, updates: Vec<Update>) -> Result<Self, Error> {
+        // validate all operations before applying any
+        let valid = updates
+            .into_iter()
+            .map(Update::to_valid_op)
+            .collect::<Result<Vec<Op>, Error>>()?;
+        // apply the valid operations to the enr and create a tuple with the inverses in
+        // case they need to be reverted
+        let inverses = valid
+            .into_iter()
+            .map(|update| update.apply_and_invert(enr))
+            .collect();
+        Ok(Self { enr, inverses })
     }
-
-    // pub fn update(&mut self, update:)
 }
 
-/*
- * let (prev_val0, prev_val1, removed_val) = enr
- *   .update_guard()
- *   .insert(k0, v0)
- *   .insert(k1, v1)
- *   .remove(k2)
- *   .finish()?
- * */
+/* Implementation for tuples*/
+
+/// Map an identifier inside a macro to a type
+macro_rules! map_to_type {
+    ($in: ident, $out: ident) => {
+        $out
+    };
+}
+/// Generates the implementation of PreUpdate::apply to a tuple of 2 or more. The macro arguments
+/// are the number of variables needed to map Update intents to valid operations.
+///
+/// A valid call of this macro looks like
+/// `gen_pre_update_impl!(up0, up1)`
+///
+/// This generates the implementation for `PreUpdate<'a, K, (Update, Update)>`
+/// containing the function
+/// `pub fn apply(self) -> Result<Guard<'a, K, (Op, Op)>, Error> { .. }`
+macro_rules! gen_pre_update_impl {
+    ($($up: ident,)*) => {
+        impl<'a, K: EnrKey> Guard<'a, K, ($(map_to_type!($up, Op),)*)> {
+            /// Verify all updates and apply them to the enr, returning a [`Guard`]. If validation
+            /// of any update fails, it's guaranteed that the [`Enr`] has not been changed.
+            pub fn new(enr: &'a mut Enr<K>, updates: ($(map_to_type!($up, Update),)*)) -> Result<Self, Error> {
+                // destructure the tuple using the identifiers
+                let ($($up,)*) = updates;
+                // reasing to the identifiers the valid version of each update
+                let ($($up,)*) = ($($up.to_valid_op()?,)*);
+                // apply the valid operations to the enr and create a tuple with the inverses in
+                // case they need to be reverted
+                let inverses = ($($up.apply_and_invert(enr),)*);
+                Ok(Self { enr, inverses })
+            }
+        }
+    };
+}
+
+/// Calls `gen_pre_update_impl` for all tuples of size in the range [2; N], where N is the number
+/// of identifies received.
+macro_rules! gen_ntuple_pre_update_impls {
+    ($up: ident, $($tokens: tt)+) => {
+        gen_pre_update_impl!($up, $($tokens)*);
+        gen_ntuple_pre_update_impls!($($tokens)*);
+    };
+    ($up: ident,) => {};
+}
+
+gen_ntuple_pre_update_impls!(up0, up1, up2,);
 
 impl<'a, K: EnrKey, I> Guard<'a, K, I> {
+    /// Applies the remaining operations in a valid [`Enr`] update:
+    ///
+    /// 1. Add the public key matching the signing key to the contents.
+    /// 2. Update the sequence number.
+    /// 3. Sign the [`Enr`].
+    /// 4. Verify that the encoded [`Enr`] is within spec lengths.
+    /// 5. Update the cache'd node id
+    ///
+    /// If any of these steps fails, a [`Revert`] object is returned that allows to reset the
+    /// [`Enr`] and obtain the error that occurred.
     pub fn finish(self, signing_key: &K) -> Result<I, Revert<'a, K, I>> {
         let Guard { enr, inverses } = self;
         let mut revert = RevertOps::new(inverses);
@@ -337,7 +153,7 @@ impl<'a, K: EnrKey, I> Guard<'a, K, I> {
             }
         };
 
-        // the size of the node id is fixed, and its encded size depends exclusively on the data
+        // the size of the node id is fixed, and its encoded size depends exclusively on the data
         // size, so we first check the size and then update the node id. This allows us to not need
         // to track the previous node id in case of failure since this is the last step
 
@@ -358,5 +174,46 @@ impl<'a, K: EnrKey, I> Guard<'a, K, I> {
             content_inverses, ..
         } = revert;
         Ok(content_inverses)
+    }
+}
+
+
+pub enum Error {
+    /// The ENR is too large.
+    ExceedsMaxSize,
+    /// The sequence number is too large.
+    SequenceNumberTooHigh,
+    /// There was an error with signing an ENR record.
+    SigningError,
+    /// The identity scheme is not supported.
+    UnsupportedIdentityScheme,
+    /// Data is valid RLP but the contents do not represent the expected type for the key.
+    InvalidReservedKeyData(Key),
+    /// The entered RLP data is invalid.
+    InvalidRlpData(rlp::DecoderError),
+}
+
+///
+pub struct Revert<'a, K: EnrKey, I> {
+    enr: &'a mut Enr<K>,
+    pending: RevertOps<I>,
+    error: Error,
+}
+
+pub struct RevertOps<I> {
+    content_inverses: I,
+    key: Option<Bytes>,
+    seq: Option<u64>,
+    signature: Option<Vec<u8>>,
+}
+
+impl<I> RevertOps<I> {
+    fn new(content_inverses: I) -> Self {
+        RevertOps {
+            content_inverses,
+            key: None,
+            seq: None,
+            signature: None,
+        }
     }
 }
