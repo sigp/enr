@@ -1761,7 +1761,6 @@ mod tests {
     /// Tests [`Enr::set_seq`] in both a failure and success case.
     #[test]
     fn test_set_seq() {
-        
         // 300 byte ENR (max size)
         const LARGE_ENR : &str = 
             concat!("enr:-QEpuEDaLyrPP4gxBI9YL7QE9U1tZig_Nt8rue8bRIuYv_IMziFc8OEt3LQMwkwt6da-Z0Y8BaqkDalZbBq647UtV2ei",
