@@ -169,7 +169,7 @@
 //! [`insert`]: struct.Enr.html#method.insert
 //! [`get`]: struct.Enr.html#method.get
 
-#![warn(clippy::all, clippy::pedantic, clippy::nursery)]
+#![warn(clippy::all)]
 #![allow(
     clippy::map_err_ignore,
     clippy::missing_errors_doc,
