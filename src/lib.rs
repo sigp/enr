@@ -1437,7 +1437,7 @@ mod tests {
             update_result[0].1,
             Some(rlp::encode(&tcp.to_be_bytes().to_vec()).freeze())
         );
-        assert_eq!(update_result[0].1, None);
+        assert_eq!(update_result[1].1, None);
 
         assert_eq!(enr.tcp4(), None);
         assert_eq!(enr.get("topics"), Some(topics));
@@ -1502,7 +1502,7 @@ mod tests {
 
             let res = enr.insert(b"tcp", &tcp.to_be_bytes().as_ref(), &key);
             if u8::try_from(tcp).is_ok() {
-                assert_eq!(res.unwrap_err().to_string(), "invalid rlp data");
+                assert_eq!(res.unwrap_err(), Error::InvalidReservedKeyData("tcp"));
             } else {
                 res.unwrap(); // integers above 255 are encoded correctly
                 assert_tcp4(&enr, tcp);
@@ -1523,7 +1523,7 @@ mod tests {
             ];
             let res = enr.remove_insert(updates, &key);
             if u8::try_from(tcp).is_ok() {
-                assert_eq!(res.unwrap_err().to_string(), "invalid rlp data");
+                assert_eq!(res.unwrap_err(), Error::InvalidReservedKeyData("tcp"));
             } else {
                 res.unwrap(); // integers above 255 are encoded correctly
                 assert_tcp4(&enr, tcp);

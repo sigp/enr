@@ -68,9 +68,24 @@ impl Update {
                         .map_err(Error::InvalidRlpData)?;
                 }
                 match key.as_slice() {
-                    b"tcp" | b"tcp6" | b"udp" | b"udp6" => {
+                    b"tcp" => {
                         if rlp::decode::<u16>(&content).is_err() {
-                            return Err(Error::InvalidReservedKeyData("ugh fixmehh"));
+                            return Err(Error::InvalidReservedKeyData("tcp"));
+                        }
+                    }
+                    b"tcp6" => {
+                        if rlp::decode::<u16>(&content).is_err() {
+                            return Err(Error::InvalidReservedKeyData("tcp6"));
+                        }
+                    }
+                    b"udp" => {
+                        if rlp::decode::<u16>(&content).is_err() {
+                            return Err(Error::InvalidReservedKeyData("udp"));
+                        }
+                    }
+                    b"udp6" => {
+                        if rlp::decode::<u16>(&content).is_err() {
+                            return Err(Error::InvalidReservedKeyData("udp6"));
                         }
                     }
                     b"id" => {
@@ -224,12 +239,13 @@ impl ValidUpdatesT for Vec<Op> {
     fn apply_and_invert<K: EnrKey>(self, enr: &mut Enr<K>) -> Self {
         self.into_iter()
             .map(|op| op.apply_with_inverse(enr))
-            .rev()
             .collect()
     }
 
     fn apply_as_inverse<K: EnrKey>(self, enr: &mut Enr<K>) {
-        self.into_iter().for_each(|op| op.irrecoverable_apply(enr))
+        self.into_iter()
+            .rev()
+            .for_each(|op| op.irrecoverable_apply(enr))
     }
 
     fn inverse_to_output(self) -> Self::Output {
@@ -291,15 +307,17 @@ macro_rules! gen_impl {
             fn apply_and_invert<K: EnrKey>(self, enr: &mut Enr<K>) -> Self {
                 // destructure the tuple using the identifiers
                 let ($($up,)*) = self;
-                let mut as_array = [$($up.apply_with_inverse(enr),)*];
-                // apply and reverse the expresions order to get the correct inverse tuple
-                as_array.reverse();
-                as_array.into()
+                ($($up.apply_with_inverse(enr),)*)
             }
 
             fn apply_as_inverse<K: EnrKey>(self, enr: &mut Enr<K>) {
                 // destructure the tuple using the identifiers
                 let ($($up,)*) = self;
+                // need to reverse it to apply it as inverse
+                let mut as_array = [$($up,)*];
+                // apply and reverse the expresions order to get the correct inverse tuple
+                as_array.reverse();
+                let [$($up,)*] = as_array;
                 $($up.irrecoverable_apply(enr);)*
             }
 
