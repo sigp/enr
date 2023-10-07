@@ -68,7 +68,7 @@ impl Update {
                         .map_err(Error::InvalidRlpData)?;
                 }
                 match key.as_slice() {
-                    k @ (b"tcp" | b"tcp6" | b"udp" | b"udp6") => {
+                    b"tcp" | b"tcp6" | b"udp" | b"udp6" => {
                         if rlp::decode::<u16>(&content).is_err() {
                             return Err(Error::InvalidReservedKeyData("ugh fixmehh"));
                         }
@@ -108,7 +108,7 @@ impl Update {
 }
 
 /// A valid update operation over the [`Enr`]. This is the result of validating an [`Update`].
-pub(crate) enum Op {
+pub enum Op {
     /// Insert a key and RLP data.
     Insert { key: Key, content: Bytes },
     /// Remove a key.
@@ -143,12 +143,17 @@ impl Op {
  * Helper traits to expand the definition of Update to tuples of Updates and vectors
  */
 
-pub(crate) trait UpdatesT {
+mod sealed {
+    //! makes the traits Sealed so that it can't be implemented outside this crate
+    pub trait Sealed {}
+}
+
+pub trait UpdatesT: sealed::Sealed {
     type ValidatedUpdates: ValidUpdatesT;
     fn to_valid(self) -> Result<Self::ValidatedUpdates, Error>;
 }
 
-pub(crate) trait ValidUpdatesT {
+pub trait ValidUpdatesT: sealed::Sealed {
     fn apply_and_invert<K: EnrKey>(self, enr: &mut Enr<K>) -> Self;
     fn apply_as_inverse<K: EnrKey>(self, enr: &mut Enr<K>);
 }
@@ -157,6 +162,9 @@ pub(crate) trait ValidUpdatesT {
  * implementation for a single update
  */
 
+impl sealed::Sealed for Update {}
+impl sealed::Sealed for Op {}
+
 impl UpdatesT for Update {
     type ValidatedUpdates = Op;
 
@@ -164,6 +172,7 @@ impl UpdatesT for Update {
         self.to_valid_op()
     }
 }
+
 impl ValidUpdatesT for Op {
     fn apply_and_invert<K: EnrKey>(self, enr: &mut Enr<K>) -> Self {
         self.apply_with_inverse(enr)
@@ -177,6 +186,10 @@ impl ValidUpdatesT for Op {
 /*
  * implementation for an arbitrary number of updates
  */
+
+impl sealed::Sealed for Vec<Update> {}
+impl sealed::Sealed for Vec<Op> {}
+
 impl UpdatesT for Vec<Update> {
     type ValidatedUpdates = Vec<Op>;
 
@@ -220,6 +233,9 @@ macro_rules! map_to_type {
 /// `pub fn apply(self) -> Result<Guard<'a, K, (Op, Op)>, Error> { .. }`
 macro_rules! gen_impl {
     ($($up: ident,)*) => {
+
+        impl sealed::Sealed for ($(map_to_type!($up, Update),)*)  {}
+        impl sealed::Sealed for ($(map_to_type!($up, Op),)*)  {}
 
         impl UpdatesT for ($(map_to_type!($up, Update),)*) {
             type ValidatedUpdates = ($(map_to_type!($up, Op),)*);

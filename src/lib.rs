@@ -444,6 +444,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Allows setting the sequence number to an arbitrary value.
     pub fn set_seq(&mut self, seq: u64, key: &K) -> Result<(), Error> {
+        // TODO(@divma): signing errors make this corrupt
         self.seq = seq;
 
         // sign the record
@@ -472,6 +473,11 @@ impl<K: EnrKey> Enr<K> {
     ) -> Result<Option<Bytes>, Error> {
         // TODO self.update_guard().insert().finish()
         self.insert_raw_rlp(key, rlp::encode(value).freeze(), enr_key)
+    }
+
+    pub fn update<Updates: update::UpdatesT>(&mut self, updates: Updates) -> Result<(), Error> {
+        update::Guard::new(self, updates)?;
+        Ok(())
     }
 
     /// Adds or modifies a key/value to the ENR record. A `EnrKey` is required to re-sign the record once

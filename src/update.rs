@@ -7,7 +7,7 @@ use crate::{error::Error, Enr, EnrKey, EnrPublicKey, NodeId, MAX_ENR_SIZE};
 mod ops;
 
 pub use ops::Update;
-use ops::{UpdatesT, ValidUpdatesT};
+pub(crate) use ops::{UpdatesT, ValidUpdatesT};
 
 /// An update guard over the [`Enr`].
 /// The inverses are set as a generic to allow optimizing for single updates, multiple updates with
