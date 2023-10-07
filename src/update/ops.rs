@@ -68,9 +68,9 @@ impl Update {
                         .map_err(Error::InvalidRlpData)?;
                 }
                 match key.as_slice() {
-                    b"tcp" | b"tcp6" | b"udp" | b"udp6" => {
+                    k @ (b"tcp" | b"tcp6" | b"udp" | b"udp6") => {
                         if rlp::decode::<u16>(&content).is_err() {
-                            return Err(Error::InvalidReservedKeyData(key));
+                            return Err(Error::InvalidReservedKeyData("ugh fixmehh"));
                         }
                     }
                     b"id" => {
@@ -84,14 +84,14 @@ impl Update {
                         let ip4_bytes =
                             rlp::decode::<Vec<u8>>(&content).map_err(Error::InvalidRlpData)?;
                         if ip4_bytes.len() != 4 {
-                            return Err(Error::InvalidReservedKeyData(key));
+                            return Err(Error::InvalidReservedKeyData("ip"));
                         }
                     }
                     b"ip6" => {
                         let ip6_bytes =
                             rlp::decode::<Vec<u8>>(&content).map_err(Error::InvalidRlpData)?;
                         if ip6_bytes.len() != 16 {
-                            return Err(Error::InvalidReservedKeyData(key));
+                            return Err(Error::InvalidReservedKeyData("ip6"));
                         }
                     }
                     _ => {}
@@ -100,7 +100,7 @@ impl Update {
                 Ok(Op::Insert { key, content })
             }
             Update::Remove { key } => match key.as_slice() {
-                b"id" => Err(Error::InvalidReservedKeyData(key)),
+                b"id" => Err(Error::InvalidReservedKeyData("id")),
                 _ => Ok(Op::Remove { key }),
             },
         }
@@ -108,7 +108,7 @@ impl Update {
 }
 
 /// A valid update operation over the [`Enr`]. This is the result of validating an [`Update`].
-pub(super) enum Op {
+pub(crate) enum Op {
     /// Insert a key and RLP data.
     Insert { key: Key, content: Bytes },
     /// Remove a key.

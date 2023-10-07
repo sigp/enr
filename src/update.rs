@@ -2,7 +2,7 @@
 
 use bytes::Bytes;
 
-use crate::{Enr, EnrKey, EnrPublicKey, NodeId, MAX_ENR_SIZE};
+use crate::{error::Error, Enr, EnrKey, EnrPublicKey, NodeId, MAX_ENR_SIZE};
 
 mod ops;
 

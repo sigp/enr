@@ -194,7 +194,7 @@ use std::{
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 #[cfg(feature = "serde")]
-use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
 use sha3::{Digest, Keccak256};
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
@@ -202,7 +202,7 @@ use std::{
 };
 
 pub use builder::EnrBuilder;
-pub use error::EnrError;
+pub use error::Error;
 
 #[cfg(feature = "k256")]
 pub use keys::k256;
@@ -443,7 +443,7 @@ impl<K: EnrKey> Enr<K> {
     // Setters //
 
     /// Allows setting the sequence number to an arbitrary value.
-    pub fn set_seq(&mut self, seq: u64, key: &K) -> Result<(), EnrError> {
+    pub fn set_seq(&mut self, seq: u64, key: &K) -> Result<(), Error> {
         self.seq = seq;
 
         // sign the record
@@ -454,7 +454,7 @@ impl<K: EnrKey> Enr<K> {
 
         // check the size of the record
         if self.size() > MAX_ENR_SIZE {
-            return Err(EnrError::ExceedsMaxSize);
+            return Err(Error::ExceedsMaxSize);
         }
 
         Ok(())
@@ -469,7 +469,7 @@ impl<K: EnrKey> Enr<K> {
         key: impl AsRef<[u8]>,
         value: &T,
         enr_key: &K,
-    ) -> Result<Option<Bytes>, EnrError> {
+    ) -> Result<Option<Bytes>, Error> {
         // TODO self.update_guard().insert().finish()
         self.insert_raw_rlp(key, rlp::encode(value).freeze(), enr_key)
     }
@@ -483,7 +483,7 @@ impl<K: EnrKey> Enr<K> {
         key: impl AsRef<[u8]>,
         value: Bytes,
         enr_key: &K,
-    ) -> Result<Option<Bytes>, EnrError> {
+    ) -> Result<Option<Bytes>, Error> {
         // TODO self.update_guard().insert_raw().finish()
         check_spec_reserved_keys(key.as_ref(), &value)?;
 
@@ -510,13 +510,13 @@ impl<K: EnrKey> Enr<K> {
             } else {
                 self.content.remove(key.as_ref());
             }
-            return Err(EnrError::ExceedsMaxSize);
+            return Err(Error::ExceedsMaxSize);
         }
         // increment the sequence number
         self.seq = self
             .seq
             .checked_add(1)
-            .ok_or(EnrError::SequenceNumberTooHigh)?;
+            .ok_or(Error::SequenceNumberTooHigh)?;
 
         // sign the record
         self.sign(enr_key)?;
@@ -526,14 +526,14 @@ impl<K: EnrKey> Enr<K> {
 
         if self.size() > MAX_ENR_SIZE {
             // in case the signature size changes, inform the user the size has exceeded the maximum
-            return Err(EnrError::ExceedsMaxSize);
+            return Err(Error::ExceedsMaxSize);
         }
 
         Ok(previous_value)
     }
 
     /// Sets the `ip` field of the ENR. Returns any pre-existing IP address in the record.
-    pub fn set_ip(&mut self, ip: IpAddr, key: &K) -> Result<Option<IpAddr>, EnrError> {
+    pub fn set_ip(&mut self, ip: IpAddr, key: &K) -> Result<Option<IpAddr>, Error> {
         // TODO: self.update_guard().insert().finish()
         match ip {
             IpAddr::V4(addr) => {
@@ -562,7 +562,7 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Sets the `udp` field of the ENR. Returns any pre-existing UDP port in the record.
-    pub fn set_udp4(&mut self, udp: u16, key: &K) -> Result<Option<u16>, EnrError> {
+    pub fn set_udp4(&mut self, udp: u16, key: &K) -> Result<Option<u16>, Error> {
         // TODO: self.update_guard().insert().finish()
         if let Some(udp_bytes) = self.insert("udp", &udp, key)? {
             return Ok(rlp::decode(&udp_bytes).ok());
@@ -571,7 +571,7 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Sets the `udp6` field of the ENR. Returns any pre-existing UDP port in the record.
-    pub fn set_udp6(&mut self, udp: u16, key: &K) -> Result<Option<u16>, EnrError> {
+    pub fn set_udp6(&mut self, udp: u16, key: &K) -> Result<Option<u16>, Error> {
         // TODO: self.update_guard().insert().finish()
         if let Some(udp_bytes) = self.insert("udp6", &udp, key)? {
             return Ok(rlp::decode(&udp_bytes).ok());
@@ -580,7 +580,7 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Sets the `tcp` field of the ENR. Returns any pre-existing tcp port in the record.
-    pub fn set_tcp4(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, EnrError> {
+    pub fn set_tcp4(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, Error> {
         // TODO: self.update_guard().insert().finish()
         if let Some(tcp_bytes) = self.insert("tcp", &tcp, key)? {
             return Ok(rlp::decode(&tcp_bytes).ok());
@@ -589,7 +589,7 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Sets the `tcp6` field of the ENR. Returns any pre-existing tcp6 port in the record.
-    pub fn set_tcp6(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, EnrError> {
+    pub fn set_tcp6(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, Error> {
         // TODO: self.update_guard().insert().finish()
         if let Some(tcp_bytes) = self.insert("tcp6", &tcp, key)? {
             return Ok(rlp::decode(&tcp_bytes).ok());
@@ -598,17 +598,17 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Sets the IP and UDP port in a single update with a single increment in sequence number.
-    pub fn set_udp_socket(&mut self, socket: SocketAddr, key: &K) -> Result<(), EnrError> {
+    pub fn set_udp_socket(&mut self, socket: SocketAddr, key: &K) -> Result<(), Error> {
         self.set_socket(socket, key, false)
     }
 
     /// Sets the IP and TCP port in a single update with a single increment in sequence number.
-    pub fn set_tcp_socket(&mut self, socket: SocketAddr, key: &K) -> Result<(), EnrError> {
+    pub fn set_tcp_socket(&mut self, socket: SocketAddr, key: &K) -> Result<(), Error> {
         self.set_socket(socket, key, true)
     }
 
     /// Helper function for `set_tcp_socket()` and `set_udp_socket`.
-    fn set_socket(&mut self, socket: SocketAddr, key: &K, is_tcp: bool) -> Result<(), EnrError> {
+    fn set_socket(&mut self, socket: SocketAddr, key: &K, is_tcp: bool) -> Result<(), Error> {
         // TODO self.update_guard().insert(ip).insert(port).finish()
         let (port_string, port_v6_string): (Key, Key) = if is_tcp {
             ("tcp".into(), "tcp6".into())
@@ -677,14 +677,14 @@ impl<K: EnrKey> Enr<K> {
                     }
                 }
             }
-            return Err(EnrError::ExceedsMaxSize);
+            return Err(Error::ExceedsMaxSize);
         }
 
         // increment the sequence number
         self.seq = self
             .seq
             .checked_add(1)
-            .ok_or(EnrError::SequenceNumberTooHigh)?;
+            .ok_or(Error::SequenceNumberTooHigh)?;
 
         // sign the record
         self.sign(key)?;
@@ -706,7 +706,7 @@ impl<K: EnrKey> Enr<K> {
         remove_keys: impl Iterator<Item = impl AsRef<[u8]>>,
         insert_key_values: impl Iterator<Item = (impl AsRef<[u8]>, &'a [u8])>,
         enr_key: &K,
-    ) -> Result<(PreviousRlpEncodedValues, PreviousRlpEncodedValues), EnrError> {
+    ) -> Result<(PreviousRlpEncodedValues, PreviousRlpEncodedValues), Error> {
         let enr_backup = self.clone();
 
         let mut removed = Vec::new();
@@ -726,13 +726,13 @@ impl<K: EnrKey> Enr<K> {
             // currently only support "v4" identity schemes
             if key.as_ref() == b"id" && value != b"v4" {
                 *self = enr_backup;
-                return Err(EnrError::UnsupportedIdentityScheme);
+                return Err(Error::UnsupportedIdentityScheme);
             }
 
             let value = rlp::encode(&(value)).freeze();
             // Prevent inserting invalid RLP integers
             if is_keyof_u16(key.as_ref()) {
-                rlp::decode::<u16>(&value).map_err(EnrError::InvalidRlpData)?;
+                rlp::decode::<u16>(&value).map_err(Error::InvalidRlpData)?;
             }
 
             inserted.push(self.content.insert(key.as_ref().to_vec(), value));
@@ -742,7 +742,7 @@ impl<K: EnrKey> Enr<K> {
         self.seq = self
             .seq
             .checked_add(1)
-            .ok_or(EnrError::SequenceNumberTooHigh)?;
+            .ok_or(Error::SequenceNumberTooHigh)?;
 
         // sign the record
         self.sign(enr_key)?;
@@ -754,14 +754,14 @@ impl<K: EnrKey> Enr<K> {
             // in case the signature size changes, inform the user the size has exceeded the
             // maximum
             *self = enr_backup;
-            return Err(EnrError::ExceedsMaxSize);
+            return Err(Error::ExceedsMaxSize);
         }
 
         Ok((removed, inserted))
     }
 
     /// Sets a new public key for the record.
-    pub fn set_public_key(&mut self, public_key: &K::PublicKey, key: &K) -> Result<(), EnrError> {
+    pub fn set_public_key(&mut self, public_key: &K::PublicKey, key: &K) -> Result<(), Error> {
         self.insert(&public_key.enr_key(), &public_key.encode().as_ref(), key)
             .map(|_| {})
     }
@@ -804,18 +804,18 @@ impl<K: EnrKey> Enr<K> {
         stream.out()
     }
 
-    fn compute_signature(&self, key: &K) -> Result<Vec<u8>, EnrError> {
+    fn compute_signature(&self, key: &K) -> Result<Vec<u8>, Error> {
         match self.id() {
             Some(ref id) if id == "v4" => key
                 .sign_v4(&self.rlp_content())
-                .map_err(|_| EnrError::SigningError),
+                .map_err(|_| Error::SigningError),
             // other identity schemes are unsupported
-            _ => return Err(EnrError::UnsupportedIdentityScheme),
+            _ => return Err(Error::UnsupportedIdentityScheme),
         }
     }
 
     /// Signs the ENR record based on the identity scheme. Currently only "v4" is supported.
-    fn sign(&mut self, key: &K) -> Result<(), EnrError> {
+    fn sign(&mut self, key: &K) -> Result<(), Error> {
         self.signature = self.compute_signature(key)?;
         Ok(())
     }
@@ -1061,31 +1061,31 @@ const fn is_keyof_u16(key: &[u8]) -> bool {
     matches!(key, b"tcp" | b"tcp6" | b"udp" | b"udp6")
 }
 
-fn check_spec_reserved_keys(key: &[u8], value: &[u8]) -> Result<(), EnrError> {
+fn check_spec_reserved_keys(key: &[u8], value: &[u8]) -> Result<(), Error> {
     match key {
         b"tcp" | b"tcp6" | b"udp" | b"udp6" => {
-            rlp::decode::<u16>(value).map_err(EnrError::InvalidRlpData)?;
+            rlp::decode::<u16>(value).map_err(Error::InvalidRlpData)?;
         }
         b"id" => {
-            let id_bytes = rlp::decode::<Vec<u8>>(value).map_err(EnrError::InvalidRlpData)?;
+            let id_bytes = rlp::decode::<Vec<u8>>(value).map_err(Error::InvalidRlpData)?;
             if id_bytes != b"v4" {
-                return Err(EnrError::UnsupportedIdentityScheme);
+                return Err(Error::UnsupportedIdentityScheme);
             }
         }
         b"ip" => {
-            let ip4_bytes = rlp::decode::<Vec<u8>>(value).map_err(EnrError::InvalidRlpData)?;
+            let ip4_bytes = rlp::decode::<Vec<u8>>(value).map_err(Error::InvalidRlpData)?;
             if ip4_bytes.len() != 4 {
-                return Err(EnrError::InvalidReservedKeyData("ip"));
+                return Err(Error::InvalidReservedKeyData("ip"));
             }
         }
         b"ip6" => {
-            let ip6_bytes = rlp::decode::<Vec<u8>>(value).map_err(EnrError::InvalidRlpData)?;
+            let ip6_bytes = rlp::decode::<Vec<u8>>(value).map_err(Error::InvalidRlpData)?;
             if ip6_bytes.len() != 16 {
-                return Err(EnrError::InvalidReservedKeyData("ip6"));
+                return Err(Error::InvalidReservedKeyData("ip6"));
             }
         }
         b"secp256k1" => {
-            rlp::decode::<Enr<k256::ecdsa::SigningKey>>(value).map_err(EnrError::InvalidRlpData)?;
+            rlp::decode::<Enr<k256::ecdsa::SigningKey>>(value).map_err(Error::InvalidRlpData)?;
         }
         _ => return Ok(()),
     };

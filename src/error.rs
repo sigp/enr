@@ -1,11 +1,10 @@
 //! The error type emitted for various ENR operations.
 
-use std::error::Error;
 use std::fmt;
 
 #[derive(Clone, Debug)]
 /// An error type for handling various ENR operations.
-pub enum EnrError {
+pub enum Error {
     /// The ENR is too large.
     ExceedsMaxSize,
     /// The sequence number is too large.
@@ -20,7 +19,7 @@ pub enum EnrError {
     InvalidRlpData(rlp::DecoderError),
 }
 
-impl fmt::Display for EnrError {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::ExceedsMaxSize => write!(f, "enr exceeds max size"),
@@ -33,4 +32,4 @@ impl fmt::Display for EnrError {
     }
 }
 
-impl Error for EnrError {}
+impl std::error::Error for Error {}
