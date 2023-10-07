@@ -8,7 +8,7 @@ use std::{
 };
 
 /// The base builder for generating ENR records with arbitrary signing algorithms.
-pub struct EnrBuilder<K: EnrKey> {
+pub struct Builder<K: EnrKey> {
     /// The identity scheme used to build the ENR record.
     id: String,
 
@@ -23,13 +23,23 @@ pub struct EnrBuilder<K: EnrKey> {
     phantom: PhantomData<K>,
 }
 
-impl<K: EnrKey> EnrBuilder<K> {
-    /// Constructs a minimal `EnrBuilder` providing only a sequence number.
+impl<K: EnrKey> Builder<K> {
+    /// Constructs a minimal [`Builder`].
     /// Currently only supports the id v4 scheme and therefore disallows creation of any other
     /// scheme.
     pub fn new(id: impl Into<String>) -> Self {
         Self {
             id: id.into(),
+            seq: 1,
+            content: BTreeMap::new(),
+            phantom: PhantomData,
+        }
+    }
+
+    /// Constructs a minimal [`Builder`] for the v4 identity scheme.
+    pub fn new_v4() -> Self {
+        Self {
+            id: String::from("v4"),
             seq: 1,
             content: BTreeMap::new(),
             phantom: PhantomData,
@@ -137,7 +147,7 @@ impl<K: EnrKey> EnrBuilder<K> {
         self.add_value(key.enr_key(), &key.encode().as_ref());
     }
 
-    /// Constructs an ENR from the `EnrBuilder`.
+    /// Constructs an ENR from the [`Builder`].
     ///
     /// # Errors
     /// Fails if the identity scheme is not supported, or the record size exceeds `MAX_ENR_SIZE`.
