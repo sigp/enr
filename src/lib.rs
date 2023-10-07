@@ -259,15 +259,6 @@ impl<K: EnrKey> Enr<K> {
         self.seq
     }
 
-    /// Create a v4 enr builder.
-    pub fn v4_builder() -> EnrBuilder<K> {
-        EnrBuilder::new_v4()
-    }
-
-    pub fn empty_v4(signing_key: &K) -> Result<Self, Error> {
-        Self::v4_builder().build(signing_key)
-    }
-
     /// Reads a custom key from the record if it exists, decoded as data.
     #[allow(clippy::missing_panics_doc)]
     pub fn get(&self, key: impl AsRef<[u8]>) -> Option<&[u8]> {
@@ -1265,6 +1256,10 @@ mod tests {
             builder.build(&key).unwrap()
         };
 
+        assert_eq!(enr.id(), Some("v4".into()));
+        assert_eq!(enr.tcp4(), Some(tcp));
+        assert_eq!(enr.public_key(), key.public());
+        assert_eq!(enr.ip4(), Some(ip));
         let encoded_enr = rlp::encode(&enr);
 
         let decoded_enr = rlp::decode::<Enr<k256::ecdsa::SigningKey>>(&encoded_enr).unwrap();

@@ -19,14 +19,15 @@ pub struct EnrBuilder<K: EnrKey> {
 
 impl<K: EnrKey> EnrBuilder<K> {
     /// Constructs a minimal `EnrBuilder` providing only a sequence number.
-    // TODO: fix docs
-    pub fn new_v4() -> Self {
-        let v4_id = rlp::encode(&b"v4".as_ref()).freeze();
+    /// Currently only supports the id v4 scheme and therefore disallows creation of any other
+    /// scheme.
+    pub fn new(id: impl Into<String>) -> Self {
+        let id = rlp::encode(&id.into().as_bytes()).freeze();
         Self {
             enr: Enr {
                 seq: 0,
                 node_id: NodeId::new(&[0; 32]),
-                content: BTreeMap::from([(b"id".to_vec(), v4_id)]),
+                content: BTreeMap::from([(b"id".to_vec(), id)]),
                 signature: Vec::default(),
                 phantom: PhantomData::default(),
             },
@@ -63,7 +64,7 @@ impl<K: EnrKey> EnrBuilder<K> {
     /// Adds an `ip` field to the `ENRBuilder`.
     pub fn ip4(&mut self, ip: Ipv4Addr) -> &mut Self {
         self.updates
-            .push(Update::insert("ip4", &ip.octets().as_ref()));
+            .push(Update::insert("ip", &ip.octets().as_ref()));
         self
     }
 
@@ -98,30 +99,13 @@ impl<K: EnrKey> EnrBuilder<K> {
         self
     }
 
-    /// Generates the rlp-encoded form of the ENR specified by the builder config.
-    fn rlp_content(&self) -> BytesMut {
-        let mut stream = RlpStream::new_with_buffer(BytesMut::with_capacity(MAX_ENR_SIZE));
-        let include_signature = false;
-        self.enr.append_rlp_content(&mut stream, include_signature);
-        stream.out()
-    }
-
-    /// Signs record based on the identity scheme. Currently only "v4" is supported.
-    fn signature(&self, key: &K) -> Result<Vec<u8>, Error> {
-        self.enr.compute_signature(key)
-    }
-
-    /// Adds a public key to the ENR builder.
-    fn add_public_key(&mut self, key: &K::PublicKey) {
-        self.add_value(key.enr_key(), &key.encode().as_ref());
-    }
-
     /// Constructs an ENR from the `EnrBuilder`.
     ///
     /// # Errors
-    /// Fails if the identity scheme is not supported, or the record size exceeds `MAX_ENR_SIZE`.
-    pub fn build(mut self, signing_key: &K) -> Result<Enr<K>, Error> {
-        let EnrBuilder { mut enr, updates } = self;
+    /// Fails if the identity scheme is not supported, or the record size exceeds [`MAX_ENR_SIZE`].
+    pub fn build(&self, signing_key: &K) -> Result<Enr<K>, Error> {
+        let mut enr = self.enr.clone();
+        let updates = self.updates.clone();
         enr.update(updates, signing_key)?;
         Ok(enr)
     }
