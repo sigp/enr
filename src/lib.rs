@@ -456,16 +456,15 @@ impl<K: EnrKey> Enr<K> {
             }
         };
 
-        // update the node id
-        let prev_node_id = std::mem::replace(&mut self.node_id, NodeId::from(key.public()));
-
         // check the size of the record
         if self.size() > MAX_ENR_SIZE {
             self.seq = prev_seq;
             self.signature = prev_signature;
-            self.node_id = prev_node_id;
             return Err(EnrError::ExceedsMaxSize);
         }
+
+        // update the node id
+        self.node_id = NodeId::from(key.public());
 
         Ok(())
     }
@@ -1596,11 +1595,7 @@ mod tests {
         let topics: &[u8] = &topics;
 
         let (removed, inserted) = enr
-            .remove_insert(
-                [b"tcp"].iter(),
-                vec![(b"topics", topics)].into_iter(),
-                &key,
-            )
+            .remove_insert([b"tcp"].iter(), vec![(b"topics", topics)].into_iter(), &key)
             .unwrap();
 
         assert_eq!(
@@ -1762,12 +1757,13 @@ mod tests {
     #[test]
     fn test_set_seq() {
         // 300 byte ENR (max size)
-        const LARGE_ENR : &str = 
-            concat!("enr:-QEpuEDaLyrPP4gxBI9YL7QE9U1tZig_Nt8rue8bRIuYv_IMziFc8OEt3LQMwkwt6da-Z0Y8BaqkDalZbBq647UtV2ei",
-                    "AYJpZIJ2NIJpcIR_AAABiXNlY3AyNTZrMaEDymNMrg1JrLQB2KTGtv6MVbcNEVv0AHacwUAPMljNMTiDdWRwgnZferiieHh4",
-                    "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
-                    "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
-                    "eHh4eHh4eHh4eHh4eHh4");
+        const LARGE_ENR : &str = concat!(
+            "enr:-QEpuEDaLyrPP4gxBI9YL7QE9U1tZig_Nt8rue8bRIuYv_IMziFc8OEt3LQMwkwt6da-Z0Y8BaqkDalZbBq647UtV2ei",
+            "AYJpZIJ2NIJpcIR_AAABiXNlY3AyNTZrMaEDymNMrg1JrLQB2KTGtv6MVbcNEVv0AHacwUAPMljNMTiDdWRwgnZferiieHh4",
+            "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
+            "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
+            "eHh4eHh4eHh4eHh4eHh4"
+        );
         let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
         let mut record = LARGE_ENR.parse::<DefaultEnr>().unwrap();
         let enr_bkp = record.clone();
