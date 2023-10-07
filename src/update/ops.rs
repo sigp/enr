@@ -137,6 +137,15 @@ impl Op {
             Op::Remove { key } => enr.content.remove(&key),
         };
     }
+
+    /// If this operation is an inverse that succeeded return the output
+    pub fn inverse_to_ouput(self) -> Option<Bytes> {
+        // key was part of the input, so it's not needed
+        match self {
+            Op::Insert { content, .. } => Some(content),
+            Op::Remove { .. } => None,
+        }
+    }
 }
 
 /*
@@ -150,12 +159,18 @@ mod sealed {
 
 pub trait UpdatesT: sealed::Sealed {
     type ValidatedUpdates: ValidUpdatesT;
+    /// Validates the updates so that they can be applied.
     fn to_valid(self) -> Result<Self::ValidatedUpdates, Error>;
 }
 
 pub trait ValidUpdatesT: sealed::Sealed {
+    type Output;
+    /// Apply the valid update and produce the inverse in case it needs to be reverted.
     fn apply_and_invert<K: EnrKey>(self, enr: &mut Enr<K>) -> Self;
+    /// Apply when used as an inverse.
     fn apply_as_inverse<K: EnrKey>(self, enr: &mut Enr<K>);
+    /// When successful map the update to its output.
+    fn inverse_to_output(self) -> Self::Output;
 }
 
 /*
@@ -174,12 +189,17 @@ impl UpdatesT for Update {
 }
 
 impl ValidUpdatesT for Op {
+    type Output = Option<Bytes>;
     fn apply_and_invert<K: EnrKey>(self, enr: &mut Enr<K>) -> Self {
         self.apply_with_inverse(enr)
     }
 
     fn apply_as_inverse<K: EnrKey>(self, enr: &mut Enr<K>) {
         self.irrecoverable_apply(enr)
+    }
+
+    fn inverse_to_output(self) -> Self::Output {
+        self.inverse_to_ouput()
     }
 }
 
@@ -199,6 +219,8 @@ impl UpdatesT for Vec<Update> {
 }
 
 impl ValidUpdatesT for Vec<Op> {
+    /// Return the keys back to the user
+    type Output = Vec<(Key, Option<Bytes>)>;
     fn apply_and_invert<K: EnrKey>(self, enr: &mut Enr<K>) -> Self {
         self.into_iter()
             .map(|op| op.apply_with_inverse(enr))
@@ -208,6 +230,15 @@ impl ValidUpdatesT for Vec<Op> {
 
     fn apply_as_inverse<K: EnrKey>(self, enr: &mut Enr<K>) {
         self.into_iter().for_each(|op| op.irrecoverable_apply(enr))
+    }
+
+    fn inverse_to_output(self) -> Self::Output {
+        self.into_iter()
+            .map(|op| match op {
+                Op::Insert { key, content } => (key, Some(content)),
+                Op::Remove { key } => (key, None),
+            })
+            .collect()
     }
 }
 
@@ -221,6 +252,9 @@ macro_rules! map_to_type {
         $out
     };
 }
+
+// alias to help the macros
+type OptionBytes = Option<Bytes>;
 
 /// Generates the implementation of PreUpdate::apply to a tuple of 2 or more. The macro arguments
 /// are the number of variables needed to map Update intents to valid operations.
@@ -252,6 +286,8 @@ macro_rules! gen_impl {
 
         impl ValidUpdatesT for ($(map_to_type!($up, Op),)*) {
 
+            type Output = ($(map_to_type!($up, OptionBytes),)*);
+
             fn apply_and_invert<K: EnrKey>(self, enr: &mut Enr<K>) -> Self {
                 // destructure the tuple using the identifiers
                 let ($($up,)*) = self;
@@ -265,6 +301,11 @@ macro_rules! gen_impl {
                 // destructure the tuple using the identifiers
                 let ($($up,)*) = self;
                 $($up.irrecoverable_apply(enr);)*
+            }
+
+            fn inverse_to_output(self) -> Self::Output {
+                let ($($up,)*) = self;
+                ($($up.inverse_to_output(),)*)
             }
         }
 

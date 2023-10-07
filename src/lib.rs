@@ -191,6 +191,7 @@ use std::{
     hash::{Hash, Hasher},
     net::{SocketAddrV4, SocketAddrV6},
 };
+use update::Update;
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 #[cfg(feature = "serde")]
@@ -444,7 +445,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Allows setting the sequence number to an arbitrary value.
     pub fn set_seq(&mut self, seq: u64, key: &K) -> Result<(), Error> {
-        // TODO(@divma): signing errors make this corrupt
+        // TODO(@divma): signing errors make this corrupt. Also ... why do we want this
         self.seq = seq;
 
         // sign the record
@@ -471,13 +472,18 @@ impl<K: EnrKey> Enr<K> {
         value: &T,
         enr_key: &K,
     ) -> Result<Option<Bytes>, Error> {
-        // TODO self.update_guard().insert().finish()
-        self.insert_raw_rlp(key, rlp::encode(value).freeze(), enr_key)
+        let update = Update::insert(key, value);
+        self.update(update, enr_key)
     }
 
-    pub fn update<Updates: update::UpdatesT>(&mut self, updates: Updates) -> Result<(), Error> {
-        update::Guard::new(self, updates)?;
-        Ok(())
+    pub fn update<Updates: update::UpdatesT>(
+        &mut self,
+        updates: Updates,
+        signing_key: &K,
+    ) -> Result<<Updates::ValidatedUpdates as update::ValidUpdatesT>::Output, Error> {
+        update::Guard::new(self, updates)?
+            .finish(signing_key)
+            .map_err(|revert_guard| revert_guard.recover())
     }
 
     /// Adds or modifies a key/value to the ENR record. A `EnrKey` is required to re-sign the record once
@@ -490,57 +496,12 @@ impl<K: EnrKey> Enr<K> {
         value: Bytes,
         enr_key: &K,
     ) -> Result<Option<Bytes>, Error> {
-        // TODO self.update_guard().insert_raw().finish()
-        check_spec_reserved_keys(key.as_ref(), &value)?;
-
-        let previous_value = self.content.insert(key.as_ref().to_vec(), value);
-        // add the new public key
-        let public_key = enr_key.public();
-        let previous_key = self.content.insert(
-            public_key.enr_key(),
-            rlp::encode(&public_key.encode().as_ref()).freeze(),
-        );
-
-        // check the size of the record
-        if self.size() > MAX_ENR_SIZE {
-            // if the size of the record is too large, revert and error
-            // revert the public key
-            if let Some(key) = previous_key {
-                self.content.insert(public_key.enr_key(), key);
-            } else {
-                self.content.remove(&public_key.enr_key());
-            }
-            // revert the content
-            if let Some(prev_value) = previous_value {
-                self.content.insert(key.as_ref().to_vec(), prev_value);
-            } else {
-                self.content.remove(key.as_ref());
-            }
-            return Err(Error::ExceedsMaxSize);
-        }
-        // increment the sequence number
-        self.seq = self
-            .seq
-            .checked_add(1)
-            .ok_or(Error::SequenceNumberTooHigh)?;
-
-        // sign the record
-        self.sign(enr_key)?;
-
-        // update the node id
-        self.node_id = NodeId::from(enr_key.public());
-
-        if self.size() > MAX_ENR_SIZE {
-            // in case the signature size changes, inform the user the size has exceeded the maximum
-            return Err(Error::ExceedsMaxSize);
-        }
-
-        Ok(previous_value)
+        let update = Update::insert_raw(key, value);
+        self.update(update, enr_key)
     }
 
     /// Sets the `ip` field of the ENR. Returns any pre-existing IP address in the record.
     pub fn set_ip(&mut self, ip: IpAddr, key: &K) -> Result<Option<IpAddr>, Error> {
-        // TODO: self.update_guard().insert().finish()
         match ip {
             IpAddr::V4(addr) => {
                 let prev_value = self.insert("ip", &addr.octets().as_ref(), key)?;
@@ -615,89 +576,21 @@ impl<K: EnrKey> Enr<K> {
 
     /// Helper function for `set_tcp_socket()` and `set_udp_socket`.
     fn set_socket(&mut self, socket: SocketAddr, key: &K, is_tcp: bool) -> Result<(), Error> {
-        // TODO self.update_guard().insert(ip).insert(port).finish()
-        let (port_string, port_v6_string): (Key, Key) = if is_tcp {
-            ("tcp".into(), "tcp6".into())
-        } else {
-            ("udp".into(), "udp6".into())
-        };
-
-        let (prev_ip, prev_port) = match socket.ip() {
-            IpAddr::V4(addr) => (
-                self.content.insert(
-                    "ip".into(),
-                    rlp::encode(&(&addr.octets() as &[u8])).freeze(),
-                ),
-                self.content
-                    .insert(port_string.clone(), rlp::encode(&socket.port()).freeze()),
-            ),
-            IpAddr::V6(addr) => (
-                self.content.insert(
-                    "ip6".into(),
-                    rlp::encode(&(&addr.octets() as &[u8])).freeze(),
-                ),
-                self.content
-                    .insert(port_v6_string.clone(), rlp::encode(&socket.port()).freeze()),
-            ),
-        };
-
-        let public_key = key.public();
-        let previous_key = self.content.insert(
-            public_key.enr_key(),
-            rlp::encode(&public_key.encode().as_ref()).freeze(),
-        );
-
-        // check the size and revert on failure
-        if self.size() > MAX_ENR_SIZE {
-            // if the size of the record is too large, revert and error
-            // revert the public key
-            if let Some(key) = previous_key {
-                self.content.insert(public_key.enr_key(), key);
-            } else {
-                self.content.remove(&public_key.enr_key());
+        let (ip_update, port_update) = match socket {
+            SocketAddr::V4(v4_socket) => {
+                let ip_update = Update::insert("ip", &v4_socket.ip().octets().as_ref());
+                let port_key = is_tcp.then_some("tcp").unwrap_or("udp");
+                let port_update = Update::insert(port_key, &v4_socket.port());
+                (ip_update, port_update)
             }
-            // revert the content
-            match socket.ip() {
-                IpAddr::V4(_) => {
-                    if let Some(ip) = prev_ip {
-                        self.content.insert("ip".into(), ip);
-                    } else {
-                        self.content.remove(b"ip".as_ref());
-                    }
-                    if let Some(udp) = prev_port {
-                        self.content.insert(port_string, udp);
-                    } else {
-                        self.content.remove(&port_string);
-                    }
-                }
-                IpAddr::V6(_) => {
-                    if let Some(ip) = prev_ip {
-                        self.content.insert("ip6".into(), ip);
-                    } else {
-                        self.content.remove(b"ip6".as_ref());
-                    }
-                    if let Some(udp) = prev_port {
-                        self.content.insert(port_v6_string, udp);
-                    } else {
-                        self.content.remove(&port_v6_string);
-                    }
-                }
+            SocketAddr::V6(v6_socket) => {
+                let ip_update = Update::insert("ip", &v6_socket.ip().octets().as_ref());
+                let port_key = is_tcp.then_some("tcp").unwrap_or("udp");
+                let port_update = Update::insert(port_key, &v6_socket.port());
+                (ip_update, port_update)
             }
-            return Err(Error::ExceedsMaxSize);
-        }
-
-        // increment the sequence number
-        self.seq = self
-            .seq
-            .checked_add(1)
-            .ok_or(Error::SequenceNumberTooHigh)?;
-
-        // sign the record
-        self.sign(key)?;
-
-        // update the node id
-        self.node_id = NodeId::from(key.public());
-
+        };
+        self.update((ip_update, port_update), key)?;
         Ok(())
     }
 
@@ -707,69 +600,13 @@ impl<K: EnrKey> Enr<K> {
     ///
     /// Returns the/set previous values as rlp encoded bytes if they exist for the removed and added/
     /// overwritten keys.
+    // TODO: adjust docs
     pub fn remove_insert<'a>(
         &mut self,
-        remove_keys: impl Iterator<Item = impl AsRef<[u8]>>,
-        insert_key_values: impl Iterator<Item = (impl AsRef<[u8]>, &'a [u8])>,
+        updates: Vec<Update>,
         enr_key: &K,
-    ) -> Result<(PreviousRlpEncodedValues, PreviousRlpEncodedValues), Error> {
-        let enr_backup = self.clone();
-
-        let mut removed = Vec::new();
-        for key in remove_keys {
-            removed.push(self.content.remove(key.as_ref()));
-        }
-
-        // add the new public key
-        let public_key = enr_key.public();
-        self.content.insert(
-            public_key.enr_key(),
-            rlp::encode(&public_key.encode().as_ref()).freeze(),
-        );
-
-        let mut inserted = Vec::new();
-        for (key, value) in insert_key_values {
-            // currently only support "v4" identity schemes
-            if key.as_ref() == b"id" && value != b"v4" {
-                *self = enr_backup;
-                return Err(Error::UnsupportedIdentityScheme);
-            }
-
-            let value = rlp::encode(&(value)).freeze();
-            // Prevent inserting invalid RLP integers
-            if is_keyof_u16(key.as_ref()) {
-                rlp::decode::<u16>(&value).map_err(Error::InvalidRlpData)?;
-            }
-
-            inserted.push(self.content.insert(key.as_ref().to_vec(), value));
-        }
-
-        // increment the sequence number
-        self.seq = self
-            .seq
-            .checked_add(1)
-            .ok_or(Error::SequenceNumberTooHigh)?;
-
-        // sign the record
-        self.sign(enr_key)?;
-
-        // update the node id
-        self.node_id = NodeId::from(enr_key.public());
-
-        if self.size() > MAX_ENR_SIZE {
-            // in case the signature size changes, inform the user the size has exceeded the
-            // maximum
-            *self = enr_backup;
-            return Err(Error::ExceedsMaxSize);
-        }
-
-        Ok((removed, inserted))
-    }
-
-    /// Sets a new public key for the record.
-    pub fn set_public_key(&mut self, public_key: &K::PublicKey, key: &K) -> Result<(), Error> {
-        self.insert(&public_key.enr_key(), &public_key.encode().as_ref(), key)
-            .map(|_| {})
+    ) -> Result<Vec<(Key, Option<Bytes>)>, Error> {
+        self.update(updates, enr_key)
     }
 
     /// Returns wether the node can be reached over UDP or not.
@@ -1593,19 +1430,14 @@ mod tests {
 
         let topics: &[u8] = &topics;
 
-        let (removed, inserted) = enr
-            .remove_insert(
-                vec![b"tcp"].iter(),
-                vec![(b"topics", topics)].into_iter(),
-                &key,
-            )
-            .unwrap();
+        let updates = vec![Update::remove("tcp"), Update::insert("topics", &topics)];
+        let update_result = enr.remove_insert(updates, &key).unwrap();
 
         assert_eq!(
-            removed[0],
+            update_result[0].1,
             Some(rlp::encode(&tcp.to_be_bytes().to_vec()).freeze())
         );
-        assert_eq!(inserted[0], None);
+        assert_eq!(update_result[0].1, None);
 
         assert_eq!(enr.tcp4(), None);
         assert_eq!(enr.get("topics"), Some(topics));
@@ -1685,11 +1517,11 @@ mod tests {
         for tcp in LOW_INT_PORTS {
             let mut enr = EnrBuilder::new("v4").build(&key).unwrap();
 
-            let res = enr.remove_insert(
-                vec![b"none"].iter(),
-                vec![(b"tcp".as_slice(), tcp.to_be_bytes().as_slice())].into_iter(),
-                &key,
-            );
+            let updates = vec![
+                Update::remove("none"),
+                Update::insert("tcp", &tcp.to_be_bytes().as_slice()),
+            ];
+            let res = enr.remove_insert(updates, &key);
             if u8::try_from(tcp).is_ok() {
                 assert_eq!(res.unwrap_err().to_string(), "invalid rlp data");
             } else {

@@ -7,7 +7,7 @@ use crate::{error::Error, Enr, EnrKey, EnrPublicKey, NodeId, MAX_ENR_SIZE};
 mod ops;
 
 pub use ops::Update;
-pub(crate) use ops::{UpdatesT, ValidUpdatesT};
+pub(crate) use ops::{Op, UpdatesT, ValidUpdatesT};
 
 /// An update guard over the [`Enr`].
 /// The inverses are set as a generic to allow optimizing for single updates, multiple updates with
@@ -49,7 +49,8 @@ impl<'a, K: EnrKey, Up: UpdatesT> Guard<'a, K, Up> {
     pub fn finish(
         self,
         signing_key: &K,
-    ) -> Result<Up::ValidatedUpdates, Revert<'a, K, Up::ValidatedUpdates>> {
+    ) -> Result<<Up::ValidatedUpdates as ValidUpdatesT>::Output, Revert<'a, K, Up::ValidatedUpdates>>
+    {
         let Guard { enr, inverses } = self;
         let mut revert = RevertOps::new(inverses);
 
@@ -106,7 +107,7 @@ impl<'a, K: EnrKey, Up: UpdatesT> Guard<'a, K, Up> {
         let RevertOps {
             content_inverses, ..
         } = revert;
-        Ok(content_inverses)
+        Ok(content_inverses.inverse_to_output())
     }
 }
 
@@ -140,7 +141,7 @@ impl<I> RevertOps<I> {
 }
 
 impl<'a, K: EnrKey, I: ValidUpdatesT> Revert<'a, K, I> {
-    fn recover(self) -> Error {
+    pub fn recover(self) -> Error {
         let Revert {
             enr,
             pending:
