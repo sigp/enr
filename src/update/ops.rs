@@ -8,6 +8,7 @@ use crate::{Enr, EnrKey, Key};
 
 /// An update operation.
 // NOTE: The most user facing type: this simply states an intent and it's not validated.
+#[derive(Clone)]
 pub enum Update {
     /// Insert a key and RLP data.
     Insert {

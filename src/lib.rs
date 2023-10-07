@@ -260,8 +260,12 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Create a v4 enr builder.
-    pub fn builder() -> EnrBuilder<K> {
-        EnrBuilder::new("v4")
+    pub fn v4_builder() -> EnrBuilder<K> {
+        EnrBuilder::new_v4()
+    }
+
+    pub fn empty_v4(signing_key: &K) -> Result<Self, Error> {
+        Self::v4_builder().build(signing_key)
     }
 
     /// Reads a custom key from the record if it exists, decoded as data.

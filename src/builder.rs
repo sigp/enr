@@ -1,4 +1,7 @@
-use crate::{Enr, EnrKey, EnrPublicKey, Error, Key, NodeId, MAX_ENR_SIZE};
+use crate::{
+    update::{self, Update},
+    Enr, EnrKey, EnrPublicKey, Error, Key, NodeId, MAX_ENR_SIZE,
+};
 use bytes::{Bytes, BytesMut};
 use rlp::{Encodable, RlpStream};
 use std::{
@@ -8,48 +11,44 @@ use std::{
 };
 
 /// The base builder for generating ENR records with arbitrary signing algorithms.
+#[derive(Clone)]
 pub struct EnrBuilder<K: EnrKey> {
-    /// The identity scheme used to build the ENR record.
-    id: String,
-
-    /// The starting sequence number for the ENR record.
-    seq: u64,
-
-    /// The key-value pairs for the ENR record.
-    /// Values are stored as RLP encoded bytes.
-    content: BTreeMap<Key, Bytes>,
-
-    /// Pins the generic key types.
-    phantom: PhantomData<K>,
+    enr: Enr<K>,
+    updates: Vec<Update>,
 }
 
 impl<K: EnrKey> EnrBuilder<K> {
     /// Constructs a minimal `EnrBuilder` providing only a sequence number.
-    /// Currently only supports the id v4 scheme and therefore disallows creation of any other
-    /// scheme.
-    pub fn new(id: impl Into<String>) -> Self {
+    // TODO: fix docs
+    pub fn new_v4() -> Self {
+        let v4_id = rlp::encode(&b"v4".as_ref()).freeze();
         Self {
-            id: id.into(),
-            seq: 1,
-            content: BTreeMap::new(),
-            phantom: PhantomData,
+            enr: Enr {
+                seq: 0,
+                node_id: NodeId::new(&[0; 32]),
+                content: BTreeMap::from([(b"id".to_vec(), v4_id)]),
+                signature: Vec::default(),
+                phantom: PhantomData::default(),
+            },
+            updates: Vec::default(),
         }
     }
 
     /// Modifies the sequence number of the builder.
     pub fn seq(&mut self, seq: u64) -> &mut Self {
-        self.seq = seq;
+        self.enr.seq = seq;
         self
     }
 
     /// Adds an arbitrary key-value to the `ENRBuilder`.
     pub fn add_value<T: Encodable>(&mut self, key: impl AsRef<[u8]>, value: &T) -> &mut Self {
-        self.add_value_rlp(key, rlp::encode(value).freeze())
+        self.updates.push(Update::insert(key, value));
+        self
     }
 
     /// Adds an arbitrary key-value where the value is raw RLP encoded bytes.
     pub fn add_value_rlp(&mut self, key: impl AsRef<[u8]>, rlp: Bytes) -> &mut Self {
-        self.content.insert(key.as_ref().to_vec(), rlp);
+        self.updates.push(Update::insert_raw(key, rlp));
         self
     }
 
@@ -63,26 +62,17 @@ impl<K: EnrKey> EnrBuilder<K> {
 
     /// Adds an `ip` field to the `ENRBuilder`.
     pub fn ip4(&mut self, ip: Ipv4Addr) -> &mut Self {
-        self.add_value("ip", &ip.octets().as_ref());
+        self.updates
+            .push(Update::insert("ip4", &ip.octets().as_ref()));
         self
     }
 
     /// Adds an `ip6` field to the `ENRBuilder`.
     pub fn ip6(&mut self, ip: Ipv6Addr) -> &mut Self {
-        self.add_value("ip6", &ip.octets().as_ref());
+        self.updates
+            .push(Update::insert("ip6", &ip.octets().as_ref()));
         self
     }
-
-    /*
-     * Removed from the builder as only the v4 scheme is currently supported.
-     * This is set as default in the builder.
-
-    /// Adds an `Id` field to the `ENRBuilder`.
-    pub fn id(&mut self, id: &str) -> &mut Self {
-        self.add_value("id", &id.as_bytes());
-        self
-    }
-    */
 
     /// Adds a `tcp` field to the `ENRBuilder`.
     pub fn tcp4(&mut self, tcp: u16) -> &mut Self {
@@ -111,25 +101,14 @@ impl<K: EnrKey> EnrBuilder<K> {
     /// Generates the rlp-encoded form of the ENR specified by the builder config.
     fn rlp_content(&self) -> BytesMut {
         let mut stream = RlpStream::new_with_buffer(BytesMut::with_capacity(MAX_ENR_SIZE));
-        stream.begin_list(self.content.len() * 2 + 1);
-        stream.append(&self.seq);
-        for (k, v) in &self.content {
-            stream.append(k);
-            // The values are stored as raw RLP encoded bytes
-            stream.append_raw(v, 1);
-        }
+        let include_signature = false;
+        self.enr.append_rlp_content(&mut stream, include_signature);
         stream.out()
     }
 
     /// Signs record based on the identity scheme. Currently only "v4" is supported.
     fn signature(&self, key: &K) -> Result<Vec<u8>, Error> {
-        match self.id.as_str() {
-            "v4" => key
-                .sign_v4(&self.rlp_content())
-                .map_err(|_| Error::SigningError),
-            // unsupported identity schemes
-            _ => Err(Error::SigningError),
-        }
+        self.enr.compute_signature(key)
     }
 
     /// Adds a public key to the ENR builder.
@@ -141,35 +120,9 @@ impl<K: EnrKey> EnrBuilder<K> {
     ///
     /// # Errors
     /// Fails if the identity scheme is not supported, or the record size exceeds `MAX_ENR_SIZE`.
-    pub fn build(&mut self, key: &K) -> Result<Enr<K>, Error> {
-        // add the identity scheme to the content
-        if self.id != "v4" {
-            return Err(Error::UnsupportedIdentityScheme);
-        }
-
-        // Sanitize all data, ensuring all RLP data is correctly formatted.
-        for (key, value) in &self.content {
-            rlp::Rlp::new(value).data().map_err(Error::InvalidRlpData)?;
-        }
-
-        self.add_value_rlp("id", rlp::encode(&self.id.as_bytes()).freeze());
-
-        self.add_public_key(&key.public());
-        let rlp_content = self.rlp_content();
-
-        let signature = self.signature(key)?;
-
-        // check the size of the record
-        if rlp_content.len() + signature.len() + 8 > MAX_ENR_SIZE {
-            return Err(Error::ExceedsMaxSize);
-        }
-
-        Ok(Enr {
-            seq: self.seq,
-            node_id: NodeId::from(key.public()),
-            content: self.content.clone(),
-            signature,
-            phantom: PhantomData,
-        })
+    pub fn build(mut self, signing_key: &K) -> Result<Enr<K>, Error> {
+        let EnrBuilder { mut enr, updates } = self;
+        enr.update(updates, signing_key)?;
+        Ok(enr)
     }
 }
