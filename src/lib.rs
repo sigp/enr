@@ -814,7 +814,7 @@ impl<K: EnrKey> Enr<K> {
                 .sign_v4(&self.rlp_content())
                 .map_err(|_| EnrError::SigningError),
             // other identity schemes are unsupported
-            _ => return Err(EnrError::UnsupportedIdentityScheme),
+            _ => Err(EnrError::UnsupportedIdentityScheme),
         }
     }
 
@@ -1597,7 +1597,7 @@ mod tests {
 
         let (removed, inserted) = enr
             .remove_insert(
-                vec![b"tcp"].iter(),
+                [b"tcp"].iter(),
                 vec![(b"topics", topics)].into_iter(),
                 &key,
             )
@@ -1688,7 +1688,7 @@ mod tests {
             let mut enr = EnrBuilder::new("v4").build(&key).unwrap();
 
             let res = enr.remove_insert(
-                vec![b"none"].iter(),
+                [b"none"].iter(),
                 vec![(b"tcp".as_slice(), tcp.to_be_bytes().as_slice())].into_iter(),
                 &key,
             );
@@ -1780,6 +1780,6 @@ mod tests {
         assert_eq!(record, enr_bkp);
 
         record.set_seq(30, &key).unwrap();
-        assert_eq!(record.seq(), 30)
+        assert_eq!(record.seq(), 30);
     }
 }
