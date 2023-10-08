@@ -25,7 +25,7 @@ impl Update {
         }
     }
 
-    /// Create an insert operation where the raw rlp is provided.  
+    /// Create an insert operation where the raw rlp is provided.
     pub fn insert_raw(key: impl AsRef<[u8]>, content: Bytes) -> Self {
         Update::Insert {
             key: key.as_ref().to_vec(),
@@ -137,7 +137,7 @@ impl Op {
     }
 
     /// If this operation is an inverse that succeeded return the output
-    pub fn inverse_to_ouput(self) -> Option<Bytes> {
+    pub fn to_output(self) -> Option<Bytes> {
         // key was part of the input, so it's not needed
         match self {
             Op::Insert { content, .. } => Some(content),
@@ -147,7 +147,8 @@ impl Op {
 }
 
 /*
- * Helper traits to expand the definition of Update to tuples of Updates and vectors
+ * Helper traits to expand the definition of Update to tuples and vectors
+ * NOTE: fixed sixed arrays would need `array::try_map` which is not yet stable
  */
 
 mod sealed {
@@ -197,7 +198,7 @@ impl ValidUpdatesT for Op {
     }
 
     fn inverse_to_output(self) -> Self::Output {
-        self.inverse_to_ouput()
+        self.to_output()
     }
 }
 
@@ -218,7 +219,7 @@ impl UpdatesT for Vec<Update> {
 
 impl ValidUpdatesT for Vec<Op> {
     /// Return the keys back to the user
-    type Output = Vec<(Key, Option<Bytes>)>;
+    type Output = Vec<Option<Bytes>>;
     fn apply_and_invert<K: EnrKey>(self, enr: &mut Enr<K>) -> Self {
         self.into_iter()
             .map(|op| op.apply_with_inverse(enr))
@@ -232,12 +233,7 @@ impl ValidUpdatesT for Vec<Op> {
     }
 
     fn inverse_to_output(self) -> Self::Output {
-        self.into_iter()
-            .map(|op| match op {
-                Op::Insert { key, content } => (key, Some(content)),
-                Op::Remove { key } => (key, None),
-            })
-            .collect()
+        self.into_iter().map(Op::to_output).collect()
     }
 }
 
@@ -255,15 +251,7 @@ macro_rules! map_to_type {
 // alias to help the macros
 type OptionBytes = Option<Bytes>;
 
-/// Generates the implementation of PreUpdate::apply to a tuple of 2 or more. The macro arguments
-/// are the number of variables needed to map Update intents to valid operations.
-///
-/// A valid call of this macro looks like
-/// `gen_impl!(up0, up1)`
-///
-/// This generates the implementation for `PreUpdate<'a, K, (Update, Update)>`
-/// containing the function
-/// `pub fn apply(self) -> Result<Guard<'a, K, (Op, Op)>, Error> { .. }`
+/// Generates the implementation for a tuple of 2 or more values
 macro_rules! gen_impl {
     ($($up: ident,)*) => {
 
@@ -279,12 +267,9 @@ macro_rules! gen_impl {
                 // obtain the valid version of each update
                 Ok(($($up.to_valid_op()?,)*))
             }
-
-
         }
 
         impl ValidUpdatesT for ($(map_to_type!($up, Op),)*) {
-
             type Output = ($(map_to_type!($up, OptionBytes),)*);
 
             fn apply_and_invert<K: EnrKey>(self, enr: &mut Enr<K>) -> Self {

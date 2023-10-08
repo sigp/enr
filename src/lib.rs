@@ -218,7 +218,6 @@ use std::marker::PhantomData;
 
 /// The "key" in an ENR record can be arbitrary bytes.
 type Key = Vec<u8>;
-type PreviousRlpEncodedValues = Vec<Option<Bytes>>;
 
 const MAX_ENR_SIZE: usize = 300;
 
@@ -600,7 +599,7 @@ impl<K: EnrKey> Enr<K> {
         &mut self,
         updates: Vec<Update>,
         enr_key: &K,
-    ) -> Result<Vec<(Key, Option<Bytes>)>, Error> {
+    ) -> Result<Vec<Option<Bytes>>, Error> {
         self.update(updates, enr_key)
     }
 
@@ -653,9 +652,9 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Signs the ENR record based on the identity scheme. Currently only "v4" is supported.
-    fn sign(&mut self, key: &K) -> Result<(), Error> {
-        self.signature = self.compute_signature(key)?;
-        Ok(())
+    fn sign(&mut self, key: &K) -> Result<Vec<u8>, Error> {
+        let new_signature = self.compute_signature(key)?;
+        Ok(std::mem::replace(&mut self.signature, new_signature))
     }
 }
 
@@ -897,37 +896,6 @@ pub(crate) fn digest(b: &[u8]) -> [u8; 32] {
 
 const fn is_keyof_u16(key: &[u8]) -> bool {
     matches!(key, b"tcp" | b"tcp6" | b"udp" | b"udp6")
-}
-
-fn check_spec_reserved_keys(key: &[u8], value: &[u8]) -> Result<(), Error> {
-    match key {
-        b"tcp" | b"tcp6" | b"udp" | b"udp6" => {
-            rlp::decode::<u16>(value).map_err(Error::InvalidRlpData)?;
-        }
-        b"id" => {
-            let id_bytes = rlp::decode::<Vec<u8>>(value).map_err(Error::InvalidRlpData)?;
-            if id_bytes != b"v4" {
-                return Err(Error::UnsupportedIdentityScheme);
-            }
-        }
-        b"ip" => {
-            let ip4_bytes = rlp::decode::<Vec<u8>>(value).map_err(Error::InvalidRlpData)?;
-            if ip4_bytes.len() != 4 {
-                return Err(Error::InvalidReservedKeyData("ip"));
-            }
-        }
-        b"ip6" => {
-            let ip6_bytes = rlp::decode::<Vec<u8>>(value).map_err(Error::InvalidRlpData)?;
-            if ip6_bytes.len() != 16 {
-                return Err(Error::InvalidReservedKeyData("ip6"));
-            }
-        }
-        b"secp256k1" => {
-            rlp::decode::<Enr<k256::ecdsa::SigningKey>>(value).map_err(Error::InvalidRlpData)?;
-        }
-        _ => return Ok(()),
-    };
-    Ok(())
 }
 
 #[cfg(test)]
@@ -1433,10 +1401,10 @@ mod tests {
         let update_result = enr.remove_insert(updates, &key).unwrap();
 
         assert_eq!(
-            update_result[0].1,
+            update_result[0],
             Some(rlp::encode(&tcp.to_be_bytes().to_vec()).freeze())
         );
-        assert_eq!(update_result[1].1, None);
+        assert_eq!(update_result[1], None);
 
         assert_eq!(enr.tcp4(), None);
         assert_eq!(enr.get("topics"), Some(topics));

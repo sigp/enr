@@ -24,8 +24,9 @@ pub(crate) struct Guard<'a, K: EnrKey, Up: UpdatesT> {
 
 impl<'a, K: EnrKey, Up: UpdatesT> Guard<'a, K, Up> {
     /// Create a new guard verifying the update and applying it to the the [`Enr`].
-    /// If validation fails, it's guaranteed that the [`Enr`] has not been changed with
-    /// an error returned.
+    ///
+    /// If validation fails, an error is returned and it's guaranteed that the [`Enr`] has not been
+    /// changed.
     pub fn new(enr: &'a mut Enr<K>, updates: Up) -> Result<Self, Error> {
         // validate the update
         let updates = updates.to_valid()?;
@@ -54,28 +55,22 @@ impl<'a, K: EnrKey, Up: UpdatesT> Guard<'a, K, Up> {
 
         // 1. set the public key
         let public_key = signing_key.public();
-        revert.key = enr.content.insert(
-            public_key.enr_key(),
-            rlp::encode(&public_key.encode().as_ref()).freeze(),
-        );
+        let encoded_pk = rlp::encode(&public_key.encode().as_ref()).freeze();
+        revert.key = enr.content.insert(public_key.enr_key(), encoded_pk);
 
         // 2. set the new sequence number
-        revert.seq = Some(enr.seq());
-        enr.seq = match enr.seq.checked_add(1) {
-            Some(seq) => seq,
-            None => {
-                return Err(Revert {
-                    enr,
-                    pending: revert,
-                    error: Error::SequenceNumberTooHigh,
-                })
-            }
+        let Some(new_seq) = enr.seq.checked_add(1) else {
+            return Err(Revert {
+                enr,
+                pending: revert,
+                error: Error::SequenceNumberTooHigh,
+            });
         };
+        revert.seq = Some(std::mem::replace(&mut enr.seq, new_seq));
 
         // 3. sign the ENR
-        revert.signature = Some(enr.signature.clone());
-        enr.signature = match enr.compute_signature(signing_key) {
-            Ok(signature) => signature,
+        revert.signature = match enr.compute_signature(signing_key) {
+            Ok(signature) => Some(std::mem::replace(&mut enr.signature, signature)),
             Err(_) => {
                 return Err(Revert {
                     enr,

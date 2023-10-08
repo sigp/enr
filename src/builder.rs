@@ -1,9 +1,6 @@
-use crate::{
-    update::{self, Update},
-    Enr, EnrKey, EnrPublicKey, Error, Key, NodeId, MAX_ENR_SIZE,
-};
-use bytes::{Bytes, BytesMut};
-use rlp::{Encodable, RlpStream};
+use crate::{update::Update, Enr, EnrKey, Error, NodeId};
+use bytes::Bytes;
+use rlp::Encodable;
 use std::{
     collections::BTreeMap,
     marker::PhantomData,
