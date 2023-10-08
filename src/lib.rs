@@ -475,9 +475,7 @@ impl<K: EnrKey> Enr<K> {
         updates: Updates,
         signing_key: &K,
     ) -> Result<<Updates::ValidatedUpdates as update::ValidUpdatesT>::Output, Error> {
-        update::Guard::new(self, updates)?
-            .finish(signing_key)
-            .map_err(|revert_guard| revert_guard.recover())
+        update::Guard::new(self, updates)?.finish(signing_key)
     }
 
     /// Adds or modifies a key/value to the ENR record. A `EnrKey` is required to re-sign the record once

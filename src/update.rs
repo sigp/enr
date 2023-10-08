@@ -48,49 +48,37 @@ impl<'a, K: EnrKey, Up: UpdatesT> Guard<'a, K, Up> {
     pub fn finish(
         self,
         signing_key: &K,
-    ) -> Result<<Up::ValidatedUpdates as ValidUpdatesT>::Output, Revert<'a, K, Up::ValidatedUpdates>>
-    {
+    ) -> Result<<Up::ValidatedUpdates as ValidUpdatesT>::Output, Error> {
         let Guard { enr, inverses } = self;
         let mut revert = RevertOps::new(inverses);
 
         // 1. set the public key
         let public_key = signing_key.public();
         let encoded_pk = rlp::encode(&public_key.encode().as_ref()).freeze();
-        revert.key = enr.content.insert(public_key.enr_key(), encoded_pk);
+        let pk_name = public_key.enr_key();
+        let prev_pk_contents = enr.content.insert(public_key.enr_key(), encoded_pk);
+        revert.public_key = Some((pk_name, prev_pk_contents));
 
         // 2. set the new sequence number
         let Some(new_seq) = enr.seq.checked_add(1) else {
-            return Err(Revert {
-                enr,
-                pending: revert,
-                error: Error::SequenceNumberTooHigh,
-            });
+            revert.recover(enr);
+            return Err(Error::SequenceNumberTooHigh);
         };
         revert.seq = Some(std::mem::replace(&mut enr.seq, new_seq));
 
         // 3. sign the ENR
         revert.signature = match enr.compute_signature(signing_key) {
             Ok(signature) => Some(std::mem::replace(&mut enr.signature, signature)),
-            Err(_) => {
-                return Err(Revert {
-                    enr,
-                    pending: revert,
-                    error: Error::SigningError,
-                })
+            Err(error) => {
+                revert.recover(enr);
+                return Err(error);
             }
         };
 
-        // the size of the node id is fixed, and its encoded size depends exclusively on the data
-        // size, so we first check the size and then update the node id. This allows us to not need
-        // to track the previous node id in case of failure since this is the last step
-
         // 4. check the encoded size
         if enr.size() > MAX_ENR_SIZE {
-            return Err(Revert {
-                enr,
-                pending: revert,
-                error: Error::ExceedsMaxSize,
-            });
+            revert.recover(enr);
+            return Err(Error::ExceedsMaxSize);
         }
 
         // 5. update the node_id
@@ -104,20 +92,10 @@ impl<'a, K: EnrKey, Up: UpdatesT> Guard<'a, K, Up> {
     }
 }
 
-/// Helper struct that handles recovering the modified [`Enr`] to it's original state.
-pub(crate) struct Revert<'a, K: EnrKey, I: ValidUpdatesT> {
-    /// Dirt [`Enr`] to recover.
-    enr: &'a mut Enr<K>,
-    /// Operations to apply to the [`Enr`] to restore to it's original state.
-    pending: RevertOps<I>,
-    /// Error that occurred in [`Guard::finish`]
-    error: Error,
-}
-
-/// Keeps track of operations that need to be applied to the [`Enr`] to restore it.
+/// Keeps track of previous values that need to be applied to the [`Enr`] to restore it.
 pub struct RevertOps<I> {
     content_inverses: I,
-    key: Option<Bytes>,
+    public_key: Option<(Vec<u8>, Option<Bytes>)>,
     seq: Option<u64>,
     signature: Option<Vec<u8>>,
 }
@@ -126,27 +104,38 @@ impl<I> RevertOps<I> {
     fn new(content_inverses: I) -> Self {
         RevertOps {
             content_inverses,
-            key: None,
             seq: None,
             signature: None,
+            public_key: None,
         }
     }
 }
 
-impl<'a, K: EnrKey, I: ValidUpdatesT> Revert<'a, K, I> {
-    pub fn recover(self) -> Error {
-        let Revert {
-            enr,
-            pending:
-                RevertOps {
-                    content_inverses,
-                    key,
-                    seq,
-                    signature,
-                },
-            error,
+impl<I: ValidUpdatesT> RevertOps<I> {
+    pub fn recover<K: EnrKey>(self, enr: &mut Enr<K>) {
+        let RevertOps {
+            content_inverses,
+            public_key,
+            seq,
+            signature,
         } = self;
 
-        error
+        // first do the content, since it could have included the contents of the public key as an
+        // explicit update
+        content_inverses.apply_as_inverse(enr);
+        if let Some(seq) = seq {
+            enr.seq = seq;
+        }
+
+        if let Some(signature) = signature {
+            enr.signature = signature;
+        }
+
+        if let Some((pk_name, pk_prev_contents)) = public_key {
+            match pk_prev_contents {
+                Some(content) => enr.content.insert(pk_name, content),
+                None => enr.content.remove(&pk_name),
+            };
+        }
     }
 }
