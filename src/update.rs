@@ -59,9 +59,7 @@ impl<'a, K: EnrKey, Up: UpdatesT> Guard<'a, K, Up> {
     /// 4. Verify that the encoded [`Enr`] is within spec lengths.
     /// 5. Update the cache'd node id
     ///
-    /// If any of these steps fails, a [`Revert`] object is returned that allows to reset the
-    /// [`Enr`] and obtain the error that occurred.
-
+    /// If any of these steps fails, all successful changes are reverted.
     pub fn finish(
         self,
         signing_key: &K,
