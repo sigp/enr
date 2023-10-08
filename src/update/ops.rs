@@ -41,7 +41,7 @@ impl Update {
     }
 
     /// Validate the update operation.
-    pub(super) fn to_valid_op(self) -> Result<Op, EnrError> {
+    pub(super) fn into_valid_op(self) -> Result<Op, EnrError> {
         match self {
             Self::Insert { key, content } => {
                 match key.as_slice() {
@@ -123,7 +123,7 @@ impl Op {
     }
 
     /// If this operation is an inverse that succeeded return the output
-    pub fn to_output(self) -> Option<Bytes> {
+    pub fn into_output(self) -> Option<Bytes> {
         // key was part of the input, so it's not needed
         match self {
             Self::Insert { content, .. } => Some(content),
@@ -169,7 +169,7 @@ impl UpdatesT for Update {
     type ValidatedUpdates = Op;
 
     fn to_valid(self) -> Result<Self::ValidatedUpdates, EnrError> {
-        self.to_valid_op()
+        self.into_valid_op()
     }
 }
 
@@ -184,7 +184,7 @@ impl ValidUpdatesT for Op {
     }
 
     fn inverse_to_output(self) -> Self::Output {
-        self.to_output()
+        self.into_output()
     }
 }
 
@@ -199,7 +199,7 @@ impl UpdatesT for Vec<Update> {
     type ValidatedUpdates = Vec<Op>;
 
     fn to_valid(self) -> Result<Self::ValidatedUpdates, EnrError> {
-        self.into_iter().map(Update::to_valid_op).collect()
+        self.into_iter().map(Update::into_valid_op).collect()
     }
 }
 
@@ -219,7 +219,7 @@ impl ValidUpdatesT for Vec<Op> {
     }
 
     fn inverse_to_output(self) -> Self::Output {
-        self.into_iter().map(Op::to_output).collect()
+        self.into_iter().map(Op::into_output).collect()
     }
 }
 
@@ -251,7 +251,7 @@ macro_rules! gen_impl {
                 // destructure the tuple using the identifiers
                 let ($($up,)*) = self;
                 // obtain the valid version of each update
-                Ok(($($up.to_valid_op()?,)*))
+                Ok(($($up.into_valid_op()?,)*))
             }
         }
 

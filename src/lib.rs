@@ -588,7 +588,7 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Allows removing a key.
-    pub fn remove<'a>(
+    pub fn remove(
         &mut self,
         to_remove: impl AsRef<[u8]>,
         enr_key: &K,

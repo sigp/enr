@@ -129,7 +129,7 @@ pub struct RevertOps<I> {
 }
 
 impl<I> RevertOps<I> {
-    fn new(content_inverses: I) -> Self {
+    const fn new(content_inverses: I) -> Self {
         Self {
             content_inverses,
             seq: None,
