@@ -191,7 +191,7 @@ use std::{
     hash::{Hash, Hasher},
     net::{SocketAddrV4, SocketAddrV6},
 };
-use update::Update;
+pub use update::Update;
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 #[cfg(feature = "serde")]
@@ -475,6 +475,58 @@ impl<K: EnrKey> Enr<K> {
         self.update(update, enr_key)
     }
 
+    /// Update the [`Enr`] performing a single sequence number update with either a single
+    /// [`Update`], a tuple of updates, or a [`Vec<Update>`]. The return value is the previous
+    /// contents of the updated keys in the same order in which they are passed, and in the same
+    /// form in which they were passed.
+    ///
+    /// # Examples
+    /// ## Single update
+    /// ```
+    /// # use enr::{EnrBuilder, k256, Update};
+    /// # use rand::thread_rng;
+    /// # let mut rng = thread_rng();
+    /// # use bytes::Bytes;
+    /// let key = k256::ecdsa::SigningKey::random(&mut rng);
+    ///
+    /// let mut enr = EnrBuilder::new("v4").build(&key).unwrap();
+    ///
+    /// let update = Update::insert("foo", &172u8);
+    /// let prev_foo = enr.update(update, &key).unwrap();
+    ///
+    /// assert_eq!(prev_foo, None);
+    /// assert_eq!(enr.get_decodable::<u8>("foo").unwrap().unwrap(), 172u8);
+    /// ```
+    ///
+    /// ## Multiple updates (Tuples and Vectors)
+    /// ```
+    /// # use enr::{EnrBuilder, k256, Update};
+    /// # use rand::thread_rng;
+    /// # let mut rng = thread_rng();
+    /// # use bytes::Bytes;
+    /// let key = k256::ecdsa::SigningKey::random(&mut rng);
+    ///
+    /// let mut enr = EnrBuilder::new("v4").build(&key).unwrap();
+    ///
+    /// let updates = (Update::remove("foo"), Update::insert("x", &16u8));
+    /// let (prev_foo, prev_x) = enr.update(updates, &key).unwrap();
+    ///
+    ///
+    /// assert_eq!(prev_foo, None);
+    /// assert_eq!(prev_x, None);
+    /// assert_eq!(enr.get("foo"), None);
+    /// assert_eq!(enr.get_decodable::<u8>("x").unwrap().unwrap(), 16);
+    ///
+    /// // a vector of updates
+    ///
+    /// let updates = vec![Update::remove("foo"), Update::insert("x", &106u8)];
+    /// let prev_values: Vec<Option<Bytes>> = enr.update(updates, &key).unwrap();
+    /// assert_eq!(prev_values[0], None);
+    /// assert_eq!(prev_values[1], Some(rlp::encode(&16u8).freeze()));
+    /// assert_eq!(enr.get("foo"), None);
+    /// assert_eq!(enr.get_decodable::<u8>("x").unwrap().unwrap(), 106);
+
+    /// ```
     pub fn update<Updates: update::UpdatesT>(
         &mut self,
         updates: Updates,
