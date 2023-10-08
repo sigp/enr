@@ -195,7 +195,7 @@ use update::Update;
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 #[cfg(feature = "serde")]
-use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use sha3::{Digest, Keccak256};
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
@@ -587,19 +587,13 @@ impl<K: EnrKey> Enr<K> {
         Ok(())
     }
 
-    /// Removes key/value mappings and adds or overwrites key/value mappings to the ENR record as
-    /// one sequence number update. An `EnrKey` is required to re-sign the record once modified.
-    /// Reverts whole ENR record on error.
-    ///
-    /// Returns the/set previous values as rlp encoded bytes if they exist for the removed and added/
-    /// overwritten keys.
-    // TODO: adjust docs
-    pub fn remove_insert<'a>(
+    /// Allows removing a key.
+    pub fn remove<'a>(
         &mut self,
-        updates: Vec<Update>,
+        to_remove: impl AsRef<[u8]>,
         enr_key: &K,
-    ) -> Result<Vec<Option<Bytes>>, EnrError> {
-        self.update(updates, enr_key)
+    ) -> Result<Option<Bytes>, EnrError> {
+        self.update(Update::remove(to_remove), enr_key)
     }
 
     /// Returns wether the node can be reached over UDP or not.
@@ -1391,14 +1385,14 @@ mod tests {
 
         let topics: &[u8] = &topics;
 
-        let updates = vec![Update::remove("tcp"), Update::insert("topics", &topics)];
-        let update_result = enr.remove_insert(updates, &key).unwrap();
+        let updates = (Update::remove("tcp"), Update::insert("topics", &topics));
+        let (prev_tcp, prev_topics) = enr.update(updates, &key).unwrap();
 
         assert_eq!(
-            update_result[0],
+            prev_tcp,
             Some(rlp::encode(&tcp.to_be_bytes().to_vec()).freeze())
         );
-        assert_eq!(update_result[1], None);
+        assert_eq!(prev_topics, None);
 
         assert_eq!(enr.tcp4(), None);
         assert_eq!(enr.get("topics"), Some(topics));
@@ -1478,11 +1472,11 @@ mod tests {
         for tcp in LOW_INT_PORTS {
             let mut enr = EnrBuilder::new("v4").build(&key).unwrap();
 
-            let updates = vec![
+            let updates = (
                 Update::remove("none"),
                 Update::insert("tcp", &tcp.to_be_bytes().as_slice()),
-            ];
-            let res = enr.remove_insert(updates, &key);
+            );
+            let res = enr.update(updates, &key);
             if u8::try_from(tcp).is_ok() {
                 assert_eq!(res.unwrap_err().to_string(), "invalid rlp data");
             } else {
