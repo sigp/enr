@@ -99,7 +99,7 @@ impl<K: EnrKey> EnrBuilder<K> {
     /// Constructs an ENR from the `EnrBuilder`.
     ///
     /// # Errors
-    /// Fails if the identity scheme is not supported, or the record size exceeds [`MAX_ENR_SIZE`].
+    /// Fails if the identity scheme is not supported, or the record size exceeds [`super::MAX_ENR_SIZE`].
     pub fn build(&self, signing_key: &K) -> Result<Enr<K>, EnrError> {
         let mut enr = self.enr.clone();
         let updates = self.updates.clone();
