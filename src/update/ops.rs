@@ -11,11 +11,7 @@ use crate::{Enr, EnrKey, Key};
 #[derive(Clone)]
 pub enum Update {
     /// Insert a key and RLP data.
-    Insert {
-        key: Key,
-        content: Bytes,
-        trust_valid_rlp: bool,
-    },
+    Insert { key: Key, content: Bytes },
     /// Remove a key.
     Remove { key: Key },
 }
@@ -23,21 +19,17 @@ pub enum Update {
 impl Update {
     /// Create an insert operation that adds an [`Encodable`] object to the given key.
     pub fn insert(key: impl AsRef<[u8]>, value: &impl Encodable) -> Self {
-        let content = rlp::encode(value).freeze();
         Update::Insert {
             key: key.as_ref().to_vec(),
-            content,
-            trust_valid_rlp: true,
+            content: rlp::encode(value).freeze(),
         }
     }
 
-    /// Create an insert operation where the raw rlp is provided. Due to implementation contrains, this
-    /// only accepts rlp strings, but not lists.
+    /// Create an insert operation where the raw rlp is provided.  
     pub fn insert_raw(key: impl AsRef<[u8]>, content: Bytes) -> Self {
         Update::Insert {
             key: key.as_ref().to_vec(),
             content,
-            trust_valid_rlp: false,
         }
     }
 
@@ -51,23 +43,10 @@ impl Update {
     /// Validate the update operation.
     pub(super) fn to_valid_op(self) -> Result<Op, Error> {
         match self {
-            Update::Insert {
-                key,
-                content,
-                trust_valid_rlp,
-            } => {
-                if !trust_valid_rlp {
-                    // TODO(@divma): this verification only checks that the rlp header is valid, it's unlikely
-                    // we can fully verify in depth the data but at least we could verify the payload size
-                    //
-                    // also, this only verifies that this has a "valid" payload if a rlp string, but the data
-                    // could be a list as well so rejecting this is probably wrong in some cases
-                    //
-                    // rlp sucks
-                    rlp::Rlp::new(content.as_ref())
-                        .data()
-                        .map_err(Error::InvalidRlpData)?;
-                }
+            Update::Insert { key, content } => {
+                rlp::Rlp::new(content.as_ref())
+                    .data()
+                    .map_err(Error::InvalidRlpData)?;
                 match key.as_slice() {
                     b"tcp" => {
                         if rlp::decode::<u16>(&content).is_err() {
@@ -110,7 +89,10 @@ impl Update {
                             return Err(Error::InvalidReservedKeyData("ip6"));
                         }
                     }
-                    _ => {}
+                    _ => {
+                        // NOTE: we don't verify the keys for the public key, since it's always
+                        // calculated in an update
+                    }
                 };
 
                 Ok(Op::Insert { key, content })

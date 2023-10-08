@@ -22,12 +22,10 @@ pub(crate) struct Guard<'a, K: EnrKey, Up: UpdatesT> {
     inverses: Up::ValidatedUpdates,
 }
 
-/// Implementation for a single update
 impl<'a, K: EnrKey, Up: UpdatesT> Guard<'a, K, Up> {
     /// Create a new guard verifying the update and applying it to the the [`Enr`].
     /// If validation fails, it's guaranteed that the [`Enr`] has not been changed with
     /// an error returned.
-    // NOTE: this is expanded to n-tuples via macros
     pub fn new(enr: &'a mut Enr<K>, updates: Up) -> Result<Self, Error> {
         // validate the update
         let updates = updates.to_valid()?;
