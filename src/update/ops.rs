@@ -44,61 +44,47 @@ impl Update {
     pub(super) fn to_valid_op(self) -> Result<Op, EnrError> {
         match self {
             Update::Insert { key, content } => {
-                rlp::Rlp::new(content.as_ref())
-                    .data()
-                    .map_err(EnrError::InvalidRlpData)?;
                 match key.as_slice() {
-                    b"tcp" => {
-                        if rlp::decode::<u16>(&content).is_err() {
-                            return Err(EnrError::InvalidReservedKeyData("tcp"));
-                        }
-                    }
-                    b"tcp6" => {
-                        if rlp::decode::<u16>(&content).is_err() {
-                            return Err(EnrError::InvalidReservedKeyData("tcp6"));
-                        }
-                    }
-                    b"udp" => {
-                        if rlp::decode::<u16>(&content).is_err() {
-                            return Err(EnrError::InvalidReservedKeyData("udp"));
-                        }
-                    }
-                    b"udp6" => {
-                        if rlp::decode::<u16>(&content).is_err() {
-                            return Err(EnrError::InvalidReservedKeyData("udp6"));
-                        }
+                    b"tcp" | b"tcp6" | b"udp" | b"udp6" => {
+                        rlp::decode::<u16>(&content)
+                            .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
                     }
                     b"id" => {
-                        let id_bytes =
-                            rlp::decode::<Vec<u8>>(&content).map_err(EnrError::InvalidRlpData)?;
+                        let id_bytes = rlp::decode::<Vec<u8>>(&content)
+                            .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
                         if id_bytes != b"v4" {
                             return Err(EnrError::UnsupportedIdentityScheme);
                         }
                     }
                     b"ip" => {
-                        let ip4_bytes =
-                            rlp::decode::<Vec<u8>>(&content).map_err(EnrError::InvalidRlpData)?;
+                        let ip4_bytes = rlp::decode::<Vec<u8>>(&content)
+                            .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
                         if ip4_bytes.len() != 4 {
-                            return Err(EnrError::InvalidReservedKeyData("ip"));
+                            return Err(EnrError::InvalidRlpData("Invalid Ipv4 size".to_string()));
                         }
                     }
                     b"ip6" => {
-                        let ip6_bytes =
-                            rlp::decode::<Vec<u8>>(&content).map_err(EnrError::InvalidRlpData)?;
+                        let ip6_bytes = rlp::decode::<Vec<u8>>(&content)
+                            .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
                         if ip6_bytes.len() != 16 {
-                            return Err(EnrError::InvalidReservedKeyData("ip6"));
+                            return Err(EnrError::InvalidRlpData("Invalid Ipv6 size".to_string()));
                         }
                     }
                     _ => {
                         // NOTE: we don't verify the keys for the public key, since it's always
                         // calculated in an update
+                        rlp::Rlp::new(content.as_ref())
+                            .data()
+                            .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
                     }
                 };
 
                 Ok(Op::Insert { key, content })
             }
             Update::Remove { key } => match key.as_slice() {
-                b"id" => Err(EnrError::InvalidReservedKeyData("id")),
+                b"id" => Err(EnrError::InvalidRlpData(
+                    "id key must not be removed".into(),
+                )),
                 _ => Ok(Op::Remove { key }),
             },
         }
