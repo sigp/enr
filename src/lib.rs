@@ -508,17 +508,16 @@ impl<K: EnrKey> Enr<K> {
     ///
     /// let mut enr = EnrBuilder::new("v4").build(&key).unwrap();
     ///
+    /// // A tuple of updates
     /// let updates = (Update::remove("foo"), Update::insert("x", &16u8));
     /// let (prev_foo, prev_x) = enr.update(updates, &key).unwrap();
-    ///
     ///
     /// assert_eq!(prev_foo, None);
     /// assert_eq!(prev_x, None);
     /// assert_eq!(enr.get("foo"), None);
     /// assert_eq!(enr.get_decodable::<u8>("x").unwrap().unwrap(), 16);
     ///
-    /// // a vector of updates
-    ///
+    /// // A vector of updates
     /// let updates = vec![Update::remove("foo"), Update::insert("x", &106u8)];
     /// let prev_values: Vec<Option<Bytes>> = enr.update(updates, &key).unwrap();
     /// assert_eq!(prev_values[0], None);
