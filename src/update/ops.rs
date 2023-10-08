@@ -3,7 +3,7 @@
 use bytes::Bytes;
 use rlp::Encodable;
 
-use super::Error;
+use super::EnrError;
 use crate::{Enr, EnrKey, Key};
 
 /// An update operation.
@@ -41,52 +41,52 @@ impl Update {
     }
 
     /// Validate the update operation.
-    pub(super) fn to_valid_op(self) -> Result<Op, Error> {
+    pub(super) fn to_valid_op(self) -> Result<Op, EnrError> {
         match self {
             Update::Insert { key, content } => {
                 rlp::Rlp::new(content.as_ref())
                     .data()
-                    .map_err(Error::InvalidRlpData)?;
+                    .map_err(EnrError::InvalidRlpData)?;
                 match key.as_slice() {
                     b"tcp" => {
                         if rlp::decode::<u16>(&content).is_err() {
-                            return Err(Error::InvalidReservedKeyData("tcp"));
+                            return Err(EnrError::InvalidReservedKeyData("tcp"));
                         }
                     }
                     b"tcp6" => {
                         if rlp::decode::<u16>(&content).is_err() {
-                            return Err(Error::InvalidReservedKeyData("tcp6"));
+                            return Err(EnrError::InvalidReservedKeyData("tcp6"));
                         }
                     }
                     b"udp" => {
                         if rlp::decode::<u16>(&content).is_err() {
-                            return Err(Error::InvalidReservedKeyData("udp"));
+                            return Err(EnrError::InvalidReservedKeyData("udp"));
                         }
                     }
                     b"udp6" => {
                         if rlp::decode::<u16>(&content).is_err() {
-                            return Err(Error::InvalidReservedKeyData("udp6"));
+                            return Err(EnrError::InvalidReservedKeyData("udp6"));
                         }
                     }
                     b"id" => {
                         let id_bytes =
-                            rlp::decode::<Vec<u8>>(&content).map_err(Error::InvalidRlpData)?;
+                            rlp::decode::<Vec<u8>>(&content).map_err(EnrError::InvalidRlpData)?;
                         if id_bytes != b"v4" {
-                            return Err(Error::UnsupportedIdentityScheme);
+                            return Err(EnrError::UnsupportedIdentityScheme);
                         }
                     }
                     b"ip" => {
                         let ip4_bytes =
-                            rlp::decode::<Vec<u8>>(&content).map_err(Error::InvalidRlpData)?;
+                            rlp::decode::<Vec<u8>>(&content).map_err(EnrError::InvalidRlpData)?;
                         if ip4_bytes.len() != 4 {
-                            return Err(Error::InvalidReservedKeyData("ip"));
+                            return Err(EnrError::InvalidReservedKeyData("ip"));
                         }
                     }
                     b"ip6" => {
                         let ip6_bytes =
-                            rlp::decode::<Vec<u8>>(&content).map_err(Error::InvalidRlpData)?;
+                            rlp::decode::<Vec<u8>>(&content).map_err(EnrError::InvalidRlpData)?;
                         if ip6_bytes.len() != 16 {
-                            return Err(Error::InvalidReservedKeyData("ip6"));
+                            return Err(EnrError::InvalidReservedKeyData("ip6"));
                         }
                     }
                     _ => {
@@ -98,7 +98,7 @@ impl Update {
                 Ok(Op::Insert { key, content })
             }
             Update::Remove { key } => match key.as_slice() {
-                b"id" => Err(Error::InvalidReservedKeyData("id")),
+                b"id" => Err(EnrError::InvalidReservedKeyData("id")),
                 _ => Ok(Op::Remove { key }),
             },
         }
@@ -159,7 +159,7 @@ mod sealed {
 pub trait UpdatesT: sealed::Sealed {
     type ValidatedUpdates: ValidUpdatesT;
     /// Validates the updates so that they can be applied.
-    fn to_valid(self) -> Result<Self::ValidatedUpdates, Error>;
+    fn to_valid(self) -> Result<Self::ValidatedUpdates, EnrError>;
 }
 
 pub trait ValidUpdatesT: sealed::Sealed {
@@ -182,7 +182,7 @@ impl sealed::Sealed for Op {}
 impl UpdatesT for Update {
     type ValidatedUpdates = Op;
 
-    fn to_valid(self) -> Result<Self::ValidatedUpdates, Error> {
+    fn to_valid(self) -> Result<Self::ValidatedUpdates, EnrError> {
         self.to_valid_op()
     }
 }
@@ -212,7 +212,7 @@ impl sealed::Sealed for Vec<Op> {}
 impl UpdatesT for Vec<Update> {
     type ValidatedUpdates = Vec<Op>;
 
-    fn to_valid(self) -> Result<Self::ValidatedUpdates, Error> {
+    fn to_valid(self) -> Result<Self::ValidatedUpdates, EnrError> {
         self.into_iter().map(Update::to_valid_op).collect()
     }
 }
@@ -261,7 +261,7 @@ macro_rules! gen_impl {
         impl UpdatesT for ($(map_to_type!($up, Update),)*) {
             type ValidatedUpdates = ($(map_to_type!($up, Op),)*);
 
-            fn to_valid(self) -> Result<Self::ValidatedUpdates, Error> {
+            fn to_valid(self) -> Result<Self::ValidatedUpdates, EnrError> {
                 // destructure the tuple using the identifiers
                 let ($($up,)*) = self;
                 // obtain the valid version of each update

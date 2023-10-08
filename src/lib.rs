@@ -203,7 +203,7 @@ use std::{
 };
 
 pub use builder::EnrBuilder;
-pub use error::Error;
+pub use error::EnrError;
 
 #[cfg(feature = "k256")]
 pub use keys::k256;
@@ -438,7 +438,7 @@ impl<K: EnrKey> Enr<K> {
     // Setters //
 
     /// Allows setting the sequence number to an arbitrary value.
-    pub fn set_seq(&mut self, seq: u64, key: &K) -> Result<(), Error> {
+    pub fn set_seq(&mut self, seq: u64, key: &K) -> Result<(), EnrError> {
         // TODO(@divma): signing errors make this corrupt. Also ... why do we want this
         self.seq = seq;
 
@@ -450,7 +450,7 @@ impl<K: EnrKey> Enr<K> {
 
         // check the size of the record
         if self.size() > MAX_ENR_SIZE {
-            return Err(Error::ExceedsMaxSize);
+            return Err(EnrError::ExceedsMaxSize);
         }
 
         Ok(())
@@ -465,7 +465,7 @@ impl<K: EnrKey> Enr<K> {
         key: impl AsRef<[u8]>,
         value: &T,
         enr_key: &K,
-    ) -> Result<Option<Bytes>, Error> {
+    ) -> Result<Option<Bytes>, EnrError> {
         let update = Update::insert(key, value);
         self.update(update, enr_key)
     }
@@ -474,7 +474,7 @@ impl<K: EnrKey> Enr<K> {
         &mut self,
         updates: Updates,
         signing_key: &K,
-    ) -> Result<<Updates::ValidatedUpdates as update::ValidUpdatesT>::Output, Error> {
+    ) -> Result<<Updates::ValidatedUpdates as update::ValidUpdatesT>::Output, EnrError> {
         update::Guard::new(self, updates)?.finish(signing_key)
     }
 
@@ -487,13 +487,13 @@ impl<K: EnrKey> Enr<K> {
         key: impl AsRef<[u8]>,
         value: Bytes,
         enr_key: &K,
-    ) -> Result<Option<Bytes>, Error> {
+    ) -> Result<Option<Bytes>, EnrError> {
         let update = Update::insert_raw(key, value);
         self.update(update, enr_key)
     }
 
     /// Sets the `ip` field of the ENR. Returns any pre-existing IP address in the record.
-    pub fn set_ip(&mut self, ip: IpAddr, key: &K) -> Result<Option<IpAddr>, Error> {
+    pub fn set_ip(&mut self, ip: IpAddr, key: &K) -> Result<Option<IpAddr>, EnrError> {
         match ip {
             IpAddr::V4(addr) => {
                 let prev_value = self.insert("ip", &addr.octets().as_ref(), key)?;
@@ -521,7 +521,7 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Sets the `udp` field of the ENR. Returns any pre-existing UDP port in the record.
-    pub fn set_udp4(&mut self, udp: u16, key: &K) -> Result<Option<u16>, Error> {
+    pub fn set_udp4(&mut self, udp: u16, key: &K) -> Result<Option<u16>, EnrError> {
         // TODO: self.update_guard().insert().finish()
         if let Some(udp_bytes) = self.insert("udp", &udp, key)? {
             return Ok(rlp::decode(&udp_bytes).ok());
@@ -530,7 +530,7 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Sets the `udp6` field of the ENR. Returns any pre-existing UDP port in the record.
-    pub fn set_udp6(&mut self, udp: u16, key: &K) -> Result<Option<u16>, Error> {
+    pub fn set_udp6(&mut self, udp: u16, key: &K) -> Result<Option<u16>, EnrError> {
         // TODO: self.update_guard().insert().finish()
         if let Some(udp_bytes) = self.insert("udp6", &udp, key)? {
             return Ok(rlp::decode(&udp_bytes).ok());
@@ -539,7 +539,7 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Sets the `tcp` field of the ENR. Returns any pre-existing tcp port in the record.
-    pub fn set_tcp4(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, Error> {
+    pub fn set_tcp4(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, EnrError> {
         // TODO: self.update_guard().insert().finish()
         if let Some(tcp_bytes) = self.insert("tcp", &tcp, key)? {
             return Ok(rlp::decode(&tcp_bytes).ok());
@@ -548,7 +548,7 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Sets the `tcp6` field of the ENR. Returns any pre-existing tcp6 port in the record.
-    pub fn set_tcp6(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, Error> {
+    pub fn set_tcp6(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, EnrError> {
         // TODO: self.update_guard().insert().finish()
         if let Some(tcp_bytes) = self.insert("tcp6", &tcp, key)? {
             return Ok(rlp::decode(&tcp_bytes).ok());
@@ -557,17 +557,17 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Sets the IP and UDP port in a single update with a single increment in sequence number.
-    pub fn set_udp_socket(&mut self, socket: SocketAddr, key: &K) -> Result<(), Error> {
+    pub fn set_udp_socket(&mut self, socket: SocketAddr, key: &K) -> Result<(), EnrError> {
         self.set_socket(socket, key, false)
     }
 
     /// Sets the IP and TCP port in a single update with a single increment in sequence number.
-    pub fn set_tcp_socket(&mut self, socket: SocketAddr, key: &K) -> Result<(), Error> {
+    pub fn set_tcp_socket(&mut self, socket: SocketAddr, key: &K) -> Result<(), EnrError> {
         self.set_socket(socket, key, true)
     }
 
     /// Helper function for `set_tcp_socket()` and `set_udp_socket`.
-    fn set_socket(&mut self, socket: SocketAddr, key: &K, is_tcp: bool) -> Result<(), Error> {
+    fn set_socket(&mut self, socket: SocketAddr, key: &K, is_tcp: bool) -> Result<(), EnrError> {
         let (ip_update, port_update) = match socket {
             SocketAddr::V4(v4_socket) => {
                 let ip_update = Update::insert("ip", &v4_socket.ip().octets().as_ref());
@@ -597,7 +597,7 @@ impl<K: EnrKey> Enr<K> {
         &mut self,
         updates: Vec<Update>,
         enr_key: &K,
-    ) -> Result<Vec<Option<Bytes>>, Error> {
+    ) -> Result<Vec<Option<Bytes>>, EnrError> {
         self.update(updates, enr_key)
     }
 
@@ -639,18 +639,18 @@ impl<K: EnrKey> Enr<K> {
         stream.out()
     }
 
-    fn compute_signature(&self, key: &K) -> Result<Vec<u8>, Error> {
+    fn compute_signature(&self, key: &K) -> Result<Vec<u8>, EnrError> {
         match self.id() {
             Some(ref id) if id == "v4" => key
                 .sign_v4(&self.rlp_content())
-                .map_err(|_| Error::SigningError),
+                .map_err(|_| EnrError::SigningError),
             // other identity schemes are unsupported
-            _ => return Err(Error::UnsupportedIdentityScheme),
+            _ => return Err(EnrError::UnsupportedIdentityScheme),
         }
     }
 
     /// Signs the ENR record based on the identity scheme. Currently only "v4" is supported.
-    fn sign(&mut self, key: &K) -> Result<Vec<u8>, Error> {
+    fn sign(&mut self, key: &K) -> Result<Vec<u8>, EnrError> {
         let new_signature = self.compute_signature(key)?;
         Ok(std::mem::replace(&mut self.signature, new_signature))
     }
@@ -1467,7 +1467,7 @@ mod tests {
 
             let res = enr.insert(b"tcp", &tcp.to_be_bytes().as_ref(), &key);
             if u8::try_from(tcp).is_ok() {
-                assert_eq!(res.unwrap_err(), Error::InvalidReservedKeyData("tcp"));
+                assert_eq!(res.unwrap_err(), EnrError::InvalidReservedKeyData("tcp"));
             } else {
                 res.unwrap(); // integers above 255 are encoded correctly
                 assert_tcp4(&enr, tcp);
@@ -1488,7 +1488,7 @@ mod tests {
             ];
             let res = enr.remove_insert(updates, &key);
             if u8::try_from(tcp).is_ok() {
-                assert_eq!(res.unwrap_err(), Error::InvalidReservedKeyData("tcp"));
+                assert_eq!(res.unwrap_err(), EnrError::InvalidReservedKeyData("tcp"));
             } else {
                 res.unwrap(); // integers above 255 are encoded correctly
                 assert_tcp4(&enr, tcp);

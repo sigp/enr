@@ -1,4 +1,4 @@
-use crate::{update::Update, Enr, EnrKey, Error, NodeId};
+use crate::{update::Update, Enr, EnrError, EnrKey, NodeId};
 use bytes::Bytes;
 use rlp::Encodable;
 use std::{
@@ -100,7 +100,7 @@ impl<K: EnrKey> EnrBuilder<K> {
     ///
     /// # Errors
     /// Fails if the identity scheme is not supported, or the record size exceeds [`MAX_ENR_SIZE`].
-    pub fn build(&self, signing_key: &K) -> Result<Enr<K>, Error> {
+    pub fn build(&self, signing_key: &K) -> Result<Enr<K>, EnrError> {
         let mut enr = self.enr.clone();
         let updates = self.updates.clone();
         enr.update(updates, signing_key)?;

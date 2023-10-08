@@ -2,7 +2,7 @@
 
 use bytes::Bytes;
 
-use crate::{error::Error, Enr, EnrKey, EnrPublicKey, NodeId, MAX_ENR_SIZE};
+use crate::{error::EnrError, Enr, EnrKey, EnrPublicKey, NodeId, MAX_ENR_SIZE};
 
 mod ops;
 
@@ -30,7 +30,7 @@ impl<'a, K: EnrKey, Up: UpdatesT> Guard<'a, K, Up> {
     ///
     /// If validation fails, an error is returned and it's guaranteed that the [`Enr`] has not been
     /// changed.
-    pub fn new(enr: &'a mut Enr<K>, updates: Up) -> Result<Self, Error> {
+    pub fn new(enr: &'a mut Enr<K>, updates: Up) -> Result<Self, EnrError> {
         // validate the update
         let updates = updates.to_valid()?;
         #[cfg(test)]
@@ -65,7 +65,7 @@ impl<'a, K: EnrKey, Up: UpdatesT> Guard<'a, K, Up> {
     pub fn finish(
         self,
         signing_key: &K,
-    ) -> Result<<Up::ValidatedUpdates as ValidUpdatesT>::Output, Error> {
+    ) -> Result<<Up::ValidatedUpdates as ValidUpdatesT>::Output, EnrError> {
         let Guard {
             #[cfg(test)]
             enr_backup,
@@ -86,7 +86,7 @@ impl<'a, K: EnrKey, Up: UpdatesT> Guard<'a, K, Up> {
             revert.recover(enr);
             #[cfg(test)]
             assert_eq!(&enr_backup, enr);
-            return Err(Error::SequenceNumberTooHigh);
+            return Err(EnrError::SequenceNumberTooHigh);
         };
         revert.seq = Some(std::mem::replace(&mut enr.seq, new_seq));
 
@@ -106,7 +106,7 @@ impl<'a, K: EnrKey, Up: UpdatesT> Guard<'a, K, Up> {
             revert.recover(enr);
             #[cfg(test)]
             assert_eq!(&enr_backup, enr);
-            return Err(Error::ExceedsMaxSize);
+            return Err(EnrError::ExceedsMaxSize);
         }
 
         // 5. update the node_id
