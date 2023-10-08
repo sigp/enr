@@ -445,7 +445,6 @@ impl<K: EnrKey> Enr<K> {
 
     /// Allows setting the sequence number to an arbitrary value.
     pub fn set_seq(&mut self, seq: u64, key: &K) -> Result<(), EnrError> {
-        // TODO(@divma): signing errors make this corrupt. Also ... why do we want this
         self.seq = seq;
 
         // sign the record
@@ -528,7 +527,6 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets the `udp` field of the ENR. Returns any pre-existing UDP port in the record.
     pub fn set_udp4(&mut self, udp: u16, key: &K) -> Result<Option<u16>, EnrError> {
-        // TODO: self.update_guard().insert().finish()
         if let Some(udp_bytes) = self.insert("udp", &udp, key)? {
             return Ok(rlp::decode(&udp_bytes).ok());
         }
@@ -537,7 +535,6 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets the `udp6` field of the ENR. Returns any pre-existing UDP port in the record.
     pub fn set_udp6(&mut self, udp: u16, key: &K) -> Result<Option<u16>, EnrError> {
-        // TODO: self.update_guard().insert().finish()
         if let Some(udp_bytes) = self.insert("udp6", &udp, key)? {
             return Ok(rlp::decode(&udp_bytes).ok());
         }
@@ -546,7 +543,6 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets the `tcp` field of the ENR. Returns any pre-existing tcp port in the record.
     pub fn set_tcp4(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, EnrError> {
-        // TODO: self.update_guard().insert().finish()
         if let Some(tcp_bytes) = self.insert("tcp", &tcp, key)? {
             return Ok(rlp::decode(&tcp_bytes).ok());
         }
@@ -555,7 +551,6 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets the `tcp6` field of the ENR. Returns any pre-existing tcp6 port in the record.
     pub fn set_tcp6(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, EnrError> {
-        // TODO: self.update_guard().insert().finish()
         if let Some(tcp_bytes) = self.insert("tcp6", &tcp, key)? {
             return Ok(rlp::decode(&tcp_bytes).ok());
         }
@@ -893,8 +888,7 @@ impl<K: EnrKey> IntoIterator for Enr<K> {
 
 pub(crate) fn digest(b: &[u8]) -> [u8; 32] {
     let mut output = [0_u8; 32];
-    let x = Keccak256::digest(b);
-    output.copy_from_slice(&x);
+    output.copy_from_slice(&Keccak256::digest(b));
     output
 }
 
