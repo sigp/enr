@@ -1748,15 +1748,24 @@ mod tests {
     #[test]
     fn test_large_enr_decoding_is_rejected() {
         // hack an enr object that is too big. This is not possible via the public API.
-        let huge_enr: DefaultEnr = Enr {
-            seq: 0,
-            node_id: NodeId::random(),
-            content: BTreeMap::default(),
-            signature: std::iter::repeat(0).take(MAX_ENR_SIZE).collect(),
-            phantom: PhantomData,
-        };
+        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+
+        let mut huge_enr = EnrBuilder::new("v4").build(&key).unwrap();
+        let large_vec: Vec<u8> = std::iter::repeat(0).take(MAX_ENR_SIZE).collect();
+        let large_vec_encoded = rlp::encode(&large_vec).freeze();
+
+        huge_enr
+            .content
+            .insert(b"large vec".to_vec(), large_vec_encoded);
+        huge_enr.sign(&key).unwrap();
+
+        assert!(huge_enr.verify());
+
         let encoded = rlp::encode(&huge_enr).freeze();
         assert!(encoded.len() > MAX_ENR_SIZE);
-        assert!(rlp::decode::<DefaultEnr>(&encoded).is_err())
+        assert_eq!(
+            rlp::decode::<DefaultEnr>(&encoded).unwrap_err(),
+            DecoderError::Custom("enr exceeds max size")
+        )
     }
 }
