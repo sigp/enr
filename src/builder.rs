@@ -20,16 +20,16 @@ impl<K: EnrKey> EnrBuilder<K> {
     /// scheme.
     pub fn new(id: impl Into<String>) -> Self {
         let id = rlp::encode(&id.into().as_bytes()).freeze();
-        Self {
-            enr: Enr {
-                seq: 0,
-                node_id: NodeId::new(&[0; 32]),
-                content: BTreeMap::from([(b"id".to_vec(), id)]),
-                signature: Vec::default(),
-                phantom: PhantomData,
-            },
-            updates: Vec::default(),
-        }
+        // create a dummy Enr over which work is done
+        let enr = Enr {
+            seq: 0,
+            node_id: NodeId::new(&[0; 32]),
+            content: BTreeMap::from([(b"id".to_vec(), id)]),
+            signature: Vec::default(),
+            phantom: PhantomData,
+        };
+        let updates = Vec::default();
+        Self { enr, updates }
     }
 
     /// Modifies the sequence number of the builder.
