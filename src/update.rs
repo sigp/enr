@@ -7,12 +7,12 @@ use crate::{error::EnrError, Enr, EnrKey, EnrPublicKey, NodeId, MAX_ENR_SIZE};
 mod ops;
 
 pub use ops::Update;
-pub(crate) use ops::{UpdatesT, ValidUpdatesT};
+pub use ops::{UpdatesT, ValidUpdatesT};
 
 /// An update guard over the [`Enr`].
 /// The inverses are set as a generic to allow optimizing for single updates, multiple updates with
 /// a known count of updates and arbitrary updates.
-pub(crate) struct Guard<'a, K: EnrKey, Up: UpdatesT> {
+pub struct Guard<'a, K: EnrKey, Up: UpdatesT> {
     /// Testing keep a clone of the enr to verify it remains unchanged on failure.
     #[cfg(test)]
     enr_backup: Enr<K>,
@@ -36,7 +36,7 @@ impl<'a, K: EnrKey, Up: UpdatesT> Guard<'a, K, Up> {
         #[cfg(test)]
         let enr_backup = Enr {
             seq: enr.seq,
-            node_id: enr.node_id.clone(),
+            node_id: enr.node_id,
             content: enr.content.clone(),
             signature: enr.signature.clone(),
             phantom: std::marker::PhantomData,
@@ -130,7 +130,7 @@ pub struct RevertOps<I> {
 
 impl<I> RevertOps<I> {
     fn new(content_inverses: I) -> Self {
-        RevertOps {
+        Self {
             content_inverses,
             seq: None,
             signature: None,
@@ -141,7 +141,7 @@ impl<I> RevertOps<I> {
 
 impl<I: ValidUpdatesT> RevertOps<I> {
     pub fn recover<K: EnrKey>(self, enr: &mut Enr<K>) {
-        let RevertOps {
+        let Self {
             content_inverses,
             public_key,
             seq,

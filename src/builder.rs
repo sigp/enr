@@ -26,7 +26,7 @@ impl<K: EnrKey> EnrBuilder<K> {
                 node_id: NodeId::new(&[0; 32]),
                 content: BTreeMap::from([(b"id".to_vec(), id)]),
                 signature: Vec::default(),
-                phantom: PhantomData::default(),
+                phantom: PhantomData,
             },
             updates: Vec::default(),
         }

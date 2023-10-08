@@ -571,13 +571,13 @@ impl<K: EnrKey> Enr<K> {
         let (ip_update, port_update) = match socket {
             SocketAddr::V4(v4_socket) => {
                 let ip_update = Update::insert("ip", &v4_socket.ip().octets().as_ref());
-                let port_key = is_tcp.then_some("tcp").unwrap_or("udp");
+                let port_key = if is_tcp { "tcp" } else { "udp" };
                 let port_update = Update::insert(port_key, &v4_socket.port());
                 (ip_update, port_update)
             }
             SocketAddr::V6(v6_socket) => {
                 let ip_update = Update::insert("ip", &v6_socket.ip().octets().as_ref());
-                let port_key = is_tcp.then_some("tcp").unwrap_or("udp");
+                let port_key = if is_tcp { "tcp" } else { "udp" };
                 let port_update = Update::insert(port_key, &v6_socket.port());
                 (ip_update, port_update)
             }
@@ -645,7 +645,7 @@ impl<K: EnrKey> Enr<K> {
                 .sign_v4(&self.rlp_content())
                 .map_err(|_| EnrError::SigningError),
             // other identity schemes are unsupported
-            _ => return Err(EnrError::UnsupportedIdentityScheme),
+            _ => Err(EnrError::UnsupportedIdentityScheme),
         }
     }
 

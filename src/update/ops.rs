@@ -19,7 +19,7 @@ pub enum Update {
 impl Update {
     /// Create an insert operation that adds an [`Encodable`] object to the given key.
     pub fn insert(key: impl AsRef<[u8]>, value: &impl Encodable) -> Self {
-        Update::Insert {
+        Self::Insert {
             key: key.as_ref().to_vec(),
             content: rlp::encode(value).freeze(),
         }
@@ -27,7 +27,7 @@ impl Update {
 
     /// Create an insert operation where the raw rlp is provided.
     pub fn insert_raw(key: impl AsRef<[u8]>, content: Bytes) -> Self {
-        Update::Insert {
+        Self::Insert {
             key: key.as_ref().to_vec(),
             content,
         }
@@ -35,7 +35,7 @@ impl Update {
 
     /// Create a remove operation.
     pub fn remove(key: impl AsRef<[u8]>) -> Self {
-        Update::Remove {
+        Self::Remove {
             key: key.as_ref().to_vec(),
         }
     }
@@ -43,7 +43,7 @@ impl Update {
     /// Validate the update operation.
     pub(super) fn to_valid_op(self) -> Result<Op, EnrError> {
         match self {
-            Update::Insert { key, content } => {
+            Self::Insert { key, content } => {
                 match key.as_slice() {
                     b"tcp" | b"tcp6" | b"udp" | b"udp6" => {
                         rlp::decode::<u16>(&content)
@@ -81,7 +81,7 @@ impl Update {
 
                 Ok(Op::Insert { key, content })
             }
-            Update::Remove { key } => match key.as_slice() {
+            Self::Remove { key } => match key.as_slice() {
                 b"id" => Err(EnrError::InvalidRlpData(
                     "id key must not be removed".into(),
                 )),
@@ -101,15 +101,15 @@ pub enum Op {
 
 impl Op {
     /// Applies the operation and returns the inverse.
-    pub fn apply_with_inverse<K: EnrKey>(self, enr: &mut Enr<K>) -> Op {
+    pub fn apply_with_inverse<K: EnrKey>(self, enr: &mut Enr<K>) -> Self {
         match self {
-            Op::Insert { key, content } => match enr.content.insert(key.clone(), content) {
-                Some(content) => Op::Insert { key, content },
-                None => Op::Remove { key },
+            Self::Insert { key, content } => match enr.content.insert(key.clone(), content) {
+                Some(content) => Self::Insert { key, content },
+                None => Self::Remove { key },
             },
-            Op::Remove { key } => match enr.content.remove(&key) {
-                Some(content) => Op::Insert { key, content },
-                None => Op::Remove { key },
+            Self::Remove { key } => match enr.content.remove(&key) {
+                Some(content) => Self::Insert { key, content },
+                None => Self::Remove { key },
             },
         }
     }
@@ -117,8 +117,8 @@ impl Op {
     /// Applies the operation to the [`Enr`].
     pub fn irrecoverable_apply<K: EnrKey>(self, enr: &mut Enr<K>) {
         match self {
-            Op::Insert { key, content } => enr.content.insert(key, content),
-            Op::Remove { key } => enr.content.remove(&key),
+            Self::Insert { key, content } => enr.content.insert(key, content),
+            Self::Remove { key } => enr.content.remove(&key),
         };
     }
 
@@ -126,8 +126,8 @@ impl Op {
     pub fn to_output(self) -> Option<Bytes> {
         // key was part of the input, so it's not needed
         match self {
-            Op::Insert { content, .. } => Some(content),
-            Op::Remove { .. } => None,
+            Self::Insert { content, .. } => Some(content),
+            Self::Remove { .. } => None,
         }
     }
 }
@@ -180,7 +180,7 @@ impl ValidUpdatesT for Op {
     }
 
     fn apply_as_inverse<K: EnrKey>(self, enr: &mut Enr<K>) {
-        self.irrecoverable_apply(enr)
+        self.irrecoverable_apply(enr);
     }
 
     fn inverse_to_output(self) -> Self::Output {
@@ -215,7 +215,7 @@ impl ValidUpdatesT for Vec<Op> {
     fn apply_as_inverse<K: EnrKey>(self, enr: &mut Enr<K>) {
         self.into_iter()
             .rev()
-            .for_each(|op| op.irrecoverable_apply(enr))
+            .for_each(|op| op.irrecoverable_apply(enr));
     }
 
     fn inverse_to_output(self) -> Self::Output {
