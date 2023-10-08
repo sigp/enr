@@ -1744,4 +1744,19 @@ mod tests {
         assert_eq!(enr.get_raw_rlp("tcp").unwrap(), rlp::encode(&tcp).to_vec());
         assert_eq!(enr.tcp4(), Some(tcp));
     }
+
+    #[test]
+    fn test_large_enr_decoding_is_rejected() {
+        // hack an enr object that is too big. This is not possible via the public API.
+        let huge_enr: DefaultEnr = Enr {
+            seq: 0,
+            node_id: NodeId::random(),
+            content: BTreeMap::default(),
+            signature: std::iter::repeat(0).take(MAX_ENR_SIZE).collect(),
+            phantom: PhantomData,
+        };
+        let encoded = rlp::encode(&huge_enr).freeze();
+        assert!(encoded.len() > MAX_ENR_SIZE);
+        assert!(rlp::decode::<DefaultEnr>(&encoded).is_err())
+    }
 }
