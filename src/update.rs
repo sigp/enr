@@ -13,6 +13,9 @@ pub(crate) use ops::{UpdatesT, ValidUpdatesT};
 /// The inverses are set as a generic to allow optimizing for single updates, multiple updates with
 /// a known count of updates and arbitrary updates.
 pub(crate) struct Guard<'a, K: EnrKey, Up: UpdatesT> {
+    /// Testing keep a clone of the enr to verify it remains unchanged on failure.
+    #[cfg(test)]
+    enr_backup: Enr<K>,
     /// [`Enr`] with update [`Op`]s already applied.
     enr: &'a mut Enr<K>,
     /// Inverses that would need to be applied to the [`Enr`] to restore [`Enr::content`].
@@ -30,9 +33,22 @@ impl<'a, K: EnrKey, Up: UpdatesT> Guard<'a, K, Up> {
     pub fn new(enr: &'a mut Enr<K>, updates: Up) -> Result<Self, Error> {
         // validate the update
         let updates = updates.to_valid()?;
+        #[cfg(test)]
+        let enr_backup = Enr {
+            seq: enr.seq,
+            node_id: enr.node_id.clone(),
+            content: enr.content.clone(),
+            signature: enr.signature.clone(),
+            phantom: std::marker::PhantomData,
+        };
         // apply the valid operation to the enr and create the inverse
         let inverses = updates.apply_and_invert(enr);
-        Ok(Self { enr, inverses })
+        Ok(Self {
+            #[cfg(test)]
+            enr_backup,
+            enr,
+            inverses,
+        })
     }
 
     /// Applies the remaining operations in a valid [`Enr`] update:
@@ -45,11 +61,17 @@ impl<'a, K: EnrKey, Up: UpdatesT> Guard<'a, K, Up> {
     ///
     /// If any of these steps fails, a [`Revert`] object is returned that allows to reset the
     /// [`Enr`] and obtain the error that occurred.
+
     pub fn finish(
         self,
         signing_key: &K,
     ) -> Result<<Up::ValidatedUpdates as ValidUpdatesT>::Output, Error> {
-        let Guard { enr, inverses } = self;
+        let Guard {
+            #[cfg(test)]
+            enr_backup,
+            enr,
+            inverses,
+        } = self;
         let mut revert = RevertOps::new(inverses);
 
         // 1. set the public key
@@ -62,6 +84,8 @@ impl<'a, K: EnrKey, Up: UpdatesT> Guard<'a, K, Up> {
         // 2. set the new sequence number
         let Some(new_seq) = enr.seq.checked_add(1) else {
             revert.recover(enr);
+            #[cfg(test)]
+            assert_eq!(&enr_backup, enr);
             return Err(Error::SequenceNumberTooHigh);
         };
         revert.seq = Some(std::mem::replace(&mut enr.seq, new_seq));
@@ -71,6 +95,8 @@ impl<'a, K: EnrKey, Up: UpdatesT> Guard<'a, K, Up> {
             Ok(signature) => Some(std::mem::replace(&mut enr.signature, signature)),
             Err(error) => {
                 revert.recover(enr);
+                #[cfg(test)]
+                assert_eq!(&enr_backup, enr);
                 return Err(error);
             }
         };
@@ -78,6 +104,8 @@ impl<'a, K: EnrKey, Up: UpdatesT> Guard<'a, K, Up> {
         // 4. check the encoded size
         if enr.size() > MAX_ENR_SIZE {
             revert.recover(enr);
+            #[cfg(test)]
+            assert_eq!(&enr_backup, enr);
             return Err(Error::ExceedsMaxSize);
         }
 
