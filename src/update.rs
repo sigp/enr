@@ -16,7 +16,7 @@ pub struct Guard<'a, K: EnrKey, Up: UpdatesT> {
     /// Testing keep a clone of the enr to verify it remains unchanged on failure.
     #[cfg(test)]
     enr_backup: Enr<K>,
-    /// [`Enr`] with update [`Op`]s already applied.
+    /// [`Enr`] with update operations already applied.
     enr: &'a mut Enr<K>,
     /// Inverses that would need to be applied to the [`Enr`] to restore [`Enr::content`].
     ///
