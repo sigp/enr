@@ -559,30 +559,22 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets the IP and UDP port in a single update with a single increment in sequence number.
     pub fn set_udp_socket(&mut self, socket: SocketAddr, key: &K) -> Result<(), EnrError> {
-        self.set_socket(socket, key, false)
+        let ip_update = match socket.ip() {
+            IpAddr::V4(ip4) => Update::insert("ip", &ip4.octets().as_ref()),
+            IpAddr::V6(ip6) => Update::insert("ip6", &ip6.octets().as_ref()),
+        };
+        let port_update = Update::insert("udp", &socket.port());
+        self.update((ip_update, port_update), key)?;
+        Ok(())
     }
 
     /// Sets the IP and TCP port in a single update with a single increment in sequence number.
     pub fn set_tcp_socket(&mut self, socket: SocketAddr, key: &K) -> Result<(), EnrError> {
-        self.set_socket(socket, key, true)
-    }
-
-    /// Helper function for `set_tcp_socket()` and `set_udp_socket`.
-    fn set_socket(&mut self, socket: SocketAddr, key: &K, is_tcp: bool) -> Result<(), EnrError> {
-        let (ip_update, port_update) = match socket {
-            SocketAddr::V4(v4_socket) => {
-                let ip_update = Update::insert("ip", &v4_socket.ip().octets().as_ref());
-                let port_key = if is_tcp { "tcp" } else { "udp" };
-                let port_update = Update::insert(port_key, &v4_socket.port());
-                (ip_update, port_update)
-            }
-            SocketAddr::V6(v6_socket) => {
-                let ip_update = Update::insert("ip", &v6_socket.ip().octets().as_ref());
-                let port_key = if is_tcp { "tcp" } else { "udp" };
-                let port_update = Update::insert(port_key, &v6_socket.port());
-                (ip_update, port_update)
-            }
+        let ip_update = match socket.ip() {
+            IpAddr::V4(ip4) => Update::insert("ip", &ip4.octets().as_ref()),
+            IpAddr::V6(ip6) => Update::insert("ip6", &ip6.octets().as_ref()),
         };
+        let port_update = Update::insert("tcp", &socket.port());
         self.update((ip_update, port_update), key)?;
         Ok(())
     }
@@ -1442,7 +1434,7 @@ mod tests {
 
         for tcp in LOW_INT_PORTS {
             let mut enr = EnrBuilder::new("v4").build(&key).unwrap();
-            enr.set_socket(SocketAddr::V4(SocketAddrV4::new(ipv4, tcp)), &key, true)
+            enr.set_tcp_socket(SocketAddr::V4(SocketAddrV4::new(ipv4, tcp)), &key)
                 .unwrap();
             assert_tcp4(&enr, tcp);
         }
