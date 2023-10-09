@@ -3,7 +3,7 @@
 use std::error::Error;
 use std::fmt;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 /// An error type for handling various ENR operations.
 pub enum EnrError {
     /// The ENR is too large.
