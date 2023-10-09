@@ -120,7 +120,7 @@
 //! assert_eq!(decoded_enr.ip4(), Some("192.168.0.1".parse().unwrap()));
 //! assert_eq!(decoded_enr.id(), Some("v4".into()));
 //! assert_eq!(decoded_enr.tcp4(), Some(8001));
-//! assert_eq!(decoded_enr.get("custom_key"), Some(vec![0,0,1]));
+//! assert_eq!(decoded_enr.get("custom_key").as_ref().map(AsRef::as_ref), Some(vec![0,0,1]).as_deref());
 //! ```
 //!
 //! ### Encoding/Decoding ENR's of various key types
@@ -260,13 +260,10 @@ impl<K: EnrKey> Enr<K> {
     /// Will panic if data is not sanitized
     /// Reads a custom key from the record if it exists, decoded as data.
     #[allow(clippy::missing_panics_doc)]
-    pub fn get(&self, key: impl AsRef<[u8]>) -> Option<Vec<u8>> {
+    pub fn get(&self, key: impl AsRef<[u8]>) -> Option<impl AsRef<[u8]>> {
         // It's ok to decode any valid RLP value as data
-        self.get_raw_rlp(key).map(|mut rlp_data| {
-            Bytes::decode(&mut rlp_data)
-                .expect("All data is sanitized")
-                .to_vec()
-        })
+        self.get_raw_rlp(key)
+            .map(|mut rlp_data| Bytes::decode(&mut rlp_data).expect("All data is sanitized"))
     }
 
     /// Reads a custom key from the record if it exists, decoded as `T`.
@@ -292,10 +289,10 @@ impl<K: EnrKey> Enr<K> {
     #[must_use]
     pub fn ip4(&self) -> Option<Ipv4Addr> {
         if let Some(ip_bytes) = self.get("ip") {
-            return match ip_bytes.len() {
+            return match ip_bytes.as_ref().len() {
                 4 => {
                     let mut ip = [0_u8; 4];
-                    ip.copy_from_slice(ip_bytes.as_slice());
+                    ip.copy_from_slice(ip_bytes.as_ref());
                     Some(Ipv4Addr::from(ip))
                 }
                 _ => None,
@@ -308,10 +305,10 @@ impl<K: EnrKey> Enr<K> {
     #[must_use]
     pub fn ip6(&self) -> Option<Ipv6Addr> {
         if let Some(ip_bytes) = self.get("ip6") {
-            return match ip_bytes.len() {
+            return match ip_bytes.as_ref().len() {
                 16 => {
                     let mut ip = [0_u8; 16];
-                    ip.copy_from_slice(ip_bytes.as_slice());
+                    ip.copy_from_slice(ip_bytes.as_ref());
                     Some(Ipv6Addr::from(ip))
                 }
                 _ => None,
@@ -324,7 +321,7 @@ impl<K: EnrKey> Enr<K> {
     #[must_use]
     pub fn id(&self) -> Option<String> {
         if let Some(id_bytes) = self.get("id") {
-            return Some(String::from_utf8_lossy(id_bytes.as_slice()).to_string());
+            return Some(String::from_utf8_lossy(id_bytes.as_ref()).to_string());
         }
         None
     }
@@ -474,7 +471,7 @@ impl<K: EnrKey> Enr<K> {
     ) -> Result<Option<Bytes>, EnrError> {
         let mut out = BytesMut::new();
         value.encode(&mut out);
-        self.insert_raw_rlp(key, Bytes::copy_from_slice(&out), enr_key)
+        self.insert_raw_rlp(key, out.freeze(), enr_key)
     }
 
     /// Adds or modifies a key/value to the ENR record. A `EnrKey` is required to re-sign the record once
@@ -1625,7 +1622,7 @@ mod tests {
         };
 
         assert_eq!(enr.tcp4(), Some(tcp));
-        assert_eq!(enr.get("topics"), None);
+        assert_eq!(enr.get("topics").as_ref().map(AsRef::as_ref), None);
 
         let topics: &[u8] = &out;
 
@@ -1642,7 +1639,7 @@ mod tests {
         assert_eq!(inserted[0], None);
 
         assert_eq!(enr.tcp4(), None);
-        assert_eq!(enr.get("topics"), Some(topics.to_vec()));
+        assert_eq!(enr.get("topics").as_ref().map(AsRef::as_ref), Some(topics));
 
         // Compare the encoding as the key itself can be different
         assert_eq!(enr.public_key().encode(), key.public().encode());

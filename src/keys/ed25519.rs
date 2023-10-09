@@ -35,7 +35,7 @@ impl EnrKey for ed25519::SigningKey {
         // Decode the RLP
         let pubkey_bytes = Bytes::decode(&mut pubkey_bytes.to_vec().as_slice())?;
 
-        Self::decode_public(pubkey_bytes.to_vec().as_slice())
+        Self::decode_public(&pubkey_bytes)
     }
 }
 

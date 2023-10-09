@@ -46,7 +46,7 @@ impl<K: EnrKey> EnrBuilder<K> {
     pub fn add_value<T: Encodable>(&mut self, key: impl AsRef<[u8]>, value: &T) -> &mut Self {
         let mut out = BytesMut::new();
         value.encode(&mut out);
-        self.add_value_rlp(key, Bytes::copy_from_slice(&out))
+        self.add_value_rlp(key, out.freeze())
     }
 
     /// Adds an arbitrary key-value where the value is raw RLP encoded bytes.

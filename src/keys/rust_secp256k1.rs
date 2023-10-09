@@ -42,7 +42,7 @@ impl EnrKey for secp256k1::SecretKey {
         // Decode the RLP
         let pubkey_bytes = Bytes::decode(&mut pubkey_bytes.to_vec().as_slice())?;
 
-        Self::decode_public(pubkey_bytes.to_vec().as_slice())
+        Self::decode_public(&pubkey_bytes)
     }
 }
 
