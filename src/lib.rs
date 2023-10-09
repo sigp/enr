@@ -444,18 +444,27 @@ impl<K: EnrKey> Enr<K> {
 
     /// Allows setting the sequence number to an arbitrary value.
     pub fn set_seq(&mut self, seq: u64, key: &K) -> Result<(), EnrError> {
+        let prev_seq = self.seq;
         self.seq = seq;
 
         // sign the record
-        self.sign(key)?;
-
-        // update the node id
-        self.node_id = NodeId::from(key.public());
+        let prev_signature = match self.sign(key) {
+            Ok(signature) => signature,
+            Err(e) => {
+                self.seq = prev_seq;
+                return Err(e);
+            }
+        };
 
         // check the size of the record
         if self.size() > MAX_ENR_SIZE {
+            self.seq = prev_seq;
+            self.signature = prev_signature;
             return Err(EnrError::ExceedsMaxSize);
         }
+
+        // update the node id
+        self.node_id = NodeId::from(key.public());
 
         Ok(())
     }
@@ -797,18 +806,22 @@ impl<K: EnrKey> Enr<K> {
         stream.out()
     }
 
+    /// Compute the enr's signature with the given key.
+    fn compute_signature(&self, signing_key: &K) -> Result<Vec<u8>, EnrError> {
+        match self.id() {
+            Some(ref id) if id == "v4" => signing_key
+                .sign_v4(&self.rlp_content())
+                .map_err(|_| EnrError::SigningError),
+            // other identity schemes are unsupported
+            _ => Err(EnrError::UnsupportedIdentityScheme),
+        }
+    }
+
     /// Signs the ENR record based on the identity scheme. Currently only "v4" is supported.
-    fn sign(&mut self, key: &K) -> Result<(), EnrError> {
-        self.signature = {
-            match self.id() {
-                Some(ref id) if id == "v4" => key
-                    .sign_v4(&self.rlp_content())
-                    .map_err(|_| EnrError::SigningError)?,
-                // other identity schemes are unsupported
-                _ => return Err(EnrError::SigningError),
-            }
-        };
-        Ok(())
+    /// The previous signature is returned.
+    fn sign(&mut self, key: &K) -> Result<Vec<u8>, EnrError> {
+        let new_signature = self.compute_signature(key)?;
+        Ok(std::mem::replace(&mut self.signature, new_signature))
     }
 }
 
@@ -1582,11 +1595,7 @@ mod tests {
         let topics: &[u8] = &topics;
 
         let (removed, inserted) = enr
-            .remove_insert(
-                vec![b"tcp"].iter(),
-                vec![(b"topics", topics)].into_iter(),
-                &key,
-            )
+            .remove_insert([b"tcp"].iter(), vec![(b"topics", topics)].into_iter(), &key)
             .unwrap();
 
         assert_eq!(
@@ -1674,7 +1683,7 @@ mod tests {
             let mut enr = EnrBuilder::new("v4").build(&key).unwrap();
 
             let res = enr.remove_insert(
-                vec![b"none"].iter(),
+                [b"none"].iter(),
                 vec![(b"tcp".as_slice(), tcp.to_be_bytes().as_slice())].into_iter(),
                 &key,
             );
@@ -1742,5 +1751,31 @@ mod tests {
         assert!(enr.verify());
         assert_eq!(enr.get_raw_rlp("tcp").unwrap(), rlp::encode(&tcp).to_vec());
         assert_eq!(enr.tcp4(), Some(tcp));
+    }
+
+    /// Tests [`Enr::set_seq`] in both a failure and success case.
+    #[test]
+    fn test_set_seq() {
+        // 300 byte ENR (max size)
+        const LARGE_ENR : &str = concat!(
+            "enr:-QEpuEDaLyrPP4gxBI9YL7QE9U1tZig_Nt8rue8bRIuYv_IMziFc8OEt3LQMwkwt6da-Z0Y8BaqkDalZbBq647UtV2ei",
+            "AYJpZIJ2NIJpcIR_AAABiXNlY3AyNTZrMaEDymNMrg1JrLQB2KTGtv6MVbcNEVv0AHacwUAPMljNMTiDdWRwgnZferiieHh4",
+            "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
+            "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
+            "eHh4eHh4eHh4eHh4eHh4"
+        );
+        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+        let mut record = LARGE_ENR.parse::<DefaultEnr>().unwrap();
+        let enr_bkp = record.clone();
+        // verify that updating the sequence number when it won't fit is rejected
+        assert_eq!(
+            record.set_seq(u64::MAX, &key),
+            Err(EnrError::ExceedsMaxSize)
+        );
+        // verify the enr is unchanged after this operation
+        assert_eq!(record, enr_bkp);
+
+        record.set_seq(30, &key).unwrap();
+        assert_eq!(record.seq(), 30);
     }
 }
