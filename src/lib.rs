@@ -1735,7 +1735,7 @@ mod tests {
         // hack an enr object that is too big. This is not possible via the public API.
         let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
 
-        let mut huge_enr = EnrBuilder::new("v4").build(&key).unwrap();
+        let mut huge_enr = Enr::empty_v4(&key).unwrap();
         let large_vec: Vec<u8> = std::iter::repeat(0).take(MAX_ENR_SIZE).collect();
         let large_vec_encoded = rlp::encode(&large_vec).freeze();
 
