@@ -7,6 +7,7 @@ use super::{ed25519_dalek as ed25519, EnrKey, EnrPublicKey, SigningError};
 use bytes::Bytes;
 pub use k256;
 use rlp::DecoderError;
+use std::convert::TryInto;
 use std::{collections::BTreeMap, convert::TryFrom};
 use zeroize::Zeroize;
 
@@ -14,7 +15,7 @@ use crate::Key;
 
 #[cfg(feature = "libp2p")]
 use libp2p_identity::{
-    ed25519 as libp2p_ed25519, secp256k1 as libp2p_secp256k1, PeerId, PublicKey,
+    ed25519 as libp2p_ed25519, secp256k1 as libp2p_secp256k1, KeyType, PeerId, PublicKey,
 };
 
 /// A standard implementation of the `EnrKey` trait used to sign and modify ENR records. The variants here represent the currently
@@ -33,8 +34,45 @@ impl From<k256::ecdsa::SigningKey> for CombinedKey {
 }
 
 impl From<ed25519::SigningKey> for CombinedKey {
-    fn from(keypair: ed25519_dalek::SigningKey) -> Self {
+    fn from(keypair: ed25519::SigningKey) -> Self {
         Self::Ed25519(keypair)
+    }
+}
+
+#[cfg(feature = "libp2p")]
+impl TryFrom<libp2p_identity::Keypair> for CombinedKey {
+    type Error = &'static str;
+
+    fn try_from(keypair: libp2p_identity::Keypair) -> Result<Self, Self::Error> {
+        match keypair.key_type() {
+            KeyType::Secp256k1 => Ok(keypair
+                .try_into_secp256k1()
+                .expect("must be the right key type")
+                .into()),
+            KeyType::Ed25519 => Ok(keypair.try_into_ed25519().expect("right key type").into()),
+            _ => Err("Unsupported keypair kind"),
+        }
+    }
+}
+
+#[cfg(feature = "libp2p")]
+impl From<libp2p_secp256k1::Keypair> for CombinedKey {
+    fn from(keypair: libp2p_secp256k1::Keypair) -> Self {
+        let secret = k256::ecdsa::SigningKey::from_slice(&keypair.secret().to_bytes())
+            .expect("libp2p key must be valid");
+        CombinedKey::Secp256k1(secret)
+    }
+}
+
+#[cfg(feature = "libp2p")]
+impl From<libp2p_ed25519::Keypair> for CombinedKey {
+    fn from(keypair: libp2p_ed25519::Keypair) -> Self {
+        let ed_keypair = ed25519::SigningKey::from_bytes(
+            &(keypair.to_bytes()[..32])
+                .try_into()
+                .expect("libp2p key must be valid"),
+        );
+        CombinedKey::from(ed_keypair)
     }
 }
 

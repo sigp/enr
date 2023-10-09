@@ -19,7 +19,7 @@ use std::{
 // Generates function setters on the `EnrBuilder`.
 macro_rules! generate_setter {
     // Function name, variable type and key
-    ($name:ident, $type:ident, $key:ident) => {
+    ($name:ident, $type:ty, $key:ident) => {
         #[doc = concat!(" Adds a `", stringify!($name),"` field to the `ENRBuilder.")]
         pub fn $name(&mut self, var: $type) -> &mut Self {
             self.add_value($key, &var);
@@ -105,23 +105,13 @@ impl<K: EnrKey> EnrBuilder<K> {
     #[cfg(feature = "eth2")]
     generate_setter!(eth2, &[u8], ETH2_ENR_KEY);
     #[cfg(feature = "eth2")]
-    /// Adds an 'attestation_bitfield` field to the `ENRBuilder`.  
-    pub fn attestation_bitfield(&mut self, attestation_bitfield: BitVector<N>) -> &mut Self {
-        self.add_value(
-            ATTESTATION_BITFIELD_ENR_KEY,
-            attestation_bitfield.to_bytes(),
-        );
-        self
-    }
+    generate_setter!(attestation_bitfield, &[u8], ATTESTATION_BITFIELD_ENR_KEY);
     #[cfg(feature = "eth2")]
-    /// Adds an 'attestation_bitfield` field to the `ENRBuilder`.  
-    pub fn sync_committee_bitfield(&mut self, sync_committee_bitfield: BitVector<N>) -> &mut Self {
-        self.add_value(
-            SYNC_COMMITTEE_BITFIELD_ENR_KEY,
-            sync_committee_bitfield.to_bytes(),
-        );
-        self
-    }
+    generate_setter!(
+        sync_committee_bitfield,
+        &[u8],
+        SYNC_COMMITTEE_BITFIELD_ENR_KEY
+    );
 
     /// Generates the rlp-encoded form of the ENR specified by the builder config.
     fn rlp_content(&self) -> BytesMut {
