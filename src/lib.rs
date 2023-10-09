@@ -1019,6 +1019,17 @@ impl<K: EnrKey> Enr<K> {
     pub fn quic4(&self) -> Option<u16> {
         self.get_decodable(QUIC_ENR_KEY).and_then(Result::ok)
     }
+
+    /// Sets the `quic` field of the ENR. Returns any pre-existing quic port in the record.
+    #[cfg(feature = "quic")]
+    #[must_use]
+    pub fn set_quic4(&mut self, quic: u16, key: &K) -> Result<Option<u16>, EnrError> {
+        if let Some(quic_bytes) = self.insert(QUIC_ENR_KEY, &quic, key)? {
+            return Ok(rlp::decode(&quic_bytes).ok());
+        }
+        Ok(None)
+    }
+
     /// Returns the quic6 port if one is set.
     #[cfg(feature = "quic")]
     #[must_use]
@@ -1026,36 +1037,67 @@ impl<K: EnrKey> Enr<K> {
         self.get_decodable(QUIC6_ENR_KEY).and_then(Result::ok)
     }
 
+    /// Sets the `quic6` field of the ENR. Returns any pre-existing quic6 port in the record.
+    #[cfg(feature = "quic6")]
+    #[must_use]
+    pub fn set_quic6(&mut self, quic6: u16, key: &K) -> Result<Option<u16>, EnrError> {
+        if let Some(quic_bytes) = self.insert(QUIC6_ENR_KEY, &quic6, key)? {
+            return Ok(rlp::decode(&quic_bytes).ok());
+        }
+        Ok(None)
+    }
+
     /// The attestation subnet bitfield associated with the ENR.
     #[cfg(feature = "eth2")]
-    pub fn attestation_bitfield<N: Clone + Unsigned>(&self) -> Result<BitVector<N>, &'static str> {
-        let bitfield_bytes = self
-            .get(ATTESTATION_BITFIELD_ENR_KEY)
-            .ok_or("ENR attestation bitfield non-existent")?;
+    pub fn attestation_bitfield(&self) -> Option<Vec<u8>> {
+        self.get(ATTESTATION_BITFIELD_ENR_KEY)
+    }
 
-        BitVector::<N>::from_ssz_bytes(bitfield_bytes)
-            .map_err(|_| "Could not decode the ENR attnets bitfield")
+    /// Sets the attestation subnet bitfield associated with the ENR.
+    #[cfg(feature = "eth2")]
+    pub fn set_attestation_bitfield(
+        &mut self,
+        bitfield: &[u8],
+        key: &K,
+    ) -> Result<Option<Vec<u8>>, EnrError> {
+        if let Some(bitfield_bytes) = self.insert(ATTESTATION_BITFIELD_ENR_KEY, bitfield, key)? {
+            return Ok(rlp::decode(&bitfield_bytes).ok());
+        }
+        Ok(None)
     }
 
     /// The sync committee subnet bitfield associated with the ENR.
     #[cfg(feature = "eth2")]
-    pub fn sync_committee_bitfield<N: Clone + Unsigned>(
-        &self,
-    ) -> Result<BitVector<N>, &'static str> {
-        let bitfield_bytes = self
-            .get(SYNC_COMMITTEE_BITFIELD_ENR_KEY)
-            .ok_or("ENR sync committee bitfield non-existent")?;
+    pub fn sync_committee_bitfield(&self) -> Option<Vec<u8>> {
+        self.get(SYNC_COMMITTEE_BITFIELD_ENR_KEY)
+    }
 
-        BitVector::<N>::from_ssz_bytes(bitfield_bytes)
-            .map_err(|_| "Could not decode the ENR syncnets bitfield")
+    /// Sets the sync committee bitfield associated with the ENR.
+    #[cfg(feature = "eth2")]
+    pub fn set_sync_committee_bitfield(
+        &mut self,
+        bitfield: &[u8],
+        key: &K,
+    ) -> Result<Option<Vec<u8>>, EnrError> {
+        if let Some(bitfield_bytes) = self.insert(SYNC_COMMITTEE_BITFIELD_ENR_KEY, bitfield, key)? {
+            return Ok(rlp::decode(&bitfield_bytes).ok());
+        }
+        Ok(None)
     }
 
     /// Returns the field that represents an `ENRForkId`. Users must make the type conversion externally.
     #[cfg(feature = "eth2")]
-    pub fn eth2(&self) -> Result<Vec<u8>, &'static str> {
-        self.get(ETH2_ENR_KEY)
-            .map(<[u8]>::to_vec)
-            .ok_or("ENR has no eth2 field")
+    pub fn eth2(&self) -> Option<Vec<u8>> {
+        self.get(ETH2_ENR_KEY).map(<[u8]>::to_vec)
+    }
+
+    /// Sets the eth2 field associated with the ENR.
+    #[cfg(feature = "eth2")]
+    pub fn set_eth2(&mut self, eth2: &[u8], key: &K) -> Result<Option<Vec<u8>>, EnrError> {
+        if let Some(eth2_bytes) = self.insert(ETH2_ENR_KEY, bitfield, key)? {
+            return Ok(rlp::decode(&eth2_bytes).ok());
+        }
+        Ok(None)
     }
 }
 
