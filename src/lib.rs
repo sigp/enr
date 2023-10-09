@@ -918,9 +918,6 @@ impl<K: EnrKey> FromStr for Enr<K> {
         let bytes = URL_SAFE_NO_PAD
             .decode(decode_string)
             .map_err(|e| format!("Invalid base64 encoding: {e:?}"))?;
-        if bytes.len() > MAX_ENR_SIZE {
-            return Err("enr exceeds max size".to_string());
-        }
         rlp::decode(&bytes).map_err(|e| format!("Invalid ENR: {e:?}"))
     }
 }
@@ -955,6 +952,10 @@ impl<K: EnrKey> rlp::Encodable for Enr<K> {
 
 impl<K: EnrKey> rlp::Decodable for Enr<K> {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        if rlp.as_raw().len() > MAX_ENR_SIZE {
+            return Err(DecoderError::Custom("enr exceeds max size"));
+        }
+
         if !rlp.is_list() {
             debug!("Failed to decode ENR. Not an RLP list: {}", rlp);
             return Err(DecoderError::RlpExpectedToBeList);
@@ -1258,10 +1259,10 @@ mod tests {
                            "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
                            "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
                            "eHh4eHh4eHh4eHh4eHh4eA");
-        assert_eq!(
-            text.parse::<DefaultEnr>().unwrap_err(),
-            "enr exceeds max size"
-        );
+        assert!(text
+            .parse::<DefaultEnr>()
+            .unwrap_err()
+            .contains("enr exceeds max size"));
     }
 
     #[cfg(feature = "k256")]
@@ -1751,6 +1752,30 @@ mod tests {
         assert!(enr.verify());
         assert_eq!(enr.get_raw_rlp("tcp").unwrap(), rlp::encode(&tcp).to_vec());
         assert_eq!(enr.tcp4(), Some(tcp));
+    }
+
+    #[test]
+    fn test_large_enr_decoding_is_rejected() {
+        // hack an enr object that is too big. This is not possible via the public API.
+        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+
+        let mut huge_enr = EnrBuilder::new("v4").build(&key).unwrap();
+        let large_vec: Vec<u8> = std::iter::repeat(0).take(MAX_ENR_SIZE).collect();
+        let large_vec_encoded = rlp::encode(&large_vec).freeze();
+
+        huge_enr
+            .content
+            .insert(b"large vec".to_vec(), large_vec_encoded);
+        huge_enr.sign(&key).unwrap();
+
+        assert!(huge_enr.verify());
+
+        let encoded = rlp::encode(&huge_enr).freeze();
+        assert!(encoded.len() > MAX_ENR_SIZE);
+        assert_eq!(
+            rlp::decode::<DefaultEnr>(&encoded).unwrap_err(),
+            DecoderError::Custom("enr exceeds max size")
+        )
     }
 
     /// Tests [`Enr::set_seq`] in both a failure and success case.
