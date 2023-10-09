@@ -158,17 +158,16 @@ impl<K: EnrKey> EnrBuilder<K> {
 
         // Sanitize all data, ensuring all RLP data is correctly formatted.
         for (key, value) in &self.content {
-            if Bytes::decode(&mut value.to_vec().as_slice()).is_err() {
+            if Bytes::decode(&mut value.as_ref()).is_err() {
                 return Err(EnrError::InvalidRlpData(
                     String::from_utf8_lossy(key).into(),
                 ));
             }
         }
 
-        self.add_value_rlp(
-            "id",
-            Bytes::copy_from_slice(&alloy_rlp::encode(self.id.as_bytes())),
-        );
+        let mut id_bytes = BytesMut::with_capacity(3);
+        self.id.as_bytes().encode(&mut id_bytes);
+        self.add_value_rlp("id", id_bytes.freeze());
 
         self.add_public_key(&key.public());
         let rlp_content = self.rlp_content();

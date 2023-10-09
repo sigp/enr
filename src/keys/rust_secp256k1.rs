@@ -40,7 +40,7 @@ impl EnrKey for secp256k1::SecretKey {
             .get(ENR_KEY.as_bytes())
             .ok_or(DecoderError::Custom("Unknown signature"))?;
         // Decode the RLP
-        let pubkey_bytes = Bytes::decode(&mut pubkey_bytes.to_vec().as_slice())?;
+        let pubkey_bytes = Bytes::decode(&mut pubkey_bytes.as_ref())?;
 
         Self::decode_public(&pubkey_bytes)
     }

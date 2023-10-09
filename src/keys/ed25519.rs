@@ -33,7 +33,7 @@ impl EnrKey for ed25519::SigningKey {
             .ok_or(DecoderError::Custom("Unknown signature"))?;
 
         // Decode the RLP
-        let pubkey_bytes = Bytes::decode(&mut pubkey_bytes.to_vec().as_slice())?;
+        let pubkey_bytes = Bytes::decode(&mut pubkey_bytes.as_ref())?;
 
         Self::decode_public(&pubkey_bytes)
     }

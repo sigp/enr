@@ -109,7 +109,7 @@
 //!
 //! enr.set_tcp4(8001, &key);
 //! // set a custom key
-//! enr.insert("custom_key", &vec![0,0,1].as_slice(), &key);
+//! enr.insert("custom_key", &[0,0,1], &key);
 //!
 //! // encode to base64
 //! let base_64_string = enr.to_base64();
@@ -260,7 +260,7 @@ impl<K: EnrKey> Enr<K> {
     /// Will panic if data is not sanitized
     /// Reads a custom key from the record if it exists, decoded as data.
     #[allow(clippy::missing_panics_doc)]
-    pub fn get(&self, key: impl AsRef<[u8]>) -> Option<impl AsRef<[u8]>> {
+    pub fn get(&self, key: impl AsRef<[u8]>) -> Option<Bytes> {
         // It's ok to decode any valid RLP value as data
         self.get_raw_rlp(key)
             .map(|mut rlp_data| Bytes::decode(&mut rlp_data).expect("All data is sanitized"))
@@ -506,9 +506,7 @@ impl<K: EnrKey> Enr<K> {
         let public_key = enr_key.public();
         let mut pubkey = BytesMut::new();
         public_key.encode().as_ref().encode(&mut pubkey);
-        let previous_key = self
-            .content
-            .insert(public_key.enr_key(), Bytes::copy_from_slice(&pubkey));
+        let previous_key = self.content.insert(public_key.enr_key(), pubkey.freeze());
 
         // check the size of the record
         if self.size() > MAX_ENR_SIZE {
@@ -578,7 +576,7 @@ impl<K: EnrKey> Enr<K> {
     /// Sets the `udp` field of the ENR. Returns any pre-existing UDP port in the record.
     pub fn set_udp4(&mut self, udp: u16, key: &K) -> Result<Option<u16>, EnrError> {
         if let Some(udp_bytes) = self.insert("udp", &udp, key)? {
-            return Ok(u16::decode(&mut udp_bytes.to_vec().as_slice()).ok());
+            return Ok(u16::decode(&mut udp_bytes.as_ref()).ok());
         }
         Ok(None)
     }
@@ -586,7 +584,7 @@ impl<K: EnrKey> Enr<K> {
     /// Sets the `udp6` field of the ENR. Returns any pre-existing UDP port in the record.
     pub fn set_udp6(&mut self, udp: u16, key: &K) -> Result<Option<u16>, EnrError> {
         if let Some(udp_bytes) = self.insert("udp6", &udp, key)? {
-            return Ok(u16::decode(&mut udp_bytes.to_vec().as_slice()).ok());
+            return Ok(u16::decode(&mut udp_bytes.as_ref()).ok());
         }
         Ok(None)
     }
@@ -594,7 +592,7 @@ impl<K: EnrKey> Enr<K> {
     /// Sets the `tcp` field of the ENR. Returns any pre-existing tcp port in the record.
     pub fn set_tcp4(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, EnrError> {
         if let Some(tcp_bytes) = self.insert("tcp", &tcp, key)? {
-            return Ok(u16::decode(&mut tcp_bytes.to_vec().as_slice()).ok());
+            return Ok(u16::decode(&mut tcp_bytes.as_ref()).ok());
         }
         Ok(None)
     }
@@ -602,7 +600,7 @@ impl<K: EnrKey> Enr<K> {
     /// Sets the `tcp6` field of the ENR. Returns any pre-existing tcp6 port in the record.
     pub fn set_tcp6(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, EnrError> {
         if let Some(tcp_bytes) = self.insert("tcp6", &tcp, key)? {
-            return Ok(u16::decode(&mut tcp_bytes.to_vec().as_slice()).ok());
+            return Ok(u16::decode(&mut tcp_bytes.as_ref()).ok());
         }
         Ok(None)
     }
@@ -632,10 +630,8 @@ impl<K: EnrKey> Enr<K> {
                 let mut port = BytesMut::new();
                 socket.port().encode(&mut port);
                 (
-                    self.content
-                        .insert("ip".into(), Bytes::copy_from_slice(&ip)),
-                    self.content
-                        .insert(port_string.clone(), Bytes::copy_from_slice(&port)),
+                    self.content.insert("ip".into(), ip.freeze()),
+                    self.content.insert(port_string.clone(), port.freeze()),
                 )
             }
             IpAddr::V6(addr) => {
@@ -644,10 +640,8 @@ impl<K: EnrKey> Enr<K> {
                 let mut port = BytesMut::new();
                 socket.port().encode(&mut port);
                 (
-                    self.content
-                        .insert("ip6".into(), Bytes::copy_from_slice(&ip6)),
-                    self.content
-                        .insert(port_v6_string.clone(), Bytes::copy_from_slice(&port)),
+                    self.content.insert("ip6".into(), ip6.freeze()),
+                    self.content.insert(port_v6_string.clone(), port.freeze()),
                 )
             }
         };
@@ -655,9 +649,7 @@ impl<K: EnrKey> Enr<K> {
         let public_key = key.public();
         let mut pubkey = BytesMut::new();
         public_key.encode().as_ref().encode(&mut pubkey);
-        let previous_key = self
-            .content
-            .insert(public_key.enr_key(), Bytes::copy_from_slice(&pubkey));
+        let previous_key = self.content.insert(public_key.enr_key(), pubkey.freeze());
 
         // check the size and revert on failure
         if self.size() > MAX_ENR_SIZE {
@@ -736,8 +728,7 @@ impl<K: EnrKey> Enr<K> {
         let public_key = enr_key.public();
         let mut pubkey = BytesMut::new();
         public_key.encode().as_ref().encode(&mut pubkey);
-        self.content
-            .insert(public_key.enr_key(), Bytes::copy_from_slice(&pubkey));
+        self.content.insert(public_key.enr_key(), pubkey.freeze());
 
         let mut inserted = Vec::new();
         for (key, value) in insert_key_values {
@@ -748,10 +739,10 @@ impl<K: EnrKey> Enr<K> {
             }
             let mut out = BytesMut::new();
             value.encode(&mut out);
-            let value = Bytes::copy_from_slice(&out);
+            let value = out.freeze();
             // Prevent inserting invalid RLP integers
             if is_keyof_u16(key.as_ref()) {
-                u16::decode(&mut value.to_vec().as_slice())
+                u16::decode(&mut value.as_ref())
                     .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
             }
 
