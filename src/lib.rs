@@ -1693,7 +1693,7 @@ mod tests {
         let tcp = 3000;
 
         let enr = {
-            let mut builder = EnrBuilder::new("v4");
+            let mut builder = EnrBuilder::new();
             builder.ip(ip.into());
             builder.tcp4(tcp);
             builder.build(&key).unwrap()
@@ -1745,7 +1745,7 @@ mod tests {
         let tcp = 30303;
 
         let mut enr = {
-            let mut builder = EnrBuilder::new("v4");
+            let mut builder = EnrBuilder::new();
             builder.ip(ip.into());
             builder.tcp4(tcp);
             builder.build(&key).unwrap()
@@ -1763,7 +1763,7 @@ mod tests {
         let ip = Ipv4Addr::new(10, 0, 0, 1);
 
         let mut enr = {
-            let mut builder = EnrBuilder::new("v4");
+            let mut builder = EnrBuilder::new();
             builder.tcp4(tcp);
             builder.build(&key).unwrap()
         };
@@ -1787,7 +1787,7 @@ mod tests {
         let ip = Ipv4Addr::new(10, 0, 0, 1);
 
         let mut enr = {
-            let mut builder = EnrBuilder::new("v4");
+            let mut builder = EnrBuilder::new();
             builder.ip(ip.into());
             builder.tcp4(tcp);
             builder.udp4(udp);
@@ -1860,7 +1860,7 @@ mod tests {
         topics.extend_from_slice(&s.out().freeze());
 
         let mut enr = {
-            let mut builder = EnrBuilder::new("v4");
+            let mut builder = EnrBuilder::new();
             builder.tcp4(tcp);
             builder.build(&key).unwrap()
         };
@@ -1905,7 +1905,7 @@ mod tests {
 
         for tcp in LOW_INT_PORTS {
             let enr = {
-                let mut builder = EnrBuilder::new("v4");
+                let mut builder = EnrBuilder::new();
                 builder.tcp4(tcp);
                 builder.build(&key).unwrap()
             };
@@ -1919,7 +1919,7 @@ mod tests {
         let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
 
         for tcp in LOW_INT_PORTS {
-            let mut enr = EnrBuilder::new("v4").build(&key).unwrap();
+            let mut enr = EnrBuilder::new().build(&key).unwrap();
             enr.set_tcp4(tcp, &key).unwrap();
             assert_tcp4(&enr, tcp);
         }
@@ -1931,7 +1931,7 @@ mod tests {
         let ipv4 = Ipv4Addr::new(127, 0, 0, 1);
 
         for tcp in LOW_INT_PORTS {
-            let mut enr = EnrBuilder::new("v4").build(&key).unwrap();
+            let mut enr = EnrBuilder::new().build(&key).unwrap();
             enr.set_socket(SocketAddr::V4(SocketAddrV4::new(ipv4, tcp)), &key, true)
                 .unwrap();
             assert_tcp4(&enr, tcp);
@@ -1943,7 +1943,7 @@ mod tests {
         let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
 
         for tcp in LOW_INT_PORTS {
-            let mut enr = EnrBuilder::new("v4").build(&key).unwrap();
+            let mut enr = EnrBuilder::new().build(&key).unwrap();
 
             println!("Inserting: {}", tcp);
             let res = enr.insert(b"tcp", &tcp.to_be_bytes().as_ref(), &key);
@@ -1961,7 +1961,7 @@ mod tests {
         let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
 
         for tcp in LOW_INT_PORTS {
-            let mut enr = EnrBuilder::new("v4").build(&key).unwrap();
+            let mut enr = EnrBuilder::new().build(&key).unwrap();
 
             println!("Inserting: {}", tcp);
             let res = enr.remove_insert(

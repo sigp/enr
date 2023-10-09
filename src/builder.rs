@@ -1,4 +1,13 @@
 use crate::{Enr, EnrError, EnrKey, EnrPublicKey, Key, NodeId, MAX_ENR_SIZE};
+#[cfg(feature = "eth2")]
+use crate::{ATTESTATION_BITFIELD_ENR_KEY, ETH2_ENR_KEY, SYNC_COMMITTEE_BITFIELD_ENR_KEY};
+use crate::{
+    ENR_VERSION, ID_ENR_KEY, IP6_ENR_KEY, IP_ENR_KEY, TCP6_ENR_KEY, TCP_ENR_KEY, UDP6_ENR_KEY,
+    UDP_ENR_KEY,
+};
+#[cfg(feature = "quic")]
+use crate::{QUIC6_ENR_KEY, QUIC_ENR_KEY};
+
 use bytes::{Bytes, BytesMut};
 use rlp::{Encodable, RlpStream};
 use std::{
@@ -7,10 +16,22 @@ use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
 };
 
+// Generates function setters on the `EnrBuilder`.
+macro_rules! generate_setter {
+    // Function name, variable type and key
+    ($name:ident, $type:ident, $key:ident) => {
+        #[doc = concat!(" Adds a `", stringify!($name),"` field to the `ENRBuilder.")]
+        pub fn $name(&mut self, var: $type) -> &mut Self {
+            self.add_value($key, &var);
+            self
+        }
+    };
+}
+
 /// The base builder for generating ENR records with arbitrary signing algorithms.
 pub struct EnrBuilder<K: EnrKey> {
     /// The identity scheme used to build the ENR record.
-    id: String,
+    id: Vec<u8>,
 
     /// The starting sequence number for the ENR record.
     seq: u64,
@@ -27,9 +48,9 @@ impl<K: EnrKey> EnrBuilder<K> {
     /// Constructs a minimal `EnrBuilder` providing only a sequence number.
     /// Currently only supports the id v4 scheme and therefore disallows creation of any other
     /// scheme.
-    pub fn new(id: impl Into<String>) -> Self {
+    pub fn new() -> Self {
         Self {
-            id: id.into(),
+            id: ENR_VERSION.into(),
             seq: 1,
             content: BTreeMap::new(),
             phantom: PhantomData,
@@ -63,48 +84,42 @@ impl<K: EnrKey> EnrBuilder<K> {
 
     /// Adds an `ip` field to the `ENRBuilder`.
     pub fn ip4(&mut self, ip: Ipv4Addr) -> &mut Self {
-        self.add_value("ip", &ip.octets().as_ref());
+        self.add_value(IP_ENR_KEY, &ip.octets().as_ref());
         self
     }
 
     /// Adds an `ip6` field to the `ENRBuilder`.
     pub fn ip6(&mut self, ip: Ipv6Addr) -> &mut Self {
-        self.add_value("ip6", &ip.octets().as_ref());
+        self.add_value(IP6_ENR_KEY, &ip.octets().as_ref());
         self
     }
 
-    /*
-     * Removed from the builder as only the v4 scheme is currently supported.
-     * This is set as default in the builder.
-
-    /// Adds an `Id` field to the `ENRBuilder`.
-    pub fn id(&mut self, id: &str) -> &mut Self {
-        self.add_value("id", &id.as_bytes());
+    generate_setter!(tcp4, u16, TCP_ENR_KEY);
+    generate_setter!(tcp6, u16, TCP6_ENR_KEY);
+    generate_setter!(udp4, u16, UDP_ENR_KEY);
+    generate_setter!(udp6, u16, UDP6_ENR_KEY);
+    #[cfg(feature = "quic")]
+    generate_setter!(quic, u16, QUIC_ENR_KEY);
+    #[cfg(feature = "quic")]
+    generate_setter!(quic6, u16, QUIC6_ENR_KEY);
+    #[cfg(feature = "eth2")]
+    generate_setter!(eth2, &[u8], ETH2_ENR_KEY);
+    #[cfg(feature = "eth2")]
+    /// Adds an 'attestation_bitfield` field to the `ENRBuilder`.  
+    pub fn attestation_bitfield(&mut self, attestation_bitfield: BitVector<N>) -> &mut Self {
+        self.add_value(
+            ATTESTATION_BITFIELD_ENR_KEY,
+            attestation_bitfield.to_bytes(),
+        );
         self
     }
-    */
-
-    /// Adds a `tcp` field to the `ENRBuilder`.
-    pub fn tcp4(&mut self, tcp: u16) -> &mut Self {
-        self.add_value("tcp", &tcp);
-        self
-    }
-
-    /// Adds a `tcp6` field to the `ENRBuilder`.
-    pub fn tcp6(&mut self, tcp: u16) -> &mut Self {
-        self.add_value("tcp6", &tcp);
-        self
-    }
-
-    /// Adds a `udp` field to the `ENRBuilder`.
-    pub fn udp4(&mut self, udp: u16) -> &mut Self {
-        self.add_value("udp", &udp);
-        self
-    }
-
-    /// Adds a `udp6` field to the `ENRBuilder`.
-    pub fn udp6(&mut self, udp: u16) -> &mut Self {
-        self.add_value("udp6", &udp);
+    #[cfg(feature = "eth2")]
+    /// Adds an 'attestation_bitfield` field to the `ENRBuilder`.  
+    pub fn sync_committee_bitfield(&mut self, sync_committee_bitfield: BitVector<N>) -> &mut Self {
+        self.add_value(
+            SYNC_COMMITTEE_BITFIELD_ENR_KEY,
+            sync_committee_bitfield.to_bytes(),
+        );
         self
     }
 
@@ -121,10 +136,10 @@ impl<K: EnrKey> EnrBuilder<K> {
         stream.out()
     }
 
-    /// Signs record based on the identity scheme. Currently only "v4" is supported.
+    /// Signs record based on the identity scheme. Currently only ENR_VERSION is supported.
     fn signature(&self, key: &K) -> Result<Vec<u8>, EnrError> {
-        match self.id.as_str() {
-            "v4" => key
+        match self.id.as_slice() {
+            ENR_VERSION => key
                 .sign_v4(&self.rlp_content())
                 .map_err(|_| EnrError::SigningError),
             // unsupported identity schemes
@@ -142,11 +157,6 @@ impl<K: EnrKey> EnrBuilder<K> {
     /// # Errors
     /// Fails if the identity scheme is not supported, or the record size exceeds `MAX_ENR_SIZE`.
     pub fn build(&mut self, key: &K) -> Result<Enr<K>, EnrError> {
-        // add the identity scheme to the content
-        if self.id != "v4" {
-            return Err(EnrError::UnsupportedIdentityScheme);
-        }
-
         // Sanitize all data, ensuring all RLP data is correctly formatted.
         for (key, value) in &self.content {
             if rlp::Rlp::new(value).data().is_err() {
@@ -156,7 +166,7 @@ impl<K: EnrKey> EnrBuilder<K> {
             }
         }
 
-        self.add_value_rlp("id", rlp::encode(&self.id.as_bytes()).freeze());
+        self.add_value_rlp(ID_ENR_KEY, rlp::encode(&self.id).freeze());
 
         self.add_public_key(&key.public());
         let rlp_content = self.rlp_content();
