@@ -24,20 +24,8 @@ pub struct Builder<K: EnrKey> {
 }
 
 impl<K: EnrKey> Builder<K> {
-    /// Constructs a minimal [`Builder`].
-    /// Currently only supports the id v4 scheme and therefore disallows creation of any other
-    /// scheme.
-    pub fn new(id: impl Into<String>) -> Self {
-        Self {
-            id: id.into(),
-            seq: 1,
-            content: BTreeMap::new(),
-            phantom: PhantomData,
-        }
-    }
-
     /// Constructs a minimal [`Builder`] for the v4 identity scheme.
-    pub fn new_v4() -> Self {
+    pub fn new() -> Self {
         Self {
             id: String::from("v4"),
             seq: 1,

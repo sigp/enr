@@ -242,19 +242,14 @@ pub struct Enr<K: EnrKey> {
 impl<K: EnrKey> Enr<K> {
     /* Builders */
 
-    /// Get a [`builder::Builder`] with a given identity scheme.
-    pub fn builder(id: impl Into<String>) -> builder::Builder<K> {
-        builder::Builder::new(id)
-    }
-
-    /// Get a [`builder::Builder`] with the default identity scheme
-    pub fn v4_builder() -> builder::Builder<K> {
-        builder::Builder::new_v4()
+    /// Get a [`builder::Builder`] with the default identity scheme.
+    pub fn builder() -> builder::Builder<K> {
+        builder::Builder::new()
     }
 
     /// Get an empty Enr for the v4 identity scheme.
-    pub fn empty_v4(signing_key: &K) -> Result<Self, EnrError> {
-        Self::v4_builder().build(signing_key)
+    pub fn empty(signing_key: &K) -> Result<Self, EnrError> {
+        Self::builder().build(signing_key)
     }
 
     // getters //
@@ -1428,7 +1423,7 @@ mod tests {
         let ip = Ipv4Addr::new(127, 0, 0, 1);
         let tcp = 3000;
 
-        let enr = Enr::v4_builder().ip4(ip).tcp4(tcp).build(&key).unwrap();
+        let enr = Enr::builder().ip4(ip).tcp4(tcp).build(&key).unwrap();
 
         let encoded_enr = rlp::encode(&enr);
 
@@ -1470,7 +1465,7 @@ mod tests {
         let ip = Ipv4Addr::new(10, 0, 0, 1);
         let tcp = 30303;
 
-        let mut enr = Enr::v4_builder().ip4(ip).tcp4(tcp).build(&key).unwrap();
+        let mut enr = Enr::builder().ip4(ip).tcp4(tcp).build(&key).unwrap();
 
         enr.insert("random", &Vec::new(), &key).unwrap();
         assert!(enr.verify());
@@ -1483,7 +1478,7 @@ mod tests {
         let tcp = 30303;
         let ip = Ipv4Addr::new(10, 0, 0, 1);
 
-        let mut enr = Enr::v4_builder().tcp4(tcp).build(&key).unwrap();
+        let mut enr = Enr::builder().tcp4(tcp).build(&key).unwrap();
 
         assert!(enr.set_ip(ip.into(), &key).is_ok());
         assert_eq!(enr.id(), Some("v4".into()));
@@ -1503,7 +1498,7 @@ mod tests {
         let udp = 30304;
         let ip = Ipv4Addr::new(10, 0, 0, 1);
 
-        let mut enr = Enr::v4_builder()
+        let mut enr = Enr::builder()
             .ip4(ip)
             .tcp4(tcp)
             .udp4(udp)
@@ -1573,7 +1568,7 @@ mod tests {
         s.append(&"eth_syncing");
         topics.extend_from_slice(&s.out().freeze());
 
-        let mut enr = Enr::v4_builder().tcp4(tcp).build(&key).unwrap();
+        let mut enr = Enr::builder().tcp4(tcp).build(&key).unwrap();
 
         assert_eq!(enr.tcp4(), Some(tcp));
         assert_eq!(enr.get("topics"), None);
@@ -1610,7 +1605,7 @@ mod tests {
         let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
 
         for tcp in LOW_INT_PORTS {
-            let enr = Enr::v4_builder().tcp4(tcp).build(&key).unwrap();
+            let enr = Enr::builder().tcp4(tcp).build(&key).unwrap();
 
             assert_tcp4(&enr, tcp);
         }
@@ -1621,7 +1616,7 @@ mod tests {
         let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
 
         for tcp in LOW_INT_PORTS {
-            let mut enr = Enr::empty_v4(&key).unwrap();
+            let mut enr = Enr::empty(&key).unwrap();
             enr.set_tcp4(tcp, &key).unwrap();
             assert_tcp4(&enr, tcp);
         }
@@ -1633,7 +1628,7 @@ mod tests {
         let ipv4 = Ipv4Addr::new(127, 0, 0, 1);
 
         for tcp in LOW_INT_PORTS {
-            let mut enr = Enr::empty_v4(&key).unwrap();
+            let mut enr = Enr::empty(&key).unwrap();
             enr.set_socket(SocketAddr::V4(SocketAddrV4::new(ipv4, tcp)), &key, true)
                 .unwrap();
             assert_tcp4(&enr, tcp);
@@ -1645,7 +1640,7 @@ mod tests {
         let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
 
         for tcp in LOW_INT_PORTS {
-            let mut enr = Enr::empty_v4(&key).unwrap();
+            let mut enr = Enr::empty(&key).unwrap();
 
             let res = enr.insert(b"tcp", &tcp.to_be_bytes().as_ref(), &key);
             if u8::try_from(tcp).is_ok() {
@@ -1662,7 +1657,7 @@ mod tests {
         let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
 
         for tcp in LOW_INT_PORTS {
-            let mut enr = Enr::empty_v4(&key).unwrap();
+            let mut enr = Enr::empty(&key).unwrap();
 
             let res = enr.remove_insert(
                 [b"none"].iter(),
@@ -1706,7 +1701,7 @@ mod tests {
         let ip = Ipv4Addr::new(10, 0, 0, 1);
         let tcp = 30303;
 
-        let enr1 = Enr::v4_builder().ip4(ip).tcp4(tcp).build(&key).unwrap();
+        let enr1 = Enr::builder().ip4(ip).tcp4(tcp).build(&key).unwrap();
 
         let mut enr2 = enr1.clone();
         enr2.set_seq(1, &key).unwrap();
@@ -1735,7 +1730,7 @@ mod tests {
         // hack an enr object that is too big. This is not possible via the public API.
         let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
 
-        let mut huge_enr = Enr::empty_v4(&key).unwrap();
+        let mut huge_enr = Enr::empty(&key).unwrap();
         let large_vec: Vec<u8> = std::iter::repeat(0).take(MAX_ENR_SIZE).collect();
         let large_vec_encoded = rlp::encode(&large_vec).freeze();
 
