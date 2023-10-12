@@ -57,13 +57,6 @@ impl<K: EnrKey> Default for Builder<K> {
 }
 
 impl<K: EnrKey> Builder<K> {
-    /// Constructs a minimal `EnrBuilder` providing only a sequence number.
-    /// Currently only supports the id v4 scheme and therefore disallows creation of any other
-    /// scheme.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     /// Modifies the sequence number of the builder.
     pub fn seq(&mut self, seq: u64) -> &mut Self {
         self.seq = seq;
