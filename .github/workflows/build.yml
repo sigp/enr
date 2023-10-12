@@ -42,12 +42,6 @@ jobs:
         run: cargo nextest run --all --release --features "secp256k1" --tests
       - name: Run tests in release rust-secp256k1
         run: cargo nextest run --all --release --features "rust-secp256k1" --tests
-      - name: Run tests in release libp2p
-        run: cargo nextest run --all --release --features "libp2p" --tests
-      - name: Run tests in release libp2p, rust-secp256k1
-        run: cargo nextest run --all --release --features "libp2p,rust-secp256k1" --tests
-      - name: Run tests in release eth2 
-        run: cargo nextest run --all --release --features "eth2" --tests
       - name: Run tests in release all features
         run: cargo nextest run --all --release --all-features
   check-rustdoc-links:
