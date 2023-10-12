@@ -55,12 +55,10 @@ enr = { version = "*", features = ["serde", "ed25519", "rust-secp256k1"] }
 
 ## Examples
 
-To build an ENR, an `EnrBuilder` is provided.
-
 #### Building an ENR with the default `k256` key type
 
 ```rust
-use enr::{EnrBuilder, k256};
+use enr::{Enr, k256};
 use std::net::Ipv4Addr;
 use rand::thread_rng;
 
@@ -69,7 +67,7 @@ let mut rng = thread_rng();
 let key = k256::ecdsa::SigningKey::random(&mut rng);
 
 let ip = Ipv4Addr::new(192,168,0,1);
-let enr = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
+let enr = Enr::builder().ip4(ip).tcp4(8000).build(&key).unwrap();
 
 assert_eq!(enr.ip4(), Some("192.168.0.1".parse().unwrap()));
 assert_eq!(enr.id(), Some("v4".into()));
@@ -78,10 +76,10 @@ assert_eq!(enr.id(), Some("v4".into()));
 #### Building an ENR with the `CombinedKey` type (support for multiple signing algorithms).
 
 Note the `ed25519` feature flag must be set. This makes use of the
-`EnrBuilder` struct.
+`builder::Builder` struct.
 
 ```rust
-use enr::{EnrBuilder, CombinedKey};
+use enr::{Enr, CombinedKey};
 use std::net::Ipv4Addr;
 
 // create a new secp256k1 key
@@ -91,7 +89,7 @@ let key = CombinedKey::generate_secp256k1();
 let key = CombinedKey::generate_ed25519();
 
 let ip = Ipv4Addr::new(192,168,0,1);
-let enr = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
+let enr = Enr::builder().ip4(ip).tcp4(8000).build(&key).unwrap();
 
 assert_eq!(enr.ip4(), Some("192.168.0.1".parse().unwrap()));
 assert_eq!(enr.id(), Some("v4".into()));
@@ -103,7 +101,7 @@ ENR fields can be added and modified using the getters/setters on `Enr`. A custo
 can be added using `insert` and retrieved with `get`.
 
 ```rust
-use enr::{EnrBuilder, k256::ecdsa::SigningKey, Enr};
+use enr::{k256::ecdsa::SigningKey, Enr};
 use std::net::Ipv4Addr;
 use rand::thread_rng;
 
@@ -115,7 +113,7 @@ let mut rng = thread_rng();
 let key = SigningKey::random(&mut rng);
 
 let ip = Ipv4Addr::new(192,168,0,1);
-let mut enr = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
+let mut enr = Enr::builder().ip4(ip).tcp4(8000).build(&key).unwrap();
 
 enr.set_tcp4(8001, &key);
 // set a custom key
@@ -136,7 +134,7 @@ assert_eq!(decoded_enr.get("custom_key"), Some(vec![0,0,1].as_slice()));
 #### Encoding/Decoding ENR's of various key types
 
 ```rust
-use enr::{EnrBuilder, k256::ecdsa::SigningKey, Enr, ed25519_dalek::Keypair, CombinedKey};
+use enr::{k256::ecdsa::SigningKey, Enr, ed25519_dalek::Keypair, CombinedKey};
 use std::net::Ipv4Addr;
 use rand::thread_rng;
 use rand::Rng;
@@ -145,7 +143,7 @@ use rand::Rng;
 let mut rng = thread_rng();
 let key = SigningKey::random(&mut rng);
 let ip = Ipv4Addr::new(192,168,0,1);
-let enr_secp256k1 = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
+let enr_secp256k1 = Enr::builder().ip4(ip).tcp4(8000).build(&key).unwrap();
 
 // encode to base64
 let base64_string_secp256k1 = enr_secp256k1.to_base64();
@@ -153,7 +151,7 @@ let base64_string_secp256k1 = enr_secp256k1.to_base64();
 // generate a random ed25519 key
 let mut rng = rand_07::thread_rng();
 let key = Keypair::generate(&mut rng);
-let enr_ed25519 = EnrBuilder::new("v4").ip4(ip).tcp4(8000).build(&key).unwrap();
+let enr_ed25519 = Enr::builder().ip4(ip).tcp4(8000).build(&key).unwrap();
 
 // encode to base64
 let base64_string_ed25519 = enr_ed25519.to_base64();
