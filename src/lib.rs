@@ -172,7 +172,7 @@
 //! [`insert`]: struct.Enr.html#method.insert
 //! [`get`]: struct.Enr.html#method.get
 
-#![warn(clippy::all, clippy::pedantic, clippy::nursery)]
+#![warn(clippy::all)]
 #![allow(
     clippy::map_err_ignore,
     clippy::missing_errors_doc,
@@ -457,6 +457,12 @@ impl<K: EnrKey> Enr<K> {
         }
     }
 
+    /// Compare if the content of 2 Enr's match.
+    #[must_use]
+    pub fn compare_content(&self, other: &Self) -> bool {
+        self.rlp_content() == other.rlp_content()
+    }
+
     /// Provides the URL-safe base64 encoded "text" version of the ENR prefixed by "enr:".
     #[must_use]
     pub fn to_base64(&self) -> String {
@@ -474,18 +480,27 @@ impl<K: EnrKey> Enr<K> {
 
     /// Allows setting the sequence number to an arbitrary value.
     pub fn set_seq(&mut self, seq: u64, key: &K) -> Result<(), EnrError> {
+        let prev_seq = self.seq;
         self.seq = seq;
 
         // sign the record
-        self.sign(key)?;
-
-        // update the node id
-        self.node_id = NodeId::from(key.public());
+        let prev_signature = match self.sign(key) {
+            Ok(signature) => signature,
+            Err(e) => {
+                self.seq = prev_seq;
+                return Err(e);
+            }
+        };
 
         // check the size of the record
         if self.size() > MAX_ENR_SIZE {
+            self.seq = prev_seq;
+            self.signature = prev_signature;
             return Err(EnrError::ExceedsMaxSize);
         }
+
+        // update the node id
+        self.node_id = NodeId::from(key.public());
 
         Ok(())
     }
@@ -815,10 +830,13 @@ impl<K: EnrKey> Enr<K> {
 
     // Private Functions //
 
-    /// Evaluates the RLP-encoding of the content of the ENR record.
-    fn rlp_content(&self) -> BytesMut {
-        let mut stream = RlpStream::new_with_buffer(BytesMut::with_capacity(MAX_ENR_SIZE));
-        stream.begin_list(self.content.len() * 2 + 1);
+    /// Encodes the ENR's content (signature(optional) + sequence number + ordered (key, value) pairs) into the stream.
+    fn append_rlp_content(&self, stream: &mut RlpStream, include_signature: bool) {
+        let item_count = usize::from(include_signature) + 1 + self.content.len() * 2;
+        stream.begin_list(item_count);
+        if include_signature {
+            stream.append(&self.signature);
+        }
         stream.append(&self.seq);
         for (k, v) in &self.content {
             // Keys are bytes
@@ -826,21 +844,32 @@ impl<K: EnrKey> Enr<K> {
             // Values are raw RLP encoded data
             stream.append_raw(v, 1);
         }
+    }
+
+    /// Encodes the ENR's content (sequence number + ordered (key, value) pairs).
+    fn rlp_content(&self) -> BytesMut {
+        let mut stream = RlpStream::new_with_buffer(BytesMut::with_capacity(MAX_ENR_SIZE));
+        let include_signature = false;
+        self.append_rlp_content(&mut stream, include_signature);
         stream.out()
     }
 
+    /// Compute the enr's signature with the given key.
+    fn compute_signature(&self, signing_key: &K) -> Result<Vec<u8>, EnrError> {
+        match self.id() {
+            Some(ref id) if id.as_bytes() == ENR_VERSION => signing_key
+                .sign_v4(&self.rlp_content())
+                .map_err(|_| EnrError::SigningError),
+            // other identity schemes are unsupported
+            _ => Err(EnrError::UnsupportedIdentityScheme),
+        }
+    }
+
     /// Signs the ENR record based on the identity scheme. Currently only "v4" is supported.
-    fn sign(&mut self, key: &K) -> Result<(), EnrError> {
-        self.signature = {
-            match self.id() {
-                Some(ref id) if id.as_bytes() == ENR_VERSION => key
-                    .sign_v4(&self.rlp_content())
-                    .map_err(|_| EnrError::SigningError)?,
-                // other identity schemes are unsupported
-                _ => return Err(EnrError::SigningError),
-            }
-        };
-        Ok(())
+    /// The previous signature is returned.
+    fn sign(&mut self, key: &K) -> Result<Vec<u8>, EnrError> {
+        let new_signature = self.compute_signature(key)?;
+        Ok(std::mem::replace(&mut self.signature, new_signature))
     }
 
     // Libp2p features
@@ -1201,9 +1230,6 @@ impl<K: EnrKey> FromStr for Enr<K> {
         let bytes = URL_SAFE_NO_PAD
             .decode(decode_string)
             .map_err(|e| format!("Invalid base64 encoding: {e:?}"))?;
-        if bytes.len() > MAX_ENR_SIZE {
-            return Err("enr exceeds max size".to_string());
-        }
         rlp::decode(&bytes).map_err(|e| format!("Invalid ENR: {e:?}"))
     }
 }
@@ -1230,22 +1256,18 @@ impl<'de, K: EnrKey> Deserialize<'de> for Enr<K> {
 }
 
 impl<K: EnrKey> rlp::Encodable for Enr<K> {
-    fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(self.content.len() * 2 + 2);
-        s.append(&self.signature);
-        s.append(&self.seq);
-        // must use rlp_content to preserve ordering.
-        for (k, v) in &self.content {
-            // Keys are byte data
-            s.append(k);
-            // Values are raw RLP encoded data
-            s.append_raw(v, 1);
-        }
+    fn rlp_append(&self, stream: &mut RlpStream) {
+        let include_signature = true;
+        self.append_rlp_content(stream, include_signature);
     }
 }
 
 impl<K: EnrKey> rlp::Decodable for Enr<K> {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        if rlp.as_raw().len() > MAX_ENR_SIZE {
+            return Err(DecoderError::Custom("enr exceeds max size"));
+        }
+
         if !rlp.is_list() {
             debug!("Failed to decode ENR. Not an RLP list: {}", rlp);
             return Err(DecoderError::RlpExpectedToBeList);
@@ -1563,10 +1585,10 @@ mod tests {
                            "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
                            "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
                            "eHh4eHh4eHh4eHh4eHh4eA");
-        assert_eq!(
-            text.parse::<DefaultEnr>().unwrap_err(),
-            "enr exceeds max size"
-        );
+        assert!(text
+            .parse::<DefaultEnr>()
+            .unwrap_err()
+            .contains("enr exceeds max size"));
     }
 
     #[cfg(feature = "k256")]
@@ -1913,11 +1935,7 @@ mod tests {
         let topics: &[u8] = &topics;
 
         let (removed, inserted) = enr
-            .remove_insert(
-                vec![b"tcp"].iter(),
-                vec![(b"topics", topics)].into_iter(),
-                &key,
-            )
+            .remove_insert([b"tcp"].iter(), vec![(b"topics", topics)].into_iter(), &key)
             .unwrap();
 
         assert_eq!(
@@ -2007,7 +2025,7 @@ mod tests {
 
             println!("Inserting: {}", tcp);
             let res = enr.remove_insert(
-                vec![b"none"].iter(),
+                [b"none"].iter(),
                 vec![(b"tcp".as_slice(), tcp.to_be_bytes().as_slice())].into_iter(),
                 &key,
             );
@@ -2039,9 +2057,88 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_compare_content() {
+        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+        let ip = Ipv4Addr::new(10, 0, 0, 1);
+        let tcp = 30303;
+
+        let enr1 = {
+            let mut builder = EnrBuilder::new();
+            builder.ip4(ip);
+            builder.tcp4(tcp);
+            builder.build(&key).unwrap()
+        };
+
+        let mut enr2 = enr1.clone();
+        enr2.set_seq(1, &key).unwrap();
+        let mut enr3 = enr1.clone();
+        enr3.set_seq(2, &key).unwrap();
+
+        // Enr 1 & 2 should be equal, secpk256k1 should have different signatures for the same Enr content
+        assert_ne!(enr1.signature(), enr2.signature());
+        assert!(enr1.compare_content(&enr2));
+        assert_ne!(enr1, enr2);
+
+        // Enr 1 & 3 should not be equal, and have different signatures
+        assert_ne!(enr1.signature(), enr3.signature());
+        assert!(!enr1.compare_content(&enr3));
+        assert_ne!(enr1, enr3);
+    }
+
     fn assert_tcp4(enr: &DefaultEnr, tcp: u16) {
         assert!(enr.verify());
         assert_eq!(enr.get_raw_rlp("tcp").unwrap(), rlp::encode(&tcp).to_vec());
         assert_eq!(enr.tcp4(), Some(tcp));
+    }
+
+    #[test]
+    fn test_large_enr_decoding_is_rejected() {
+        // hack an enr object that is too big. This is not possible via the public API.
+        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+
+        let mut huge_enr = EnrBuilder::new().build(&key).unwrap();
+        let large_vec: Vec<u8> = std::iter::repeat(0).take(MAX_ENR_SIZE).collect();
+        let large_vec_encoded = rlp::encode(&large_vec).freeze();
+
+        huge_enr
+            .content
+            .insert(b"large vec".to_vec(), large_vec_encoded);
+        huge_enr.sign(&key).unwrap();
+
+        assert!(huge_enr.verify());
+
+        let encoded = rlp::encode(&huge_enr).freeze();
+        assert!(encoded.len() > MAX_ENR_SIZE);
+        assert_eq!(
+            rlp::decode::<DefaultEnr>(&encoded).unwrap_err(),
+            DecoderError::Custom("enr exceeds max size")
+        )
+    }
+
+    /// Tests [`Enr::set_seq`] in both a failure and success case.
+    #[test]
+    fn test_set_seq() {
+        // 300 byte ENR (max size)
+        const LARGE_ENR : &str = concat!(
+            "enr:-QEpuEDaLyrPP4gxBI9YL7QE9U1tZig_Nt8rue8bRIuYv_IMziFc8OEt3LQMwkwt6da-Z0Y8BaqkDalZbBq647UtV2ei",
+            "AYJpZIJ2NIJpcIR_AAABiXNlY3AyNTZrMaEDymNMrg1JrLQB2KTGtv6MVbcNEVv0AHacwUAPMljNMTiDdWRwgnZferiieHh4",
+            "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
+            "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
+            "eHh4eHh4eHh4eHh4eHh4"
+        );
+        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+        let mut record = LARGE_ENR.parse::<DefaultEnr>().unwrap();
+        let enr_bkp = record.clone();
+        // verify that updating the sequence number when it won't fit is rejected
+        assert_eq!(
+            record.set_seq(u64::MAX, &key),
+            Err(EnrError::ExceedsMaxSize)
+        );
+        // verify the enr is unchanged after this operation
+        assert_eq!(record, enr_bkp);
+
+        record.set_seq(30, &key).unwrap();
+        assert_eq!(record.seq(), 30);
     }
 }

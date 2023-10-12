@@ -44,17 +44,23 @@ pub struct EnrBuilder<K: EnrKey> {
     phantom: PhantomData<K>,
 }
 
-impl<K: EnrKey> EnrBuilder<K> {
-    /// Constructs a minimal `EnrBuilder` providing only a sequence number.
-    /// Currently only supports the id v4 scheme and therefore disallows creation of any other
-    /// scheme.
-    pub fn new() -> Self {
+impl<K: EnrKey> Default for EnrBuilder<K> {
+    fn default() -> Self {
         Self {
             id: ENR_VERSION.into(),
             seq: 1,
             content: BTreeMap::new(),
             phantom: PhantomData,
         }
+    }
+}
+
+impl<K: EnrKey> EnrBuilder<K> {
+    /// Constructs a minimal `EnrBuilder` providing only a sequence number.
+    /// Currently only supports the id v4 scheme and therefore disallows creation of any other
+    /// scheme.
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Modifies the sequence number of the builder.
