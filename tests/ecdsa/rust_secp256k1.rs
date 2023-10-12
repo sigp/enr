@@ -1,4 +1,4 @@
-use enr::{Enr, EnrBuilder};
+use enr::Enr;
 use std::net::Ipv4Addr;
 
 // Ensures the mock data is not used in the production environment.
@@ -13,7 +13,7 @@ fn test_secp256k1_sign_ecdsa_with_noncedata() {
     let udp = 30303;
 
     let key = secp256k1::SecretKey::from_slice(&key_data).unwrap();
-    let enr = EnrBuilder::new("v4").ip4(ip).udp4(udp).build(&key).unwrap();
+    let enr = Enr::builder().ip4(ip).udp4(udp).build(&key).unwrap();
     let enr_base64 = enr.to_base64();
     assert_ne!(enr_base64, not_expected_enr_base64);
 
