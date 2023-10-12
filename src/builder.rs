@@ -23,9 +23,9 @@ pub struct Builder<K: EnrKey> {
     phantom: PhantomData<K>,
 }
 
-impl<K: EnrKey> Builder<K> {
+impl<K: EnrKey> Default for Builder<K> {
     /// Constructs a minimal [`Builder`] for the v4 identity scheme.
-    pub fn new() -> Self {
+    fn default() -> Self {
         Self {
             id: String::from("v4"),
             seq: 1,
@@ -33,7 +33,9 @@ impl<K: EnrKey> Builder<K> {
             phantom: PhantomData,
         }
     }
+}
 
+impl<K: EnrKey> Builder<K> {
     /// Modifies the sequence number of the builder.
     pub fn seq(&mut self, seq: u64) -> &mut Self {
         self.seq = seq;

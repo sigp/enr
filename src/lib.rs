@@ -244,7 +244,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Get a [`builder::Builder`] with the default identity scheme.
     pub fn builder() -> builder::Builder<K> {
-        builder::Builder::new()
+        builder::Builder::default()
     }
 
     /// Get an empty Enr for the v4 identity scheme.
@@ -1522,22 +1522,14 @@ mod tests {
         // generate a random secp256k1 key
         let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
         let ip = Ipv4Addr::new(192, 168, 0, 1);
-        let enr_secp256k1 = Enr::builder()
-            .ip(ip.into())
-            .tcp4(8000)
-            .build(&key)
-            .unwrap();
+        let enr_secp256k1 = Enr::builder().ip(ip.into()).tcp4(8000).build(&key).unwrap();
 
         // encode to base64
         let base64_string_secp256k1 = enr_secp256k1.to_base64();
 
         // generate a random ed25519 key
         let key = ed25519_dalek::SigningKey::generate(&mut rand::thread_rng());
-        let enr_ed25519 = Enr::builder()
-            .ip(ip.into())
-            .tcp4(8000)
-            .build(&key)
-            .unwrap();
+        let enr_ed25519 = Enr::builder().ip(ip.into()).tcp4(8000).build(&key).unwrap();
 
         // encode to base64
         let base64_string_ed25519 = enr_ed25519.to_base64();
