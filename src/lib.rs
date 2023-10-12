@@ -57,7 +57,7 @@
 //! let key = k256::ecdsa::SigningKey::random(&mut rng);
 //!
 //! let ip = Ipv4Addr::new(192,168,0,1);
-//! let enr = Enr::v4_builder().ip4(ip).tcp4(8000).build(&key).unwrap();
+//! let enr = Enr::builder().ip4(ip).tcp4(8000).build(&key).unwrap();
 //!
 //! assert_eq!(enr.ip4(), Some("192.168.0.1".parse().unwrap()));
 //! assert_eq!(enr.id(), Some("v4".into()));
@@ -79,7 +79,7 @@
 //! let key = CombinedKey::generate_ed25519();
 //!
 //! let ip = Ipv4Addr::new(192,168,0,1);
-//! let enr = Enr::v4_builder().ip4(ip).tcp4(8000).build(&key).unwrap();
+//! let enr = Enr::builder().ip4(ip).tcp4(8000).build(&key).unwrap();
 //!
 //! assert_eq!(enr.ip4(), Some("192.168.0.1".parse().unwrap()));
 //! assert_eq!(enr.id(), Some("v4".into()));
@@ -104,7 +104,7 @@
 //! let key = SigningKey::random(&mut rng);
 //!
 //! let ip = Ipv4Addr::new(192,168,0,1);
-//! let mut enr = Enr::v4_builder().ip4(ip).tcp4(8000).build(&key).unwrap();
+//! let mut enr = Enr::builder().ip4(ip).tcp4(8000).build(&key).unwrap();
 //!
 //! enr.set_tcp4(8001, &key);
 //! // set a custom key
@@ -135,14 +135,14 @@
 //! let mut rng = thread_rng();
 //! let key = ecdsa::SigningKey::random(&mut rng);
 //! let ip = Ipv4Addr::new(192,168,0,1);
-//! let enr_secp256k1 = Enr::v4_builder().ip4(ip).tcp4(8000).build(&key).unwrap();
+//! let enr_secp256k1 = Enr::builder().ip4(ip).tcp4(8000).build(&key).unwrap();
 //!
 //! // encode to base64
 //! let base64_string_secp256k1 = enr_secp256k1.to_base64();
 //!
 //! // generate a random ed25519 key
 //! let key = ed25519::SigningKey::generate(&mut rng);
-//! let enr_ed25519 = Enr::v4_builder().ip4(ip).tcp4(8000).build(&key).unwrap();
+//! let enr_ed25519 = Enr::builder().ip4(ip).tcp4(8000).build(&key).unwrap();
 //!
 //! // encode to base64
 //! let base64_string_ed25519 = enr_ed25519.to_base64();
@@ -1355,7 +1355,7 @@ mod tests {
         let ip = Ipv4Addr::new(127, 0, 0, 1);
         let tcp = 3000;
 
-        let enr = Enr::v4_builder().ip4(ip).tcp4(tcp).build(&key).unwrap();
+        let enr = Enr::builder().ip4(ip).tcp4(tcp).build(&key).unwrap();
 
         let encoded_enr = rlp::encode(&enr);
 
@@ -1408,7 +1408,7 @@ mod tests {
         let udp = 30303;
 
         let key = secp256k1::SecretKey::from_slice(&key_data).unwrap();
-        let enr = Enr::v4_builder().ip4(ip).udp4(udp).build(&key).unwrap();
+        let enr = Enr::builder().ip4(ip).udp4(udp).build(&key).unwrap();
         let enr_base64 = enr.to_base64();
         assert_eq!(enr_base64, expected_enr_base64);
 
@@ -1446,7 +1446,7 @@ mod tests {
         let ip = Ipv4Addr::new(10, 0, 0, 1);
         let tcp = 30303;
 
-        let enr = Enr::v4_builder().ip4(ip).tcp4(tcp).build(&key).unwrap();
+        let enr = Enr::builder().ip4(ip).tcp4(tcp).build(&key).unwrap();
 
         let encoded_enr = rlp::encode(&enr);
         let decoded_enr = rlp::decode::<Enr<CombinedKey>>(&encoded_enr).unwrap();
@@ -1522,7 +1522,7 @@ mod tests {
         // generate a random secp256k1 key
         let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
         let ip = Ipv4Addr::new(192, 168, 0, 1);
-        let enr_secp256k1 = Enr::v4_builder()
+        let enr_secp256k1 = Enr::builder()
             .ip(ip.into())
             .tcp4(8000)
             .build(&key)
@@ -1533,7 +1533,7 @@ mod tests {
 
         // generate a random ed25519 key
         let key = ed25519_dalek::SigningKey::generate(&mut rand::thread_rng());
-        let enr_ed25519 = Enr::v4_builder()
+        let enr_ed25519 = Enr::builder()
             .ip(ip.into())
             .tcp4(8000)
             .build(&key)
