@@ -23,12 +23,12 @@ sha3 = "0.10"
 k256 = { version = "0.13", features = ["ecdsa"], optional = true }
 serde = { version = "1.0.110", features = ["derive"], optional = true }
 ed25519-dalek = { version = "2.0.0", optional = true, features = ["rand_core"] }
-secp256k1 = { version = "0.27", optional = true, default-features = false, features = [
+secp256k1 = { version = "0.28", optional = true, default-features = false, features = [
     "global-context",
 ] }
 
 [dev-dependencies]
-secp256k1 = { features = ["rand-std"], version = "0.27" }
+secp256k1 = { features = ["rand-std"], version = "0.28" }
 serde_json = { version = "1.0.95" }
 
 [features]
