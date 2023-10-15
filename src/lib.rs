@@ -1076,7 +1076,7 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Sets the `quic6` field of the ENR. Returns any pre-existing quic6 port in the record.
-    #[cfg(feature = "quic6")]
+    #[cfg(feature = "quic")]
     #[must_use]
     pub fn set_quic6(&mut self, quic6: u16, key: &K) -> Result<Option<u16>, EnrError> {
         if let Some(quic_bytes) = self.insert(QUIC6_ENR_KEY, &quic6, key)? {
