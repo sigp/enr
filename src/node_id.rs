@@ -122,8 +122,8 @@ mod serde_hex_prfx {
         T: hex::FromHex,
         <T as hex::FromHex>::Error: std::fmt::Display,
     {
-        let raw: &[u8] = serde::Deserialize::deserialize(deserializer)?;
-        let src = raw.strip_prefix(b"0x").unwrap_or(raw);
+        let raw: String = serde::Deserialize::deserialize(deserializer)?;
+        let src = raw.strip_prefix("0x").unwrap_or(&raw);
         hex::FromHex::from_hex(src).map_err(serde::de::Error::custom)
     }
 }
@@ -143,10 +143,26 @@ mod tests {
 
     #[cfg(feature = "serde")]
     #[test]
-    fn test_serde() {
+    fn test_serde_str() {
         let node = NodeId::random();
         let json_string = serde_json::to_string(&node).unwrap();
         assert_eq!(node, serde_json::from_str::<NodeId>(&json_string).unwrap());
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_serde_slice() {
+        let node = NodeId::random();
+        let json_bytes = serde_json::to_vec(&node).unwrap();
+        assert_eq!(node, serde_json::from_slice::<NodeId>(&json_bytes).unwrap());
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_serde_value() {
+        let node = NodeId::random();
+        let value = serde_json::to_value(&node).unwrap();
+        assert_eq!(node, serde_json::from_value::<NodeId>(value).unwrap());
     }
 
     #[cfg(feature = "serde")]
