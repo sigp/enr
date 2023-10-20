@@ -264,9 +264,6 @@ impl<K: EnrKey> Enr<K> {
         self.seq
     }
 
-    /// # Panics
-    ///
-    /// Will panic if data is not sanitized
     /// Reads a custom key from the record if it exists, decoded as data.
     #[allow(clippy::missing_panics_doc)]
     pub fn get(&self, key: impl AsRef<[u8]>) -> Option<Bytes> {
@@ -408,9 +405,7 @@ impl<K: EnrKey> Enr<K> {
     pub fn signature(&self) -> &[u8] {
         &self.signature
     }
-    /// # Panics
-    ///
-    /// Will panic if the content does not has a public key
+
     /// Returns the public key of the ENR record.
     /// # Panics
     ///
@@ -803,7 +798,7 @@ impl<K: EnrKey> Enr<K> {
     /// Encodes the ENR's content (signature(optional) + sequence number + ordered (key, value) pairs) into the stream.
     fn append_rlp_content(&self, stream: &mut BytesMut, include_signature: bool) {
         if include_signature {
-            self.signature.encode(stream);
+            self.signature.as_slice().encode(stream);
         }
         self.seq.encode(stream);
         for (k, v) in &self.content {
@@ -968,19 +963,15 @@ impl<'de, K: EnrKey> Deserialize<'de> for Enr<K> {
 
 impl<K: EnrKey> Encodable for Enr<K> {
     fn encode(&self, out: &mut dyn bytes::BufMut) {
-        let mut list = Vec::<u8>::new();
-        self.signature.as_slice().encode(&mut list);
-        self.seq.encode(&mut list);
-        for (k, v) in &self.content {
-            k.as_slice().encode(&mut list);
-            list.extend_from_slice(v);
-        }
+        let mut stream = BytesMut::with_capacity(MAX_ENR_SIZE);
+        let include_signature = true;
+        self.append_rlp_content(&mut stream, include_signature);
         let header = Header {
             list: true,
-            payload_length: list.len(),
+            payload_length: stream.len(),
         };
         header.encode(out);
-        out.put_slice(&list);
+        out.put_slice(&stream);
     }
 }
 
@@ -994,6 +985,10 @@ impl<K: EnrKey> Decodable for Enr<K> {
 
         if !header.list {
             return Err(DecoderError::Custom("Invalid format of header"));
+        }
+
+        if header.payload_length > buf.len() {
+            return Err(DecoderError::Custom("payload length exceeds buffer size"));
         }
 
         let payload = &mut &buf[..header.payload_length];
@@ -1132,7 +1127,7 @@ fn check_spec_reserved_keys(key: &[u8], mut value: &[u8]) -> Result<(), EnrError
         b"id" => {
             let id_bytes = Bytes::decode(&mut value)
                 .map_err(|err| EnrError::InvalidRlpData(err.to_string()))?;
-            if id_bytes.to_vec() != b"v4" {
+            if id_bytes.as_ref() != b"v4" {
                 return Err(EnrError::UnsupportedIdentityScheme);
             }
         }
