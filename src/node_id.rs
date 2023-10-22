@@ -107,6 +107,7 @@ impl std::fmt::Debug for NodeId {
 /// Serialize with the 0x prefix.
 #[cfg(feature = "serde")]
 mod serde_hex_prfx {
+
     pub fn serialize<T: AsRef<[u8]> + hex::ToHex, S: serde::Serializer>(
         data: &T,
         serializer: S,
@@ -122,7 +123,15 @@ mod serde_hex_prfx {
         T: hex::FromHex,
         <T as hex::FromHex>::Error: std::fmt::Display,
     {
-        let raw: String = serde::Deserialize::deserialize(deserializer)?;
+        /// Helper struct to obtain a owned string when necessary (using [`serde_json`], for
+        /// example) or a borrowed string with the appropriate lifetime (most the time).
+        // NOTE: see https://github.com/serde-rs/serde/issues/1413#issuecomment-494892266 and
+        // https://github.com/sigp/enr/issues/62
+        #[derive(serde::Deserialize)]
+        struct CowNodeId<'a>(#[serde(borrow)] std::borrow::Cow<'a, str>);
+
+        let CowNodeId::<'de>(raw) = serde::Deserialize::deserialize(deserializer)?;
+
         let src = raw.strip_prefix("0x").unwrap_or(&raw);
         hex::FromHex::from_hex(src).map_err(serde::de::Error::custom)
     }
