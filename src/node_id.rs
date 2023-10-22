@@ -107,6 +107,7 @@ impl std::fmt::Debug for NodeId {
 /// Serialize with the 0x prefix.
 #[cfg(feature = "serde")]
 mod serde_hex_prfx {
+
     pub fn serialize<T: AsRef<[u8]> + hex::ToHex, S: serde::Serializer>(
         data: &T,
         serializer: S,
@@ -122,8 +123,16 @@ mod serde_hex_prfx {
         T: hex::FromHex,
         <T as hex::FromHex>::Error: std::fmt::Display,
     {
-        let raw: &[u8] = serde::Deserialize::deserialize(deserializer)?;
-        let src = raw.strip_prefix(b"0x").unwrap_or(raw);
+        /// Helper struct to obtain a owned string when necessary (using [`serde_json`], for
+        /// example) or a borrowed string with the appropriate lifetime (most the time).
+        // NOTE: see https://github.com/serde-rs/serde/issues/1413#issuecomment-494892266 and
+        // https://github.com/sigp/enr/issues/62
+        #[derive(serde::Deserialize)]
+        struct CowNodeId<'a>(#[serde(borrow)] std::borrow::Cow<'a, str>);
+
+        let CowNodeId::<'de>(raw) = serde::Deserialize::deserialize(deserializer)?;
+
+        let src = raw.strip_prefix("0x").unwrap_or(&raw);
         hex::FromHex::from_hex(src).map_err(serde::de::Error::custom)
     }
 }
@@ -143,10 +152,26 @@ mod tests {
 
     #[cfg(feature = "serde")]
     #[test]
-    fn test_serde() {
+    fn test_serde_str() {
         let node = NodeId::random();
         let json_string = serde_json::to_string(&node).unwrap();
         assert_eq!(node, serde_json::from_str::<NodeId>(&json_string).unwrap());
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_serde_slice() {
+        let node = NodeId::random();
+        let json_bytes = serde_json::to_vec(&node).unwrap();
+        assert_eq!(node, serde_json::from_slice::<NodeId>(&json_bytes).unwrap());
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_serde_value() {
+        let node = NodeId::random();
+        let value = serde_json::to_value(&node).unwrap();
+        assert_eq!(node, serde_json::from_value::<NodeId>(value).unwrap());
     }
 
     #[cfg(feature = "serde")]
