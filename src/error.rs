@@ -17,6 +17,12 @@ pub enum Error {
     InvalidRlpData(String),
 }
 
+impl From<rlp::DecoderError> for Error {
+    fn from(decode_error: rlp::DecoderError) -> Self {
+        Error::InvalidRlpData(decode_error.to_string())
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

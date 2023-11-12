@@ -742,7 +742,7 @@ impl<K: EnrKey> Enr<K> {
             let value = rlp::encode(&(value)).freeze();
             // Prevent inserting invalid RLP integers
             if is_keyof_u16(key.as_ref()) {
-                rlp::decode::<u16>(&value).map_err(|err| Error::InvalidRlpData(err.to_string()))?;
+                rlp::decode::<u16>(&value)?;
             }
 
             inserted.push(self.content.insert(key.as_ref().to_vec(), value));
@@ -1076,32 +1076,25 @@ const fn is_keyof_u16(key: &[u8]) -> bool {
 fn check_spec_reserved_keys(key: &[u8], value: &[u8]) -> Result<(), Error> {
     match key {
         b"tcp" | b"tcp6" | b"udp" | b"udp6" => {
-            rlp::decode::<u16>(value).map_err(|err| Error::InvalidRlpData(err.to_string()))?;
+            rlp::decode::<u16>(value)?;
         }
         b"id" => {
-            let id_bytes = rlp::decode::<Vec<u8>>(value)
-                .map_err(|err| Error::InvalidRlpData(err.to_string()))?;
+            let id_bytes = rlp::decode::<Vec<u8>>(value)?;
             if id_bytes != b"v4" {
                 return Err(Error::UnsupportedIdentityScheme);
             }
         }
         b"ip" => {
-            let ip4_bytes = rlp::decode::<Vec<u8>>(value)
-                .map_err(|err| Error::InvalidRlpData(err.to_string()))?;
+            let ip4_bytes = rlp::decode::<Vec<u8>>(value)?;
             if ip4_bytes.len() != 4 {
                 return Err(Error::InvalidRlpData("Invalid Ipv4 size".to_string()));
             }
         }
         b"ip6" => {
-            let ip6_bytes = rlp::decode::<Vec<u8>>(value)
-                .map_err(|err| Error::InvalidRlpData(err.to_string()))?;
+            let ip6_bytes = rlp::decode::<Vec<u8>>(value)?;
             if ip6_bytes.len() != 16 {
                 return Err(Error::InvalidRlpData("Invalid Ipv6 size".to_string()));
             }
-        }
-        b"secp256k1" => {
-            rlp::decode::<Enr<k256::ecdsa::SigningKey>>(value)
-                .map_err(|err| Error::InvalidRlpData(err.to_string()))?;
         }
         _ => return Ok(()),
     };
