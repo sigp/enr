@@ -1087,13 +1087,17 @@ fn check_spec_reserved_keys(key: &[u8], value: &[u8]) -> Result<(), Error> {
         b"ip" => {
             let ip4_bytes = rlp::decode::<Vec<u8>>(value)?;
             if ip4_bytes.len() != 4 {
-                return Err(Error::InvalidRlpData("Invalid Ipv4 size".to_string()));
+                return Err(Error::InvalidRlpData(rlp::DecoderError::Custom(
+                    "invalid IPv4 bytes length",
+                )));
             }
         }
         b"ip6" => {
             let ip6_bytes = rlp::decode::<Vec<u8>>(value)?;
             if ip6_bytes.len() != 16 {
-                return Err(Error::InvalidRlpData("Invalid Ipv6 size".to_string()));
+                return Err(Error::InvalidRlpData(rlp::DecoderError::Custom(
+                    "invalid IPv6 bytes lenght",
+                )));
             }
         }
         _ => return Ok(()),

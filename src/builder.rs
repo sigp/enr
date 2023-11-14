@@ -148,10 +148,8 @@ impl<K: EnrKey> Builder<K> {
         }
 
         // Sanitize all data, ensuring all RLP data is correctly formatted.
-        for (key, value) in &self.content {
-            if rlp::Rlp::new(value).data().is_err() {
-                return Err(Error::InvalidRlpData(String::from_utf8_lossy(key).into()));
-            }
+        for value in self.content.values() {
+            rlp::Rlp::new(value).data()?;
         }
 
         self.add_value_rlp("id", rlp::encode(&self.id.as_bytes()).freeze());
