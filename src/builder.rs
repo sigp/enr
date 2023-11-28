@@ -1,4 +1,3 @@
-use crate::{Enr, EnrError, EnrKey, EnrPublicKey, Key, NodeId, MAX_ENR_SIZE};
 #[cfg(feature = "eth2")]
 use crate::{ATTESTATION_BITFIELD_ENR_KEY, ETH2_ENR_KEY, SYNC_COMMITTEE_BITFIELD_ENR_KEY};
 use crate::{
@@ -8,6 +7,7 @@ use crate::{
 #[cfg(feature = "quic")]
 use crate::{QUIC6_ENR_KEY, QUIC_ENR_KEY};
 
+use crate::{Enr, EnrKey, EnrPublicKey, Error, Key, NodeId, MAX_ENR_SIZE};
 use bytes::{Bytes, BytesMut};
 use rlp::{Encodable, RlpStream};
 use std::{
@@ -126,14 +126,14 @@ impl<K: EnrKey> Builder<K> {
         stream.out()
     }
 
-    /// Signs record based on the identity scheme. Currently only ENR_VERSION is supported.
-    fn signature(&self, key: &K) -> Result<Vec<u8>, EnrError> {
+    /// Signs record based on the identity scheme. Currently only [`ENR_VERSION`] is supported.
+    fn signature(&self, key: &K) -> Result<Vec<u8>, Error> {
         match self.id.as_slice() {
             ENR_VERSION => key
                 .sign_v4(&self.rlp_content())
-                .map_err(|_| EnrError::SigningError),
+                .map_err(|_| Error::SigningError),
             // unsupported identity schemes
-            _ => Err(EnrError::SigningError),
+            _ => Err(Error::SigningError),
         }
     }
 
@@ -146,14 +146,10 @@ impl<K: EnrKey> Builder<K> {
     ///
     /// # Errors
     /// Fails if the identity scheme is not supported, or the record size exceeds `MAX_ENR_SIZE`.
-    pub fn build(&mut self, key: &K) -> Result<Enr<K>, EnrError> {
+    pub fn build(&mut self, key: &K) -> Result<Enr<K>, Error> {
         // Sanitize all data, ensuring all RLP data is correctly formatted.
-        for (key, value) in &self.content {
-            if rlp::Rlp::new(value).data().is_err() {
-                return Err(EnrError::InvalidRlpData(
-                    String::from_utf8_lossy(key).into(),
-                ));
-            }
+        for value in self.content.values() {
+            rlp::Rlp::new(value).data()?;
         }
 
         self.add_value_rlp(ID_ENR_KEY, rlp::encode(&self.id).freeze());
@@ -165,7 +161,7 @@ impl<K: EnrKey> Builder<K> {
 
         // check the size of the record
         if rlp_content.len() + signature.len() + 8 > MAX_ENR_SIZE {
-            return Err(EnrError::ExceedsMaxSize);
+            return Err(Error::ExceedsMaxSize);
         }
 
         Ok(Enr {
