@@ -1,4 +1,4 @@
-use crate::{Enr, EnrError, EnrKey, EnrPublicKey, Key, NodeId, MAX_ENR_SIZE};
+use crate::{Enr, EnrKey, EnrPublicKey, Error, Key, NodeId, MAX_ENR_SIZE};
 use bytes::{Bytes, BytesMut};
 use rlp::{Encodable, RlpStream};
 use std::{
@@ -122,13 +122,13 @@ impl<K: EnrKey> Builder<K> {
     }
 
     /// Signs record based on the identity scheme. Currently only "v4" is supported.
-    fn signature(&self, key: &K) -> Result<Vec<u8>, EnrError> {
+    fn signature(&self, key: &K) -> Result<Vec<u8>, Error> {
         match self.id.as_str() {
             "v4" => key
                 .sign_v4(&self.rlp_content())
-                .map_err(|_| EnrError::SigningError),
+                .map_err(|_| Error::SigningError),
             // unsupported identity schemes
-            _ => Err(EnrError::SigningError),
+            _ => Err(Error::SigningError),
         }
     }
 
@@ -141,19 +141,15 @@ impl<K: EnrKey> Builder<K> {
     ///
     /// # Errors
     /// Fails if the identity scheme is not supported, or the record size exceeds `MAX_ENR_SIZE`.
-    pub fn build(&mut self, key: &K) -> Result<Enr<K>, EnrError> {
+    pub fn build(&mut self, key: &K) -> Result<Enr<K>, Error> {
         // add the identity scheme to the content
         if self.id != "v4" {
-            return Err(EnrError::UnsupportedIdentityScheme);
+            return Err(Error::UnsupportedIdentityScheme);
         }
 
         // Sanitize all data, ensuring all RLP data is correctly formatted.
-        for (key, value) in &self.content {
-            if rlp::Rlp::new(value).data().is_err() {
-                return Err(EnrError::InvalidRlpData(
-                    String::from_utf8_lossy(key).into(),
-                ));
-            }
+        for value in self.content.values() {
+            rlp::Rlp::new(value).data()?;
         }
 
         self.add_value_rlp("id", rlp::encode(&self.id.as_bytes()).freeze());
@@ -165,7 +161,7 @@ impl<K: EnrKey> Builder<K> {
 
         // check the size of the record
         if rlp_content.len() + signature.len() + 8 > MAX_ENR_SIZE {
-            return Err(EnrError::ExceedsMaxSize);
+            return Err(Error::ExceedsMaxSize);
         }
 
         Ok(Enr {
