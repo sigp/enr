@@ -7,10 +7,16 @@ use super::{ed25519_dalek as ed25519, EnrKey, EnrPublicKey, SigningError};
 use bytes::Bytes;
 pub use k256;
 use rlp::DecoderError;
+use std::convert::TryInto;
 use std::{collections::BTreeMap, convert::TryFrom};
 use zeroize::Zeroize;
 
 use crate::Key;
+
+#[cfg(feature = "libp2p")]
+use libp2p_identity::{
+    ed25519 as libp2p_ed25519, secp256k1 as libp2p_secp256k1, KeyType, PeerId, PublicKey,
+};
 
 /// A standard implementation of the `EnrKey` trait used to sign and modify ENR records. The variants here represent the currently
 /// supported in-built signing schemes.
@@ -28,8 +34,45 @@ impl From<k256::ecdsa::SigningKey> for CombinedKey {
 }
 
 impl From<ed25519::SigningKey> for CombinedKey {
-    fn from(keypair: ed25519_dalek::SigningKey) -> Self {
+    fn from(keypair: ed25519::SigningKey) -> Self {
         Self::Ed25519(keypair)
+    }
+}
+
+#[cfg(feature = "libp2p")]
+impl TryFrom<libp2p_identity::Keypair> for CombinedKey {
+    type Error = &'static str;
+
+    fn try_from(keypair: libp2p_identity::Keypair) -> Result<Self, Self::Error> {
+        match keypair.key_type() {
+            KeyType::Secp256k1 => Ok(keypair
+                .try_into_secp256k1()
+                .expect("must be the right key type")
+                .into()),
+            KeyType::Ed25519 => Ok(keypair.try_into_ed25519().expect("right key type").into()),
+            _ => Err("Unsupported keypair kind"),
+        }
+    }
+}
+
+#[cfg(feature = "libp2p")]
+impl From<libp2p_secp256k1::Keypair> for CombinedKey {
+    fn from(keypair: libp2p_secp256k1::Keypair) -> Self {
+        let secret = k256::ecdsa::SigningKey::from_slice(&keypair.secret().to_bytes())
+            .expect("libp2p key must be valid");
+        CombinedKey::Secp256k1(secret)
+    }
+}
+
+#[cfg(feature = "libp2p")]
+impl From<libp2p_ed25519::Keypair> for CombinedKey {
+    fn from(keypair: libp2p_ed25519::Keypair) -> Self {
+        let ed_keypair = ed25519::SigningKey::from_bytes(
+            &(keypair.to_bytes()[..32])
+                .try_into()
+                .expect("libp2p key must be valid"),
+        );
+        CombinedKey::from(ed_keypair)
     }
 }
 
@@ -164,6 +207,29 @@ impl EnrPublicKey for CombinedPublicKey {
         match self {
             Self::Secp256k1(key) => key.enr_key(),
             Self::Ed25519(key) => key.enr_key(),
+        }
+    }
+
+    /// Converts the publickey into a peer id, without consuming the key.
+    ///
+    /// This is only available with the `libp2p` feature flag.
+    #[cfg(feature = "libp2p")]
+    fn as_peer_id(&self) -> PeerId {
+        match self {
+            Self::Secp256k1(pk) => {
+                let pk_bytes = pk.to_sec1_bytes();
+                let libp2p_pk: PublicKey = libp2p_secp256k1::PublicKey::try_from_bytes(&pk_bytes)
+                    .expect("valid public key")
+                    .into();
+                PeerId::from_public_key(&libp2p_pk)
+            }
+            Self::Ed25519(pk) => {
+                let pk_bytes = pk.to_bytes();
+                let libp2p_pk: PublicKey = libp2p_ed25519::PublicKey::try_from_bytes(&pk_bytes)
+                    .expect("valid public key")
+                    .into();
+                PeerId::from_public_key(&libp2p_pk)
+            }
         }
     }
 }

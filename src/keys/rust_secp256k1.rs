@@ -6,6 +6,9 @@ use rlp::DecoderError;
 use secp256k1::SECP256K1;
 use std::collections::BTreeMap;
 
+#[cfg(feature = "libp2p")]
+use libp2p_identity::{secp256k1 as libp2p_secp256k1, PeerId, PublicKey};
+
 #[cfg(test)]
 use self::MockOsRng as OsRng;
 #[cfg(not(test))]
@@ -80,6 +83,15 @@ impl EnrPublicKey for secp256k1::PublicKey {
 
     fn enr_key(&self) -> Key {
         ENR_KEY.into()
+    }
+
+    #[cfg(feature = "libp2p")]
+    fn as_peer_id(&self) -> PeerId {
+        let pk_bytes = self.serialize();
+        let libp2p_pk: PublicKey = libp2p_secp256k1::PublicKey::try_from_bytes(&pk_bytes)
+            .expect("valid public key")
+            .into();
+        PeerId::from_public_key(&libp2p_pk)
     }
 }
 

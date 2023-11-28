@@ -20,6 +20,9 @@ use rlp::DecoderError;
 use sha3::{Digest, Keccak256};
 use std::{collections::BTreeMap, convert::TryFrom};
 
+#[cfg(feature = "libp2p")]
+use libp2p_identity::{secp256k1, PeerId, PublicKey};
+
 /// The ENR key that stores the public key in the ENR record.
 pub const ENR_KEY: &str = "secp256k1";
 
@@ -98,6 +101,15 @@ impl EnrPublicKey for VerifyingKey {
         coords[32..].copy_from_slice(&y);
 
         coords
+    }
+
+    #[cfg(feature = "libp2p")]
+    fn as_peer_id(&self) -> PeerId {
+        let pk_bytes = self.to_sec1_bytes();
+        let libp2p_pk: PublicKey = secp256k1::PublicKey::try_from_bytes(&pk_bytes)
+            .expect("valid public key")
+            .into();
+        PeerId::from_public_key(&libp2p_pk)
     }
 
     fn enr_key(&self) -> Key {
