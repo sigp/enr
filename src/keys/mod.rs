@@ -24,8 +24,8 @@ pub use k256;
 pub use secp256k1;
 
 use crate::Key;
+use alloy_rlp::Error as DecoderError;
 use bytes::Bytes;
-use rlp::DecoderError;
 use std::{
     collections::BTreeMap,
     error::Error,

@@ -108,7 +108,7 @@
 //!
 //! enr.set_tcp4(8001, &key);
 //! // set a custom key
-//! enr.insert("custom_key", &vec![0,0,1], &key);
+//! enr.insert("custom_key", &[0,0,1], &key);
 //!
 //! // encode to base64
 //! let base_64_string = enr.to_base64();
@@ -119,7 +119,7 @@
 //! assert_eq!(decoded_enr.ip4(), Some("192.168.0.1".parse().unwrap()));
 //! assert_eq!(decoded_enr.id(), Some("v4".into()));
 //! assert_eq!(decoded_enr.tcp4(), Some(8001));
-//! assert_eq!(decoded_enr.get("custom_key"), Some(vec![0,0,1].as_slice()));
+//! assert_eq!(decoded_enr.get("custom_key").as_ref().map(AsRef::as_ref), Some(vec![0,0,1]).as_deref());
 //! ```
 //!
 //! ### Encoding/Decoding ENR's of various key types
@@ -179,10 +179,8 @@ mod builder;
 mod error;
 mod keys;
 mod node_id;
-
-use bytes::{Bytes, BytesMut};
-use log::debug;
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use alloy_rlp::{Decodable, Encodable, Error as DecoderError, Header};
+use bytes::{Buf, Bytes, BytesMut};
 use std::{
     collections::BTreeMap,
     hash::{Hash, Hasher},
@@ -268,13 +266,10 @@ impl<K: EnrKey> Enr<K> {
 
     /// Reads a custom key from the record if it exists, decoded as data.
     #[allow(clippy::missing_panics_doc)]
-    pub fn get(&self, key: impl AsRef<[u8]>) -> Option<&[u8]> {
+    pub fn get(&self, key: impl AsRef<[u8]>) -> Option<Bytes> {
         // It's ok to decode any valid RLP value as data
-        self.get_raw_rlp(key).map(|rlp_data| {
-            rlp::Rlp::new(rlp_data)
-                .data()
-                .expect("All data is sanitized")
-        })
+        self.get_raw_rlp(key)
+            .map(|mut rlp_data| Bytes::decode(&mut rlp_data).expect("All data is sanitized"))
     }
 
     /// Reads a custom key from the record if it exists, decoded as `T`.
@@ -282,7 +277,8 @@ impl<K: EnrKey> Enr<K> {
         &self,
         key: impl AsRef<[u8]>,
     ) -> Option<Result<T, DecoderError>> {
-        self.get_raw_rlp(key).map(|rlp_data| rlp::decode(rlp_data))
+        self.get_raw_rlp(key)
+            .map(|mut rlp_data| Decodable::decode(&mut rlp_data))
     }
 
     /// Reads a custom key from the record if it exists as raw RLP bytes.
@@ -299,10 +295,10 @@ impl<K: EnrKey> Enr<K> {
     #[must_use]
     pub fn ip4(&self) -> Option<Ipv4Addr> {
         if let Some(ip_bytes) = self.get("ip") {
-            return match ip_bytes.len() {
+            return match ip_bytes.as_ref().len() {
                 4 => {
                     let mut ip = [0_u8; 4];
-                    ip.copy_from_slice(ip_bytes);
+                    ip.copy_from_slice(ip_bytes.as_ref());
                     Some(Ipv4Addr::from(ip))
                 }
                 _ => None,
@@ -315,10 +311,10 @@ impl<K: EnrKey> Enr<K> {
     #[must_use]
     pub fn ip6(&self) -> Option<Ipv6Addr> {
         if let Some(ip_bytes) = self.get("ip6") {
-            return match ip_bytes.len() {
+            return match ip_bytes.as_ref().len() {
                 16 => {
                     let mut ip = [0_u8; 16];
-                    ip.copy_from_slice(ip_bytes);
+                    ip.copy_from_slice(ip_bytes.as_ref());
                     Some(Ipv6Addr::from(ip))
                 }
                 _ => None,
@@ -331,7 +327,7 @@ impl<K: EnrKey> Enr<K> {
     #[must_use]
     pub fn id(&self) -> Option<String> {
         if let Some(id_bytes) = self.get("id") {
-            return Some(String::from_utf8_lossy(id_bytes).to_string());
+            return Some(String::from_utf8_lossy(id_bytes.as_ref()).to_string());
         }
         None
     }
@@ -439,14 +435,18 @@ impl<K: EnrKey> Enr<K> {
     /// Provides the URL-safe base64 encoded "text" version of the ENR prefixed by "enr:".
     #[must_use]
     pub fn to_base64(&self) -> String {
-        let hex = URL_SAFE_NO_PAD.encode(&rlp::encode(self));
+        let mut out = BytesMut::new();
+        self.encode(&mut out);
+        let hex = URL_SAFE_NO_PAD.encode(out);
         format!("enr:{hex}")
     }
 
     /// Returns the current size of the ENR.
     #[must_use]
     pub fn size(&self) -> usize {
-        rlp::encode(self).len()
+        let mut out = BytesMut::new();
+        self.encode(&mut out);
+        out.len()
     }
 
     // Setters //
@@ -488,7 +488,9 @@ impl<K: EnrKey> Enr<K> {
         value: &T,
         enr_key: &K,
     ) -> Result<Option<Bytes>, Error> {
-        self.insert_raw_rlp(key, rlp::encode(value).freeze(), enr_key)
+        let mut out = BytesMut::new();
+        value.encode(&mut out);
+        self.insert_raw_rlp(key, out.freeze(), enr_key)
     }
 
     /// Adds or modifies a key/value to the ENR record. A `EnrKey` is required to re-sign the record once
@@ -502,14 +504,13 @@ impl<K: EnrKey> Enr<K> {
         enr_key: &K,
     ) -> Result<Option<Bytes>, Error> {
         check_spec_reserved_keys(key.as_ref(), &value)?;
-
-        let previous_value = self.content.insert(key.as_ref().to_vec(), value);
+        let raw_key = key.as_ref().to_vec();
+        let previous_value = self.content.insert(raw_key.clone(), value);
         // add the new public key
         let public_key = enr_key.public();
-        let previous_key = self.content.insert(
-            public_key.enr_key(),
-            rlp::encode(&public_key.encode().as_ref()).freeze(),
-        );
+        let mut pubkey = BytesMut::new();
+        public_key.encode().as_ref().encode(&mut pubkey);
+        let previous_key = self.content.insert(public_key.enr_key(), pubkey.freeze());
 
         // check the size of the record
         if self.size() > MAX_ENR_SIZE {
@@ -522,7 +523,7 @@ impl<K: EnrKey> Enr<K> {
             }
             // revert the content
             if let Some(prev_value) = previous_value {
-                self.content.insert(key.as_ref().to_vec(), prev_value);
+                self.content.insert(raw_key, prev_value);
             } else {
                 self.content.remove(key.as_ref());
             }
@@ -579,7 +580,7 @@ impl<K: EnrKey> Enr<K> {
     /// Sets the `udp` field of the ENR. Returns any pre-existing UDP port in the record.
     pub fn set_udp4(&mut self, udp: u16, key: &K) -> Result<Option<u16>, Error> {
         if let Some(udp_bytes) = self.insert("udp", &udp, key)? {
-            return Ok(rlp::decode(&udp_bytes).ok());
+            return Ok(u16::decode(&mut udp_bytes.as_ref()).ok());
         }
         Ok(None)
     }
@@ -587,7 +588,7 @@ impl<K: EnrKey> Enr<K> {
     /// Sets the `udp6` field of the ENR. Returns any pre-existing UDP port in the record.
     pub fn set_udp6(&mut self, udp: u16, key: &K) -> Result<Option<u16>, Error> {
         if let Some(udp_bytes) = self.insert("udp6", &udp, key)? {
-            return Ok(rlp::decode(&udp_bytes).ok());
+            return Ok(u16::decode(&mut udp_bytes.as_ref()).ok());
         }
         Ok(None)
     }
@@ -595,7 +596,7 @@ impl<K: EnrKey> Enr<K> {
     /// Sets the `tcp` field of the ENR. Returns any pre-existing tcp port in the record.
     pub fn set_tcp4(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, Error> {
         if let Some(tcp_bytes) = self.insert("tcp", &tcp, key)? {
-            return Ok(rlp::decode(&tcp_bytes).ok());
+            return Ok(u16::decode(&mut tcp_bytes.as_ref()).ok());
         }
         Ok(None)
     }
@@ -603,7 +604,7 @@ impl<K: EnrKey> Enr<K> {
     /// Sets the `tcp6` field of the ENR. Returns any pre-existing tcp6 port in the record.
     pub fn set_tcp6(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, Error> {
         if let Some(tcp_bytes) = self.insert("tcp6", &tcp, key)? {
-            return Ok(rlp::decode(&tcp_bytes).ok());
+            return Ok(u16::decode(&mut tcp_bytes.as_ref()).ok());
         }
         Ok(None)
     }
@@ -627,29 +628,32 @@ impl<K: EnrKey> Enr<K> {
         };
 
         let (prev_ip, prev_port) = match socket.ip() {
-            IpAddr::V4(addr) => (
-                self.content.insert(
-                    "ip".into(),
-                    rlp::encode(&(&addr.octets() as &[u8])).freeze(),
-                ),
-                self.content
-                    .insert(port_string.clone(), rlp::encode(&socket.port()).freeze()),
-            ),
-            IpAddr::V6(addr) => (
-                self.content.insert(
-                    "ip6".into(),
-                    rlp::encode(&(&addr.octets() as &[u8])).freeze(),
-                ),
-                self.content
-                    .insert(port_v6_string.clone(), rlp::encode(&socket.port()).freeze()),
-            ),
+            IpAddr::V4(addr) => {
+                let mut ip = BytesMut::new();
+                addr.encode(&mut ip);
+                let mut port = BytesMut::new();
+                socket.port().encode(&mut port);
+                (
+                    self.content.insert("ip".into(), ip.freeze()),
+                    self.content.insert(port_string.clone(), port.freeze()),
+                )
+            }
+            IpAddr::V6(addr) => {
+                let mut ip6 = BytesMut::new();
+                addr.encode(&mut ip6);
+                let mut port = BytesMut::new();
+                socket.port().encode(&mut port);
+                (
+                    self.content.insert("ip6".into(), ip6.freeze()),
+                    self.content.insert(port_v6_string.clone(), port.freeze()),
+                )
+            }
         };
 
         let public_key = key.public();
-        let previous_key = self.content.insert(
-            public_key.enr_key(),
-            rlp::encode(&public_key.encode().as_ref()).freeze(),
-        );
+        let mut pubkey = BytesMut::new();
+        public_key.encode().as_ref().encode(&mut pubkey);
+        let previous_key = self.content.insert(public_key.enr_key(), pubkey.freeze());
 
         // check the size and revert on failure
         if self.size() > MAX_ENR_SIZE {
@@ -726,10 +730,9 @@ impl<K: EnrKey> Enr<K> {
 
         // add the new public key
         let public_key = enr_key.public();
-        self.content.insert(
-            public_key.enr_key(),
-            rlp::encode(&public_key.encode().as_ref()).freeze(),
-        );
+        let mut pubkey = BytesMut::new();
+        public_key.encode().as_ref().encode(&mut pubkey);
+        self.content.insert(public_key.enr_key(), pubkey.freeze());
 
         let mut inserted = Vec::new();
         for (key, value) in insert_key_values {
@@ -738,11 +741,12 @@ impl<K: EnrKey> Enr<K> {
                 *self = enr_backup;
                 return Err(Error::UnsupportedIdentityScheme);
             }
-
-            let value = rlp::encode(&(value)).freeze();
+            let mut out = BytesMut::new();
+            value.encode(&mut out);
+            let value = out.freeze();
             // Prevent inserting invalid RLP integers
             if is_keyof_u16(key.as_ref()) {
-                rlp::decode::<u16>(&value)?;
+                u16::decode(&mut value.as_ref())?;
             }
 
             inserted.push(self.content.insert(key.as_ref().to_vec(), value));
@@ -791,27 +795,32 @@ impl<K: EnrKey> Enr<K> {
     // Private Functions //
 
     /// Encodes the ENR's content (signature(optional) + sequence number + ordered (key, value) pairs) into the stream.
-    fn append_rlp_content(&self, stream: &mut RlpStream, include_signature: bool) {
-        let item_count = usize::from(include_signature) + 1 + self.content.len() * 2;
-        stream.begin_list(item_count);
+    fn append_rlp_content(&self, stream: &mut BytesMut, include_signature: bool) {
         if include_signature {
-            stream.append(&self.signature);
+            self.signature.as_slice().encode(stream);
         }
-        stream.append(&self.seq);
+        self.seq.encode(stream);
         for (k, v) in &self.content {
             // Keys are bytes
-            stream.append(k);
+            k.as_slice().encode(stream);
             // Values are raw RLP encoded data
-            stream.append_raw(v, 1);
+            stream.extend_from_slice(v);
         }
     }
 
     /// Encodes the ENR's content (sequence number + ordered (key, value) pairs).
     fn rlp_content(&self) -> BytesMut {
-        let mut stream = RlpStream::new_with_buffer(BytesMut::with_capacity(MAX_ENR_SIZE));
+        let mut stream = BytesMut::with_capacity(MAX_ENR_SIZE);
         let include_signature = false;
         self.append_rlp_content(&mut stream, include_signature);
-        stream.out()
+        let header = Header {
+            list: true,
+            payload_length: stream.len(),
+        };
+        let mut out = BytesMut::new();
+        header.encode(&mut out);
+        out.extend_from_slice(&stream);
+        out
     }
 
     /// Compute the enr's signature with the given key.
@@ -904,7 +913,7 @@ impl<K: EnrKey> std::fmt::Debug for Enr<K> {
             .field("IpV4 TCP Socket", &self.tcp4_socket())
             .field("IpV6 TCP Socket", &self.tcp6_socket())
             .field("Other Pairs", &OtherPairs(&self.content))
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -926,7 +935,7 @@ impl<K: EnrKey> FromStr for Enr<K> {
         let bytes = URL_SAFE_NO_PAD
             .decode(decode_string)
             .map_err(|e| format!("Invalid base64 encoding: {e:?}"))?;
-        rlp::decode(&bytes).map_err(|e| format!("Invalid ENR: {e:?}"))
+        Self::decode(&mut bytes.as_ref()).map_err(|e| format!("Invalid ENR: {e:?}"))
     }
 }
 
@@ -951,67 +960,103 @@ impl<'de, K: EnrKey> Deserialize<'de> for Enr<K> {
     }
 }
 
-impl<K: EnrKey> rlp::Encodable for Enr<K> {
-    fn rlp_append(&self, stream: &mut RlpStream) {
+impl<K: EnrKey> Encodable for Enr<K> {
+    fn encode(&self, out: &mut dyn bytes::BufMut) {
+        let mut stream = BytesMut::with_capacity(MAX_ENR_SIZE);
         let include_signature = true;
-        self.append_rlp_content(stream, include_signature);
+        self.append_rlp_content(&mut stream, include_signature);
+        let header = Header {
+            list: true,
+            payload_length: stream.len(),
+        };
+        header.encode(out);
+        out.put_slice(&stream);
     }
 }
 
-impl<K: EnrKey> rlp::Decodable for Enr<K> {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        if rlp.as_raw().len() > MAX_ENR_SIZE {
+impl<K: EnrKey> Decodable for Enr<K> {
+    fn decode(buf: &mut &[u8]) -> Result<Self, DecoderError> {
+        if buf.len() > MAX_ENR_SIZE {
             return Err(DecoderError::Custom("enr exceeds max size"));
         }
 
-        if !rlp.is_list() {
-            debug!("Failed to decode ENR. Not an RLP list: {}", rlp);
-            return Err(DecoderError::RlpExpectedToBeList);
+        let header = Header::decode(buf)?;
+
+        if !header.list {
+            return Err(DecoderError::Custom("Invalid format of header"));
         }
 
-        // verify there is no extra data
-        let payload_info = rlp.payload_info()?;
-        if rlp.as_raw().len() != payload_info.header_len + payload_info.value_len {
-            return Err(DecoderError::RlpInconsistentLengthAndData);
+        if header.payload_length > buf.len() {
+            return Err(DecoderError::Custom("payload length exceeds buffer size"));
         }
 
-        let mut rlp_iter = rlp.iter();
-
-        if rlp_iter.len() == 0 || rlp_iter.len() % 2 != 0 {
-            debug!("Failed to decode ENR. List size is not a multiple of 2.");
-            return Err(DecoderError::Custom("List not a multiple of two"));
+        let payload = &mut &buf[..header.payload_length];
+        if payload.is_empty() {
+            return Err(DecoderError::Custom("Payload is empty"));
         }
 
-        let signature = rlp_iter
-            .next()
-            .ok_or(DecoderError::Custom("List is empty"))?
-            .data()?;
-        let seq = rlp_iter
-            .next()
-            .ok_or(DecoderError::Custom("List has only one item"))?
-            .as_val()?;
+        let signature = Bytes::decode(payload)?;
+
+        if payload.is_empty() {
+            return Err(DecoderError::Custom("Seq is miising"));
+        }
+
+        let seq = u64::decode(payload)?;
 
         let mut content = BTreeMap::new();
-        let mut prev: Option<&[u8]> = None;
-        while let Some(key) = rlp_iter.next() {
-            let key = key.data()?;
-            let item = rlp_iter
-                .next()
-                .ok_or(DecoderError::Custom("List not a multiple of 2"))?;
-
-            // Sanitize the data
-            if is_keyof_u16(key) {
-                item.as_val::<u16>()?;
-            } else {
-                item.data()?;
-            }
-            let value = item.as_raw();
-
-            if prev.is_some() && prev >= Some(key) {
+        let mut prev: Option<Vec<u8>> = None;
+        while !payload.is_empty() {
+            let key = Bytes::decode(payload)?;
+            let raw_key = key.to_vec();
+            if prev.is_some() && prev >= Some(raw_key.clone()) {
                 return Err(DecoderError::Custom("Unsorted keys"));
             }
-            prev = Some(key);
-            content.insert(key.to_vec(), Bytes::copy_from_slice(value));
+            prev = Some(raw_key.clone());
+
+            match raw_key.as_slice() {
+                b"id" => {
+                    let id = Bytes::decode(payload)?;
+                    if id.to_vec() != b"v4" {
+                        return Err(DecoderError::Custom("Unsupported identity scheme"));
+                    }
+                    content.insert(raw_key, Bytes::copy_from_slice(&alloy_rlp::encode(id)));
+                }
+                b"tcp" | b"tcp6" | b"udp" | b"udp6" => {
+                    let port = u16::decode(payload)?;
+                    content.insert(raw_key, Bytes::copy_from_slice(&alloy_rlp::encode(port)));
+                }
+                b"ip" => {
+                    let ip = Ipv4Addr::decode(payload)?;
+                    content.insert(raw_key, Bytes::copy_from_slice(&alloy_rlp::encode(ip)));
+                }
+                b"ip6" => {
+                    let ip6 = Ipv6Addr::decode(payload)?;
+                    content.insert(raw_key, Bytes::copy_from_slice(&alloy_rlp::encode(ip6)));
+                }
+                b"secp256k1" | b"ed25519" => {
+                    let keys = Bytes::decode(payload)?;
+                    content.insert(raw_key, Bytes::copy_from_slice(&alloy_rlp::encode(keys)));
+                }
+                b"eth" => {
+                    let eth_header = Header::decode(payload)?;
+                    let value = &mut &payload[..eth_header.payload_length];
+                    payload.advance(eth_header.payload_length);
+                    let val_header = Header {
+                        list: true,
+                        payload_length: value.len(),
+                    };
+                    let mut out = BytesMut::new();
+                    val_header.encode(&mut out);
+                    out.extend_from_slice(value);
+                    content.insert(raw_key, Bytes::copy_from_slice(&out));
+                }
+                _ => {
+                    let other_header = Header::decode(payload)?;
+                    let value = &mut &payload[..other_header.payload_length];
+                    payload.advance(other_header.payload_length);
+                    content.insert(raw_key, Bytes::copy_from_slice(&alloy_rlp::encode(value)));
+                }
+            };
         }
 
         // verify we know the signature type
@@ -1023,7 +1068,7 @@ impl<K: EnrKey> rlp::Decodable for Enr<K> {
         let enr = Self {
             seq,
             node_id,
-            signature: signature.into(),
+            signature: signature.to_vec(),
             content,
             phantom: PhantomData,
         };
@@ -1073,32 +1118,25 @@ const fn is_keyof_u16(key: &[u8]) -> bool {
     matches!(key, b"tcp" | b"tcp6" | b"udp" | b"udp6")
 }
 
-fn check_spec_reserved_keys(key: &[u8], value: &[u8]) -> Result<(), Error> {
+fn check_spec_reserved_keys(key: &[u8], mut value: &[u8]) -> Result<(), Error> {
     match key {
         b"tcp" | b"tcp6" | b"udp" | b"udp6" => {
-            rlp::decode::<u16>(value)?;
+            u16::decode(&mut value)?;
         }
         b"id" => {
-            let id_bytes = rlp::decode::<Vec<u8>>(value)?;
-            if id_bytes != b"v4" {
+            let id_bytes = Bytes::decode(&mut value)?;
+            if id_bytes.as_ref() != b"v4" {
                 return Err(Error::UnsupportedIdentityScheme);
             }
         }
         b"ip" => {
-            let ip4_bytes = rlp::decode::<Vec<u8>>(value)?;
-            if ip4_bytes.len() != 4 {
-                return Err(Error::InvalidRlpData(rlp::DecoderError::Custom(
-                    "invalid IPv4 bytes length",
-                )));
-            }
+            Ipv4Addr::decode(&mut value)?;
         }
         b"ip6" => {
-            let ip6_bytes = rlp::decode::<Vec<u8>>(value)?;
-            if ip6_bytes.len() != 16 {
-                return Err(Error::InvalidRlpData(rlp::DecoderError::Custom(
-                    "invalid IPv6 bytes lenght",
-                )));
-            }
+            Ipv6Addr::decode(&mut value)?;
+        }
+        b"secp256k1" => {
+            <Enr<k256::ecdsa::SigningKey>>::decode(&mut value)?;
         }
         _ => return Ok(()),
     };
@@ -1123,7 +1161,7 @@ mod tests {
             hex::decode("03ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd3138")
                 .unwrap();
 
-        let enr = rlp::decode::<DefaultEnr>(&valid_record).unwrap();
+        let enr = DefaultEnr::decode(&mut valid_record.as_slice()).unwrap();
 
         let pubkey = enr.public_key().encode();
 
@@ -1305,16 +1343,16 @@ mod tests {
             hex::decode("03ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd3138")
                 .unwrap();
 
-        let enr = rlp::decode::<DefaultEnr>(&valid_record).unwrap();
+        let enr = DefaultEnr::decode(&mut valid_record.as_slice()).unwrap();
         let pubkey = enr.public_key().encode();
         assert_eq!(pubkey.to_vec(), expected_pubkey);
         assert!(enr.verify());
 
         let invalid_record = hex::decode(record_hex2).unwrap();
-        rlp::decode::<DefaultEnr>(&invalid_record).expect_err("should reject extra data");
+        DefaultEnr::decode(&mut invalid_record.as_slice()).expect_err("should reject extra data");
 
         let invalid_record = hex::decode(record_hex3).unwrap();
-        rlp::decode::<DefaultEnr>(&invalid_record).expect_err("should reject extra data");
+        DefaultEnr::decode(&mut invalid_record.as_slice()).expect("should reject extra data");
     }
 
     /// Tests that RLP integers decoding rejects any item with leading zeroes.
@@ -1339,7 +1377,7 @@ mod tests {
         let text = "enr:-Ia4QHCYrYZbAKWCBRlAy5zzaDZXJBGkcnh4MHcBFZntXNFrdvJjX04jRzjzCBOonrkTfj499SZuOh8R33Ls8RRcy5yCAAGCaWSCdjSCaXCEfwAAAYlzZWNwMjU2azGhA8pjTK4NSay0Adikxrb-jFW3DRFb9AB2nMFADzJYzTE4g3VkcIJ2Xw";
         assert_eq!(
             text.parse::<DefaultEnr>().unwrap_err(),
-            "Invalid ENR: RlpInvalidIndirection"
+            "Invalid ENR: LeadingZero"
         );
     }
 
@@ -1353,15 +1391,18 @@ mod tests {
 
         let enr = Enr::builder().ip4(ip).tcp4(tcp).build(&key).unwrap();
 
-        let encoded_enr = rlp::encode(&enr);
+        let encoded_enr = alloy_rlp::encode(enr);
 
-        let decoded_enr = rlp::decode::<Enr<secp256k1::SecretKey>>(&encoded_enr).unwrap();
+        let decoded_enr = DefaultEnr::decode(&mut encoded_enr.as_slice()).unwrap();
 
         assert_eq!(decoded_enr.id(), Some("v4".into()));
         assert_eq!(decoded_enr.ip4(), Some(ip));
         assert_eq!(decoded_enr.tcp4(), Some(tcp));
         // Must compare encoding as the public key itself can be different
-        assert_eq!(decoded_enr.public_key().encode(), key.public().encode());
+        assert_eq!(
+            decoded_enr.public_key().encode(),
+            key.public().encode().into()
+        );
         assert!(decoded_enr.verify());
     }
 
@@ -1421,9 +1462,11 @@ mod tests {
 
         let enr = Enr::builder().ip4(ip).tcp4(tcp).build(&key).unwrap();
 
-        let encoded_enr = rlp::encode(&enr);
+        let mut encoded_enr = BytesMut::new();
+        enr.encode(&mut encoded_enr);
 
-        let decoded_enr = rlp::decode::<Enr<k256::ecdsa::SigningKey>>(&encoded_enr).unwrap();
+        let decoded_enr =
+            Enr::<k256::ecdsa::SigningKey>::decode(&mut encoded_enr.to_vec().as_slice()).unwrap();
 
         assert_eq!(decoded_enr.id(), Some("v4".into()));
         assert_eq!(decoded_enr.ip4(), Some(ip));
@@ -1444,8 +1487,9 @@ mod tests {
 
         let enr = Enr::builder().ip4(ip).tcp4(tcp).build(&key).unwrap();
 
-        let encoded_enr = rlp::encode(&enr);
-        let decoded_enr = rlp::decode::<Enr<CombinedKey>>(&encoded_enr).unwrap();
+        let mut out = BytesMut::new();
+        enr.encode(&mut out);
+        let decoded_enr = Enr::<CombinedKey>::decode(&mut out.to_vec().as_slice()).unwrap();
 
         assert_eq!(decoded_enr.id(), Some("v4".into()));
         assert_eq!(decoded_enr.ip4(), Some(ip));
@@ -1463,7 +1507,7 @@ mod tests {
 
         let mut enr = Enr::builder().ip4(ip).tcp4(tcp).build(&key).unwrap();
 
-        enr.insert("random", &Vec::new(), &key).unwrap();
+        enr.insert("random", &Vec::<u8>::new(), &key).unwrap();
         assert!(enr.verify());
     }
 
@@ -1544,43 +1588,43 @@ mod tests {
         let _decoded_enr: Enr<CombinedKey> = base64_string_ed25519.parse().unwrap();
     }
 
+    fn encoded_list<T: Encodable + Clone>(t: &[T]) -> BytesMut {
+        let mut out = BytesMut::new();
+        alloy_rlp::encode_list(t, &mut out);
+        out
+    }
+
     #[test]
     fn test_remove_insert() {
         let mut rng = rand::thread_rng();
         let key = k256::ecdsa::SigningKey::random(&mut rng);
         let tcp = 30303;
-        let mut topics = Vec::new();
-        let mut s = RlpStream::new();
-        s.begin_list(2);
-        s.append(&"lighthouse");
-        s.append(&"eth_syncing");
-        topics.extend_from_slice(&s.out().freeze());
+        let list = &["lighthouse", "eth_sync"];
+        let out = encoded_list(list);
 
         let mut enr = Enr::builder().tcp4(tcp).build(&key).unwrap();
 
         assert_eq!(enr.tcp4(), Some(tcp));
-        assert_eq!(enr.get("topics"), None);
+        assert_eq!(enr.get("topics").as_ref().map(AsRef::as_ref), None);
 
-        let topics: &[u8] = &topics;
+        let topics: &[u8] = &out;
 
         let (removed, inserted) = enr
             .remove_insert([b"tcp"].iter(), vec![(b"topics", topics)].into_iter(), &key)
             .unwrap();
-
-        assert_eq!(
-            removed[0],
-            Some(rlp::encode(&tcp.to_be_bytes().to_vec()).freeze())
-        );
+        let mut buffer = Vec::<u8>::new();
+        tcp.encode(&mut buffer);
+        assert_eq!(removed[0], Some(Bytes::copy_from_slice(&buffer)));
         assert_eq!(inserted[0], None);
 
         assert_eq!(enr.tcp4(), None);
-        assert_eq!(enr.get("topics"), Some(topics));
+        assert_eq!(enr.get("topics").as_ref().map(AsRef::as_ref), Some(topics));
 
         // Compare the encoding as the key itself can be different
         assert_eq!(enr.public_key().encode(), key.public().encode());
     }
 
-    /// | n     | `rlp::encode(n.to_be_bytes())` | `rlp::encode::<u16>(n)` |
+    /// | n     | `Rlp::encode(n.to_be_bytes())` | `Rlp::encode::<u16>(n)` |
     /// | ----- | ------------------------------ | ----------------------- |
     /// | 0     | 0x820000                       | 0x80
     /// | 30    | 0x82001e                       | 0x1e
@@ -1673,10 +1717,7 @@ mod tests {
         for (tcp, enr_str) in vectors {
             let res = DefaultEnr::from_str(enr_str);
             if u8::try_from(tcp).is_ok() {
-                assert_eq!(
-                    res.unwrap_err().to_string(),
-                    "Invalid ENR: RlpInvalidIndirection"
-                );
+                assert_eq!(res.unwrap_err().to_string(), "Invalid ENR: LeadingZero");
             } else {
                 assert_tcp4(&res.unwrap(), tcp);
             }
@@ -1708,8 +1749,10 @@ mod tests {
     }
 
     fn assert_tcp4(enr: &DefaultEnr, tcp: u16) {
+        let mut buffer = Vec::<u8>::new();
+        tcp.encode(&mut buffer);
         assert!(enr.verify());
-        assert_eq!(enr.get_raw_rlp("tcp").unwrap(), rlp::encode(&tcp).to_vec());
+        assert_eq!(enr.get_raw_rlp("tcp").unwrap(), buffer);
         assert_eq!(enr.tcp4(), Some(tcp));
     }
 
@@ -1720,19 +1763,19 @@ mod tests {
 
         let mut huge_enr = Enr::empty(&key).unwrap();
         let large_vec: Vec<u8> = std::iter::repeat(0).take(MAX_ENR_SIZE).collect();
-        let large_vec_encoded = rlp::encode(&large_vec).freeze();
+        let large_vec_encoded = alloy_rlp::encode(&large_vec);
 
         huge_enr
             .content
-            .insert(b"large vec".to_vec(), large_vec_encoded);
+            .insert(b"large vec".to_vec(), large_vec_encoded.into());
         huge_enr.sign(&key).unwrap();
 
         assert!(huge_enr.verify());
 
-        let encoded = rlp::encode(&huge_enr).freeze();
+        let encoded = alloy_rlp::encode(&huge_enr);
         assert!(encoded.len() > MAX_ENR_SIZE);
         assert_eq!(
-            rlp::decode::<DefaultEnr>(&encoded).unwrap_err(),
+            DefaultEnr::decode(&mut encoded.as_ref()).unwrap_err(),
             DecoderError::Custom("enr exceeds max size")
         )
     }

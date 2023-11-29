@@ -14,11 +14,11 @@ pub enum Error {
     /// The identity scheme is not supported.
     UnsupportedIdentityScheme,
     /// Failed decoding the RLP data.
-    InvalidRlpData(rlp::DecoderError),
+    InvalidRlpData(alloy_rlp::Error),
 }
 
-impl From<rlp::DecoderError> for Error {
-    fn from(decode_error: rlp::DecoderError) -> Self {
+impl From<alloy_rlp::Error> for Error {
+    fn from(decode_error: alloy_rlp::Error) -> Self {
         Error::InvalidRlpData(decode_error)
     }
 }

@@ -1,8 +1,8 @@
 use super::{EnrKey, EnrKeyUnambiguous, EnrPublicKey, SigningError};
 use crate::{digest, Key};
+use alloy_rlp::{Decodable, Error as DecoderError};
 use bytes::Bytes;
 use rand::RngCore;
-use rlp::DecoderError;
 use secp256k1::SECP256K1;
 use std::collections::BTreeMap;
 
@@ -40,9 +40,9 @@ impl EnrKey for secp256k1::SecretKey {
             .get(ENR_KEY.as_bytes())
             .ok_or(DecoderError::Custom("Unknown signature"))?;
         // Decode the RLP
-        let pubkey_bytes = rlp::Rlp::new(pubkey_bytes).data()?;
+        let pubkey_bytes = Bytes::decode(&mut pubkey_bytes.as_ref())?;
 
-        Self::decode_public(pubkey_bytes)
+        Self::decode_public(&pubkey_bytes)
     }
 }
 
