@@ -205,6 +205,7 @@ pub use keys::secp256k1;
 #[cfg(all(feature = "ed25519", feature = "k256"))]
 pub use keys::{ed25519_dalek, CombinedKey, CombinedPublicKey};
 
+pub use builder::Builder;
 pub use keys::{EnrKey, EnrKeyUnambiguous, EnrPublicKey};
 pub use node_id::NodeId;
 use std::marker::PhantomData;
