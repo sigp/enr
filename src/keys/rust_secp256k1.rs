@@ -20,8 +20,7 @@ impl EnrKey for secp256k1::SecretKey {
     fn sign_v4(&self, msg: &[u8]) -> Result<Vec<u8>, SigningError> {
         // take a keccak256 hash then sign.
         let hash = digest(msg);
-        let m = secp256k1::Message::from_slice(&hash)
-            .map_err(|_| SigningError::new("failed to parse secp256k1 digest"))?;
+        let m = secp256k1::Message::from_digest(hash);
         // serialize to an uncompressed 64 byte vector
         let signature = {
             let mut noncedata = [0; 32];
@@ -61,9 +60,8 @@ impl EnrPublicKey for secp256k1::PublicKey {
     fn verify_v4(&self, msg: &[u8], sig: &[u8]) -> bool {
         let msg = digest(msg);
         if let Ok(sig) = secp256k1::ecdsa::Signature::from_compact(sig) {
-            if let Ok(msg) = secp256k1::Message::from_slice(&msg) {
-                return SECP256K1.verify_ecdsa(&msg, &sig, self).is_ok();
-            }
+            let msg = secp256k1::Message::from_digest(msg);
+            return SECP256K1.verify_ecdsa(&msg, &sig, self).is_ok();
         }
         false
     }
