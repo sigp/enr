@@ -170,7 +170,7 @@ mod tests {
     #[test]
     fn test_serde_value() {
         let node = NodeId::random();
-        let value = serde_json::to_value(&node).unwrap();
+        let value = serde_json::to_value(node).unwrap();
         assert_eq!(node, serde_json::from_value::<NodeId>(value).unwrap());
     }
 

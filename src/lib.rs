@@ -781,13 +781,13 @@ impl<K: EnrKey> Enr<K> {
             .map(|_| {})
     }
 
-    /// Returns wether the node can be reached over UDP or not.
+    /// Returns whether the node can be reached over UDP or not.
     #[must_use]
     pub fn is_udp_reachable(&self) -> bool {
         self.udp4_socket().is_some() || self.udp6_socket().is_some()
     }
 
-    /// Returns wether the node can be reached over TCP or not.
+    /// Returns whether the node can be reached over TCP or not.
     #[must_use]
     pub fn is_tcp_reachable(&self) -> bool {
         self.tcp4_socket().is_some() || self.tcp6_socket().is_some()
@@ -981,62 +981,52 @@ impl<K: EnrKey> Decodable for Enr<K> {
             return Err(DecoderError::Custom("enr exceeds max size"));
         }
 
-        let header = Header::decode(buf)?;
+        let payload = &mut Header::decode_bytes(buf, true)?;
 
-        if !header.list {
-            return Err(DecoderError::Custom("Invalid format of header"));
-        }
-
-        if header.payload_length > buf.len() {
-            return Err(DecoderError::Custom("payload length exceeds buffer size"));
-        }
-
-        let payload = &mut &buf[..header.payload_length];
         if payload.is_empty() {
             return Err(DecoderError::Custom("Payload is empty"));
         }
-
-        let signature = Bytes::decode(payload)?;
+        let signature = Header::decode_bytes(payload, false)?;
 
         if payload.is_empty() {
-            return Err(DecoderError::Custom("Seq is miising"));
+            return Err(DecoderError::Custom("Seq is missing"));
         }
-
         let seq = u64::decode(payload)?;
 
         let mut content = BTreeMap::new();
-        let mut prev: Option<Vec<u8>> = None;
+        let mut prev = None;
         while !payload.is_empty() {
-            let key = Bytes::decode(payload)?;
-            let raw_key = key.to_vec();
-            if prev.is_some() && prev >= Some(raw_key.clone()) {
-                return Err(DecoderError::Custom("Unsorted keys"));
+            let key = Header::decode_bytes(payload, false)?;
+            if let Some(prev) = prev {
+                if prev >= key {
+                    return Err(DecoderError::Custom("Unsorted keys"));
+                }
             }
-            prev = Some(raw_key.clone());
+            prev = Some(key);
 
-            match raw_key.as_slice() {
+            let value = match key {
                 b"id" => {
-                    let id = Bytes::decode(payload)?;
-                    if id.to_vec() != b"v4" {
+                    let id = Header::decode_bytes(payload, false)?;
+                    if id != b"v4" {
                         return Err(DecoderError::Custom("Unsupported identity scheme"));
                     }
-                    content.insert(raw_key, Bytes::copy_from_slice(&alloy_rlp::encode(id)));
+                    alloy_rlp::encode(id)
                 }
                 b"tcp" | b"tcp6" | b"udp" | b"udp6" => {
                     let port = u16::decode(payload)?;
-                    content.insert(raw_key, Bytes::copy_from_slice(&alloy_rlp::encode(port)));
+                    alloy_rlp::encode(port)
                 }
                 b"ip" => {
                     let ip = Ipv4Addr::decode(payload)?;
-                    content.insert(raw_key, Bytes::copy_from_slice(&alloy_rlp::encode(ip)));
+                    alloy_rlp::encode(ip)
                 }
                 b"ip6" => {
                     let ip6 = Ipv6Addr::decode(payload)?;
-                    content.insert(raw_key, Bytes::copy_from_slice(&alloy_rlp::encode(ip6)));
+                    alloy_rlp::encode(ip6)
                 }
                 b"secp256k1" | b"ed25519" => {
-                    let keys = Bytes::decode(payload)?;
-                    content.insert(raw_key, Bytes::copy_from_slice(&alloy_rlp::encode(keys)));
+                    let keys = Header::decode_bytes(payload, false)?;
+                    alloy_rlp::encode(keys)
                 }
                 b"eth" => {
                     let eth_header = Header::decode(payload)?;
@@ -1046,18 +1036,19 @@ impl<K: EnrKey> Decodable for Enr<K> {
                         list: true,
                         payload_length: value.len(),
                     };
-                    let mut out = BytesMut::new();
+                    let mut out = Vec::<u8>::new();
                     val_header.encode(&mut out);
                     out.extend_from_slice(value);
-                    content.insert(raw_key, Bytes::copy_from_slice(&out));
+                    out
                 }
                 _ => {
                     let other_header = Header::decode(payload)?;
-                    let value = &mut &payload[..other_header.payload_length];
+                    let value = &payload[..other_header.payload_length];
                     payload.advance(other_header.payload_length);
-                    content.insert(raw_key, Bytes::copy_from_slice(&alloy_rlp::encode(value)));
+                    alloy_rlp::encode(value)
                 }
             };
+            content.insert(key.to_vec(), Bytes::from(value));
         }
 
         // verify we know the signature type
@@ -1080,6 +1071,7 @@ impl<K: EnrKey> Decodable for Enr<K> {
         if !enr.verify() {
             return Err(DecoderError::Custom("Invalid Signature"));
         }
+
         Ok(enr)
     }
 }
@@ -1149,7 +1141,6 @@ fn check_spec_reserved_keys(key: &[u8], mut value: &[u8]) -> Result<(), Error> {
 mod tests {
     use super::*;
     use std::convert::TryFrom;
-    use std::net::Ipv4Addr;
 
     type DefaultEnr = Enr<k256::ecdsa::SigningKey>;
 
@@ -1162,7 +1153,9 @@ mod tests {
             hex::decode("03ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd3138")
                 .unwrap();
 
-        let enr = DefaultEnr::decode(&mut valid_record.as_slice()).unwrap();
+        let mut buf = valid_record.as_slice();
+        let enr = DefaultEnr::decode(&mut buf).unwrap();
+        assert!(buf.is_empty());
 
         let pubkey = enr.public_key().encode();
 
@@ -1764,7 +1757,7 @@ mod tests {
 
         let mut huge_enr = Enr::empty(&key).unwrap();
         let large_vec: Vec<u8> = std::iter::repeat(0).take(MAX_ENR_SIZE).collect();
-        let large_vec_encoded = alloy_rlp::encode(&large_vec);
+        let large_vec_encoded = alloy_rlp::encode(large_vec);
 
         huge_enr
             .content

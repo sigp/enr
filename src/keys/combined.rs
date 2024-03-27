@@ -4,13 +4,11 @@
 //! Currently only `secp256k1` and `ed25519` key types are supported.
 
 use super::{ed25519_dalek as ed25519, EnrKey, EnrPublicKey, SigningError};
+use crate::Key;
 use alloy_rlp::Error as DecoderError;
 use bytes::Bytes;
-pub use k256;
 use std::{collections::BTreeMap, convert::TryFrom};
 use zeroize::Zeroize;
-
-use crate::Key;
 
 /// A standard implementation of the `EnrKey` trait used to sign and modify ENR records. The variants here represent the currently
 /// supported in-built signing schemes.
