@@ -781,13 +781,13 @@ impl<K: EnrKey> Enr<K> {
             .map(|_| {})
     }
 
-    /// Returns wether the node can be reached over UDP or not.
+    /// Returns whether the node can be reached over UDP or not.
     #[must_use]
     pub fn is_udp_reachable(&self) -> bool {
         self.udp4_socket().is_some() || self.udp6_socket().is_some()
     }
 
-    /// Returns wether the node can be reached over TCP or not.
+    /// Returns whether the node can be reached over TCP or not.
     #[must_use]
     pub fn is_tcp_reachable(&self) -> bool {
         self.tcp4_socket().is_some() || self.tcp6_socket().is_some()
@@ -981,17 +981,8 @@ impl<K: EnrKey> Decodable for Enr<K> {
             return Err(DecoderError::Custom("enr exceeds max size"));
         }
 
-        let header = Header::decode(buf)?;
+        let payload = &mut Header::decode_bytes(buf, true)?;
 
-        if !header.list {
-            return Err(DecoderError::Custom("Invalid format of header"));
-        }
-
-        if header.payload_length > buf.len() {
-            return Err(DecoderError::Custom("payload length exceeds buffer size"));
-        }
-
-        let payload = &mut &buf[..header.payload_length];
         if payload.is_empty() {
             return Err(DecoderError::Custom("Payload is empty"));
         }
@@ -999,7 +990,7 @@ impl<K: EnrKey> Decodable for Enr<K> {
         let signature = Bytes::decode(payload)?;
 
         if payload.is_empty() {
-            return Err(DecoderError::Custom("Seq is miising"));
+            return Err(DecoderError::Custom("Seq is missing"));
         }
 
         let seq = u64::decode(payload)?;
@@ -1080,6 +1071,7 @@ impl<K: EnrKey> Decodable for Enr<K> {
         if !enr.verify() {
             return Err(DecoderError::Custom("Invalid Signature"));
         }
+
         Ok(enr)
     }
 }
@@ -1149,7 +1141,6 @@ fn check_spec_reserved_keys(key: &[u8], mut value: &[u8]) -> Result<(), Error> {
 mod tests {
     use super::*;
     use std::convert::TryFrom;
-    use std::net::Ipv4Addr;
 
     type DefaultEnr = Enr<k256::ecdsa::SigningKey>;
 
@@ -1162,7 +1153,9 @@ mod tests {
             hex::decode("03ca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd3138")
                 .unwrap();
 
-        let enr = DefaultEnr::decode(&mut valid_record.as_slice()).unwrap();
+        let mut buf = valid_record.as_slice();
+        let enr = DefaultEnr::decode(&mut buf).unwrap();
+        assert!(buf.is_empty());
 
         let pubkey = enr.public_key().encode();
 
@@ -1764,7 +1757,7 @@ mod tests {
 
         let mut huge_enr = Enr::empty(&key).unwrap();
         let large_vec: Vec<u8> = std::iter::repeat(0).take(MAX_ENR_SIZE).collect();
-        let large_vec_encoded = alloy_rlp::encode(&large_vec);
+        let large_vec_encoded = alloy_rlp::encode(large_vec);
 
         huge_enr
             .content
