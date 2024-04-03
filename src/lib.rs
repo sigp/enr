@@ -1149,7 +1149,6 @@ fn check_spec_reserved_keys(key: &[u8], mut value: &[u8]) -> Result<(), Error> {
 mod tests {
     use super::*;
     use std::convert::TryFrom;
-    use std::net::Ipv4Addr;
 
     type DefaultEnr = Enr<k256::ecdsa::SigningKey>;
 
@@ -1497,6 +1496,31 @@ mod tests {
         assert_eq!(decoded_enr.tcp4(), Some(tcp));
         assert_eq!(decoded_enr.public_key().encode(), key.public().encode());
         assert!(decoded_enr.verify());
+    }
+
+    #[test]
+    fn test_add_content_value() {
+        #[derive(PartialEq, Eq, Debug, alloy_rlp::RlpEncodable, alloy_rlp::RlpDecodable)]
+        struct Proto {
+            name: String,
+            version: u64,
+        }
+
+        let mut rng = rand::thread_rng();
+        let key = k256::ecdsa::SigningKey::random(&mut rng);
+        let proto = Proto {
+            name: "test".to_string(),
+            version: 1,
+        };
+
+        let enr = Enr::builder()
+            .add_value("proto", &proto)
+            .build(&key)
+            .unwrap();
+
+        let decoded_proto = enr.get_decodable::<Proto>("proto").unwrap().unwrap();
+
+        assert_eq!(decoded_proto, proto);
     }
 
     #[test]

@@ -1,5 +1,5 @@
 use crate::{Enr, EnrKey, EnrPublicKey, Error, Key, NodeId, MAX_ENR_SIZE};
-use alloy_rlp::{Decodable, Encodable, Header};
+use alloy_rlp::{Encodable, Header};
 use bytes::{Bytes, BytesMut};
 use std::{
     collections::BTreeMap,
@@ -158,7 +158,7 @@ impl<K: EnrKey> Builder<K> {
 
         // Sanitize all data, ensuring all RLP data is correctly formatted.
         for value in self.content.values() {
-            Bytes::decode(&mut value.as_ref())?;
+            Header::decode(&mut value.as_ref())?;
         }
 
         let mut id_bytes = BytesMut::with_capacity(3);
