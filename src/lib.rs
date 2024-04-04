@@ -269,8 +269,11 @@ impl<K: EnrKey> Enr<K> {
     #[allow(clippy::missing_panics_doc)]
     pub fn get(&self, key: impl AsRef<[u8]>) -> Option<Bytes> {
         // It's ok to decode any valid RLP value as data
-        self.get_raw_rlp(key)
-            .map(|mut rlp_data| Bytes::decode(&mut rlp_data).expect("All data is sanitized"))
+        self.get_raw_rlp(key).map(|mut rlp_data| {
+            let mut raw_data = &mut rlp_data;
+            let header = Header::decode(&mut raw_data).expect("All data is sanitized");
+            raw_data[..header.payload_length].to_vec().into()
+        })
     }
 
     /// Reads a custom key from the record if it exists, decoded as `T`.
@@ -1513,7 +1516,6 @@ mod tests {
             .unwrap();
 
         let decoded_proto = enr.get_decodable::<Proto>("proto").unwrap().unwrap();
-
         assert_eq!(decoded_proto, proto);
     }
 
