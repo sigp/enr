@@ -269,8 +269,11 @@ impl<K: EnrKey> Enr<K> {
     #[allow(clippy::missing_panics_doc)]
     pub fn get(&self, key: impl AsRef<[u8]>) -> Option<Bytes> {
         // It's ok to decode any valid RLP value as data
-        self.get_raw_rlp(key)
-            .map(|mut rlp_data| Bytes::decode(&mut rlp_data).expect("All data is sanitized"))
+        self.get_raw_rlp(key).map(|mut rlp_data| {
+            let raw_data = &mut rlp_data;
+            let header = Header::decode(raw_data).expect("All data is sanitized");
+            raw_data[..header.payload_length].to_vec().into()
+        })
     }
 
     /// Reads a custom key from the record if it exists, decoded as `T`.
@@ -1490,6 +1493,30 @@ mod tests {
         assert_eq!(decoded_enr.tcp4(), Some(tcp));
         assert_eq!(decoded_enr.public_key().encode(), key.public().encode());
         assert!(decoded_enr.verify());
+    }
+
+    #[test]
+    fn test_add_content_value() {
+        #[derive(PartialEq, Eq, Debug, alloy_rlp::RlpEncodable, alloy_rlp::RlpDecodable)]
+        struct Proto {
+            name: String,
+            version: u64,
+        }
+
+        let mut rng = rand::thread_rng();
+        let key = k256::ecdsa::SigningKey::random(&mut rng);
+        let proto = Proto {
+            name: "test".to_string(),
+            version: 1,
+        };
+
+        let enr = Enr::builder()
+            .add_value("proto", &proto)
+            .build(&key)
+            .unwrap();
+
+        let decoded_proto = enr.get_decodable::<Proto>("proto").unwrap().unwrap();
+        assert_eq!(decoded_proto, proto);
     }
 
     #[test]
