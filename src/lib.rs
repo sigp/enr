@@ -270,8 +270,8 @@ impl<K: EnrKey> Enr<K> {
     pub fn get(&self, key: impl AsRef<[u8]>) -> Option<Bytes> {
         // It's ok to decode any valid RLP value as data
         self.get_raw_rlp(key).map(|mut rlp_data| {
-            let mut raw_data = &mut rlp_data;
-            let header = Header::decode(&mut raw_data).expect("All data is sanitized");
+            let raw_data = &mut rlp_data;
+            let header = Header::decode(raw_data).expect("All data is sanitized");
             raw_data[..header.payload_length].to_vec().into()
         })
     }
