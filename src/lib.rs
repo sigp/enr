@@ -47,7 +47,10 @@
 //!
 //! ### Building an ENR with the default `k256` `secp256k1` key type
 //!
+//! Note the `k256` feature flag must be set (default).
+//!
 //! ```rust
+//! # #[cfg(feature = "k256")] {
 //! use enr::{Enr, k256};
 //! use std::net::Ipv4Addr;
 //! use rand::thread_rng;
@@ -61,6 +64,7 @@
 //!
 //! assert_eq!(enr.ip4(), Some("192.168.0.1".parse().unwrap()));
 //! assert_eq!(enr.id(), Some("v4".into()));
+//! # }
 //! ```
 //!
 //! ### Building an ENR with the `CombinedKey` type (support for multiple signing
@@ -92,6 +96,7 @@
 //! can be added using [`insert`] and retrieved with [`get`].
 //!
 //! ```rust
+//! # #[cfg(feature = "k256")] {
 //! use enr::{k256::ecdsa::SigningKey, Enr};
 //! use std::net::Ipv4Addr;
 //! use rand::thread_rng;
@@ -120,6 +125,7 @@
 //! assert_eq!(decoded_enr.id(), Some("v4".into()));
 //! assert_eq!(decoded_enr.tcp4(), Some(8001));
 //! assert_eq!(decoded_enr.get("custom_key").as_ref().map(AsRef::as_ref), Some(vec![0,0,1]).as_deref());
+//! # }
 //! ```
 //!
 //! ### Encoding/Decoding ENR's of various key types
@@ -167,7 +173,7 @@
 //! [`insert`]: struct.Enr.html#method.insert
 //! [`get`]: struct.Enr.html#method.get
 
-#![warn(clippy::all)]
+#![warn(clippy::all, rustdoc::all)]
 #![allow(
     clippy::map_err_ignore,
     clippy::missing_errors_doc,
@@ -1124,7 +1130,10 @@ fn check_spec_reserved_keys(key: &[u8], mut value: &[u8]) -> Result<(), Error> {
             Ipv6Addr::decode(&mut value)?;
         }
         b"secp256k1" => {
+            #[cfg(all(feature = "k256", not(feature = "rust-secp256k1")))]
             <Enr<k256::ecdsa::SigningKey>>::decode(&mut value)?;
+            #[cfg(feature = "rust-secp256k1")]
+            <Enr<secp256k1::SecretKey>>::decode(&mut value)?;
         }
         _ => return Ok(()),
     };
@@ -1136,7 +1145,6 @@ fn check_spec_reserved_keys(key: &[u8], mut value: &[u8]) -> Result<(), Error> {
 mod tests {
     use super::*;
     use alloy_rlp::{RlpDecodable, RlpEncodable};
-    use std::convert::TryFrom;
 
     type DefaultEnr = Enr<k256::ecdsa::SigningKey>;
 

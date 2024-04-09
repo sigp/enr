@@ -5,7 +5,7 @@ use super::{
 use crate::Key;
 use alloy_rlp::{Decodable, Error as DecoderError};
 use bytes::Bytes;
-use std::{collections::BTreeMap, convert::TryFrom};
+use std::collections::BTreeMap;
 
 /// The ENR key that stores the public key in the ENR record.
 pub const ENR_KEY: &str = "ed25519";
