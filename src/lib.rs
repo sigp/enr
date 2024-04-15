@@ -1031,19 +1031,6 @@ impl<K: EnrKey> Decodable for Enr<K> {
                     let keys = Header::decode_bytes(payload, false)?;
                     alloy_rlp::encode(keys)
                 }
-                b"eth" => {
-                    let eth_header = Header::decode(payload)?;
-                    let value = &mut &payload[..eth_header.payload_length];
-                    payload.advance(eth_header.payload_length);
-                    let val_header = Header {
-                        list: true,
-                        payload_length: value.len(),
-                    };
-                    let mut out = Vec::<u8>::new();
-                    val_header.encode(&mut out);
-                    out.extend_from_slice(value);
-                    out
-                }
                 _ => {
                     let other_header = Header::decode(payload)?;
                     let value = &mut &payload[..other_header.payload_length];
