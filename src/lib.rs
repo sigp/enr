@@ -1046,9 +1046,16 @@ impl<K: EnrKey> Decodable for Enr<K> {
                 }
                 _ => {
                     let other_header = Header::decode(payload)?;
-                    let value = &payload[..other_header.payload_length];
+                    let value = &mut &payload[..other_header.payload_length];
                     payload.advance(other_header.payload_length);
-                    alloy_rlp::encode(value)
+                    let val_header = Header {
+                        list: true,
+                        payload_length: value.len(),
+                    };
+                    let mut out = Vec::<u8>::new();
+                    val_header.encode(&mut out);
+                    out.extend_from_slice(value);
+                    out
                 }
             };
             content.insert(key.to_vec(), Bytes::from(value));
@@ -1516,6 +1523,36 @@ mod tests {
             .unwrap();
 
         let decoded_proto = enr.get_decodable::<Proto>("proto").unwrap().unwrap();
+        assert_eq!(decoded_proto, proto);
+    }
+
+    #[test]
+    fn test_add_content_value_decoding() {
+        #[derive(PartialEq, Eq, Debug, alloy_rlp::RlpEncodable, alloy_rlp::RlpDecodable)]
+        struct Proto {
+            name: String,
+            version: u64,
+        }
+
+        let mut rng = rand::thread_rng();
+        let key = k256::ecdsa::SigningKey::random(&mut rng);
+        let proto = Proto {
+            name: "test".to_string(),
+            version: 1,
+        };
+
+        let enr = Enr::builder()
+            .add_value("proto", &proto)
+            .build(&key)
+            .unwrap();
+
+        let encoded_enr = alloy_rlp::encode(enr.clone());
+        let decoded_enr = Enr::<k256::ecdsa::SigningKey>::decode(&mut &encoded_enr[..]).unwrap();
+
+        let decoded_proto = decoded_enr
+            .get_decodable::<Proto>("proto")
+            .unwrap()
+            .unwrap();
         assert_eq!(decoded_proto, proto);
     }
 
