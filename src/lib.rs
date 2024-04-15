@@ -1137,9 +1137,27 @@ fn check_spec_reserved_keys(key: &[u8], mut value: &[u8]) -> Result<(), Error> {
 #[cfg(feature = "k256")]
 mod tests {
     use super::*;
+    use alloy_rlp::{RlpDecodable, RlpEncodable};
     use std::convert::TryFrom;
 
     type DefaultEnr = Enr<k256::ecdsa::SigningKey>;
+
+    #[derive(RlpEncodable, RlpDecodable, Debug, PartialEq, Eq)]
+    struct EnrForkId {
+        fork_digest: [u8; 4],
+        next_fork_version: [u8; 4],
+        next_fork_epoch: u64,
+    }
+
+    impl EnrForkId {
+        fn gen_random() -> Self {
+            Self {
+                fork_digest: rand::random(),
+                next_fork_version: rand::random(),
+                next_fork_epoch: rand::random(),
+            }
+        }
+    }
 
     #[cfg(feature = "k256")]
     #[test]
@@ -1450,8 +1468,14 @@ mod tests {
         let key = k256::ecdsa::SigningKey::random(&mut rand::rngs::OsRng);
         let ip = Ipv4Addr::new(127, 0, 0, 1);
         let tcp = 3000;
+        let fork_id = EnrForkId::gen_random();
 
-        let enr = Enr::builder().ip4(ip).tcp4(tcp).build(&key).unwrap();
+        let enr = Enr::builder()
+            .ip4(ip)
+            .tcp4(tcp)
+            .add_value("eth2", &fork_id)
+            .build(&key)
+            .unwrap();
 
         let mut encoded_enr = BytesMut::new();
         enr.encode(&mut encoded_enr);
@@ -1462,6 +1486,13 @@ mod tests {
         assert_eq!(decoded_enr.id(), Some("v4".into()));
         assert_eq!(decoded_enr.ip4(), Some(ip));
         assert_eq!(decoded_enr.tcp4(), Some(tcp));
+        assert_eq!(
+            decoded_enr
+                .get_decodable::<EnrForkId>("eth2")
+                .unwrap()
+                .unwrap(),
+            fork_id
+        );
         // Must compare encoding as the public key itself can be different
         assert_eq!(decoded_enr.public_key().encode(), key.public().encode());
         decoded_enr.public_key().encode_uncompressed();
@@ -1475,8 +1506,14 @@ mod tests {
         let key = ed25519_dalek::SigningKey::generate(&mut rng);
         let ip = Ipv4Addr::new(10, 0, 0, 1);
         let tcp = 30303;
+        let fork_id = EnrForkId::gen_random();
 
-        let enr = Enr::builder().ip4(ip).tcp4(tcp).build(&key).unwrap();
+        let enr = Enr::builder()
+            .ip4(ip)
+            .tcp4(tcp)
+            .add_value("eth2", &fork_id)
+            .build(&key)
+            .unwrap();
 
         let mut out = BytesMut::new();
         enr.encode(&mut out);
@@ -1485,6 +1522,13 @@ mod tests {
         assert_eq!(decoded_enr.id(), Some("v4".into()));
         assert_eq!(decoded_enr.ip4(), Some(ip));
         assert_eq!(decoded_enr.tcp4(), Some(tcp));
+        assert_eq!(
+            decoded_enr
+                .get_decodable::<EnrForkId>("eth2")
+                .unwrap()
+                .unwrap(),
+            fork_id
+        );
         assert_eq!(decoded_enr.public_key().encode(), key.public().encode());
         assert!(decoded_enr.verify());
     }
