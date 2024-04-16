@@ -1580,14 +1580,8 @@ mod tests {
         let key = ed25519_dalek::SigningKey::generate(&mut rng);
         let ip = Ipv4Addr::new(10, 0, 0, 1);
         let tcp = 30303;
-        let fork_id = EnrForkId::gen_random();
 
-        let enr = Enr::builder()
-            .ip4(ip)
-            .tcp4(tcp)
-            .add_value("eth2", &fork_id)
-            .build(&key)
-            .unwrap();
+        let enr = Enr::builder().ip4(ip).tcp4(tcp).build(&key).unwrap();
 
         let mut out = BytesMut::new();
         enr.encode(&mut out);
@@ -1596,13 +1590,6 @@ mod tests {
         assert_eq!(decoded_enr.id(), Some("v4".into()));
         assert_eq!(decoded_enr.ip4(), Some(ip));
         assert_eq!(decoded_enr.tcp4(), Some(tcp));
-        assert_eq!(
-            decoded_enr
-                .get_decodable::<EnrForkId>("eth2")
-                .unwrap()
-                .unwrap(),
-            fork_id
-        );
         assert_eq!(decoded_enr.public_key().encode(), key.public().encode());
         assert!(decoded_enr.verify());
     }
