@@ -267,6 +267,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Reads a custom key from the record if it exists, decoded as data. Caution! Only use for
     /// data that is not an aggregate type. Default to using [`get_decodable`](Enr::get_decodable).
+    #[deprecated(since = "0.11.2", note = "use get_decodable")]
     #[allow(clippy::missing_panics_doc)]
     pub fn get(&self, key: impl AsRef<[u8]>) -> Option<Bytes> {
         self.get_raw_rlp(key).map(|mut rlp_data| {
