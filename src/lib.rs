@@ -1033,14 +1033,11 @@ impl<K: EnrKey> Decodable for Enr<K> {
                 }
                 _ => {
                     let other_header = Header::decode(payload)?;
-                    let value = &mut &payload[..other_header.payload_length];
+                    let value = &payload[..other_header.payload_length];
+                    // Preserve the valid encoding
                     payload.advance(other_header.payload_length);
-                    let val_header = Header {
-                        list: true,
-                        payload_length: value.len(),
-                    };
                     let mut out = Vec::<u8>::new();
-                    val_header.encode(&mut out);
+                    other_header.encode(&mut out);
                     out.extend_from_slice(value);
                     out
                 }
@@ -1142,19 +1139,37 @@ mod tests {
 
     type DefaultEnr = Enr<k256::ecdsa::SigningKey>;
 
+    // Struct for testing the case that an ENR value is an RLP encodable list.
     #[derive(RlpEncodable, RlpDecodable, Debug, PartialEq, Eq)]
-    struct EnrForkId {
-        fork_digest: [u8; 4],
-        next_fork_version: [u8; 4],
-        next_fork_epoch: u64,
+    struct GenericListValue {
+        first_field: [u8; 4],
+        second_field: [u8; 4],
+        third_field: u64,
     }
 
-    impl EnrForkId {
+    impl GenericListValue {
         fn gen_random() -> Self {
             Self {
-                fork_digest: rand::random(),
-                next_fork_version: rand::random(),
-                next_fork_epoch: rand::random(),
+                first_field: rand::random(),
+                second_field: rand::random(),
+                third_field: rand::random(),
+            }
+        }
+    }
+
+    // Struct for testing the case that an ENR value is a recursive RLP encodable list (just to
+    // depth 2).
+    #[derive(RlpEncodable, RlpDecodable, Debug, PartialEq, Eq)]
+    struct DoubleListValue {
+        first_field: [u8; 4],
+        second_field: GenericListValue,
+    }
+
+    impl DoubleListValue {
+        fn gen_random() -> Self {
+            Self {
+                first_field: rand::random(),
+                second_field: GenericListValue::gen_random(),
             }
         }
     }
@@ -1237,6 +1252,78 @@ mod tests {
         assert_eq!(enr.node_id().raw().to_vec(), expected_node_id);
 
         assert!(enr.verify());
+    }
+
+    #[test]
+    fn test_encode_decode_list_value() {
+        let key = k256::ecdsa::SigningKey::random(&mut rand::rngs::OsRng);
+        let ip = Ipv4Addr::new(127, 0, 0, 1);
+        let tcp = 3000;
+        let list_value = GenericListValue::gen_random();
+
+        let enr = Enr::builder()
+            .ip4(ip)
+            .tcp4(tcp)
+            .add_value("list_value", &list_value)
+            .build(&key)
+            .unwrap();
+
+        let mut encoded_enr = BytesMut::new();
+        enr.encode(&mut encoded_enr);
+
+        let decoded_enr =
+            Enr::<k256::ecdsa::SigningKey>::decode(&mut encoded_enr.to_vec().as_slice()).unwrap();
+
+        assert_eq!(decoded_enr.id(), Some("v4".into()));
+        assert_eq!(decoded_enr.ip4(), Some(ip));
+        assert_eq!(decoded_enr.tcp4(), Some(tcp));
+        assert_eq!(
+            decoded_enr
+                .get_decodable::<GenericListValue>("list_value")
+                .unwrap()
+                .unwrap(),
+            list_value
+        );
+        // Must compare encoding as the public key itself can be different
+        assert_eq!(decoded_enr.public_key().encode(), key.public().encode());
+        decoded_enr.public_key().encode_uncompressed();
+        assert!(decoded_enr.verify());
+    }
+
+    #[test]
+    fn test_encode_decode_double_list_value() {
+        let key = k256::ecdsa::SigningKey::random(&mut rand::rngs::OsRng);
+        let ip = Ipv4Addr::new(127, 0, 0, 1);
+        let tcp = 3000;
+        let list_value = DoubleListValue::gen_random();
+
+        let enr = Enr::builder()
+            .ip4(ip)
+            .tcp4(tcp)
+            .add_value("list_value", &list_value)
+            .build(&key)
+            .unwrap();
+
+        let mut encoded_enr = BytesMut::new();
+        enr.encode(&mut encoded_enr);
+
+        let decoded_enr =
+            Enr::<k256::ecdsa::SigningKey>::decode(&mut encoded_enr.to_vec().as_slice()).unwrap();
+
+        assert_eq!(decoded_enr.id(), Some("v4".into()));
+        assert_eq!(decoded_enr.ip4(), Some(ip));
+        assert_eq!(decoded_enr.tcp4(), Some(tcp));
+        assert_eq!(
+            decoded_enr
+                .get_decodable::<DoubleListValue>("list_value")
+                .unwrap()
+                .unwrap(),
+            list_value
+        );
+        // Must compare encoding as the public key itself can be different
+        assert_eq!(decoded_enr.public_key().encode(), key.public().encode());
+        decoded_enr.public_key().encode_uncompressed();
+        assert!(decoded_enr.verify());
     }
 
     // the values in the content are rlp lists
@@ -1468,14 +1555,8 @@ mod tests {
         let key = k256::ecdsa::SigningKey::random(&mut rand::rngs::OsRng);
         let ip = Ipv4Addr::new(127, 0, 0, 1);
         let tcp = 3000;
-        let fork_id = EnrForkId::gen_random();
 
-        let enr = Enr::builder()
-            .ip4(ip)
-            .tcp4(tcp)
-            .add_value("eth2", &fork_id)
-            .build(&key)
-            .unwrap();
+        let enr = Enr::builder().ip4(ip).tcp4(tcp).build(&key).unwrap();
 
         let mut encoded_enr = BytesMut::new();
         enr.encode(&mut encoded_enr);
@@ -1486,13 +1567,6 @@ mod tests {
         assert_eq!(decoded_enr.id(), Some("v4".into()));
         assert_eq!(decoded_enr.ip4(), Some(ip));
         assert_eq!(decoded_enr.tcp4(), Some(tcp));
-        assert_eq!(
-            decoded_enr
-                .get_decodable::<EnrForkId>("eth2")
-                .unwrap()
-                .unwrap(),
-            fork_id
-        );
         // Must compare encoding as the public key itself can be different
         assert_eq!(decoded_enr.public_key().encode(), key.public().encode());
         decoded_enr.public_key().encode_uncompressed();
