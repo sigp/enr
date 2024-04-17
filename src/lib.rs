@@ -299,7 +299,7 @@ impl<K: EnrKey> Enr<K> {
     /// Returns the IPv4 address of the ENR record if it is defined.
     #[must_use]
     pub fn ip4(&self) -> Option<Ipv4Addr> {
-        if let Some(ip_bytes) = self.get("ip") {
+        if let Some(Ok(ip_bytes)) = self.get_decodable::<Bytes>("ip") {
             return match ip_bytes.as_ref().len() {
                 4 => {
                     let mut ip = [0_u8; 4];
@@ -315,7 +315,7 @@ impl<K: EnrKey> Enr<K> {
     /// Returns the IPv6 address of the ENR record if it is defined.
     #[must_use]
     pub fn ip6(&self) -> Option<Ipv6Addr> {
-        if let Some(ip_bytes) = self.get("ip6") {
+        if let Some(Ok(ip_bytes)) = self.get_decodable::<Bytes>("ip6") {
             return match ip_bytes.as_ref().len() {
                 16 => {
                     let mut ip = [0_u8; 16];
@@ -331,7 +331,7 @@ impl<K: EnrKey> Enr<K> {
     /// The `id` of ENR record if it is defined.
     #[must_use]
     pub fn id(&self) -> Option<String> {
-        if let Some(id_bytes) = self.get("id") {
+        if let Some(Ok(id_bytes)) = self.get_decodable::<Bytes>("id") {
             return Some(String::from_utf8_lossy(id_bytes.as_ref()).to_string());
         }
         None
@@ -1756,7 +1756,7 @@ mod tests {
         let mut enr = Enr::builder().tcp4(tcp).build(&key).unwrap();
 
         assert_eq!(enr.tcp4(), Some(tcp));
-        assert_eq!(enr.get("topics").as_ref().map(AsRef::as_ref), None);
+        assert_eq!(enr.get_decodable::<BytesMut>("topics"), None);
 
         let topics: &[u8] = &out;
 
@@ -1769,7 +1769,7 @@ mod tests {
         assert_eq!(inserted[0], None);
 
         assert_eq!(enr.tcp4(), None);
-        assert_eq!(enr.get("topics").as_ref().map(AsRef::as_ref), Some(topics));
+        assert_eq!(enr.get_decodable("topics"), Some(Ok(out)));
 
         // Compare the encoding as the key itself can be different
         assert_eq!(enr.public_key().encode(), key.public().encode());
