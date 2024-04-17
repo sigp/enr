@@ -265,10 +265,11 @@ impl<K: EnrKey> Enr<K> {
         self.seq
     }
 
-    /// Reads a custom key from the record if it exists, decoded as data.
+    /// Reads a custom key from the record if it exists, decoded as data. Caution! Only use for
+    /// data that is not an aggregate type. Default to using [`get_decodable`](Enr::get_decodable).
+    #[deprecated(since = "0.11.2", note = "use get_decodable")]
     #[allow(clippy::missing_panics_doc)]
     pub fn get(&self, key: impl AsRef<[u8]>) -> Option<Bytes> {
-        // It's ok to decode any valid RLP value as data
         self.get_raw_rlp(key).map(|mut rlp_data| {
             let raw_data = &mut rlp_data;
             let header = Header::decode(raw_data).expect("All data is sanitized");
@@ -298,7 +299,7 @@ impl<K: EnrKey> Enr<K> {
     /// Returns the IPv4 address of the ENR record if it is defined.
     #[must_use]
     pub fn ip4(&self) -> Option<Ipv4Addr> {
-        if let Some(ip_bytes) = self.get("ip") {
+        if let Some(Ok(ip_bytes)) = self.get_decodable::<Bytes>("ip") {
             return match ip_bytes.as_ref().len() {
                 4 => {
                     let mut ip = [0_u8; 4];
@@ -314,7 +315,7 @@ impl<K: EnrKey> Enr<K> {
     /// Returns the IPv6 address of the ENR record if it is defined.
     #[must_use]
     pub fn ip6(&self) -> Option<Ipv6Addr> {
-        if let Some(ip_bytes) = self.get("ip6") {
+        if let Some(Ok(ip_bytes)) = self.get_decodable::<Bytes>("ip6") {
             return match ip_bytes.as_ref().len() {
                 16 => {
                     let mut ip = [0_u8; 16];
@@ -330,7 +331,7 @@ impl<K: EnrKey> Enr<K> {
     /// The `id` of ENR record if it is defined.
     #[must_use]
     pub fn id(&self) -> Option<String> {
-        if let Some(id_bytes) = self.get("id") {
+        if let Some(Ok(id_bytes)) = self.get_decodable::<Bytes>("id") {
             return Some(String::from_utf8_lossy(id_bytes.as_ref()).to_string());
         }
         None
@@ -1031,24 +1032,15 @@ impl<K: EnrKey> Decodable for Enr<K> {
                     let keys = Header::decode_bytes(payload, false)?;
                     alloy_rlp::encode(keys)
                 }
-                b"eth" => {
-                    let eth_header = Header::decode(payload)?;
-                    let value = &mut &payload[..eth_header.payload_length];
-                    payload.advance(eth_header.payload_length);
-                    let val_header = Header {
-                        list: true,
-                        payload_length: value.len(),
-                    };
-                    let mut out = Vec::<u8>::new();
-                    val_header.encode(&mut out);
-                    out.extend_from_slice(value);
-                    out
-                }
                 _ => {
                     let other_header = Header::decode(payload)?;
                     let value = &payload[..other_header.payload_length];
+                    // Preserve the valid encoding
                     payload.advance(other_header.payload_length);
-                    alloy_rlp::encode(value)
+                    let mut out = Vec::<u8>::new();
+                    other_header.encode(&mut out);
+                    out.extend_from_slice(value);
+                    out
                 }
             };
             content.insert(key.to_vec(), Bytes::from(value));
@@ -1143,9 +1135,45 @@ fn check_spec_reserved_keys(key: &[u8], mut value: &[u8]) -> Result<(), Error> {
 #[cfg(feature = "k256")]
 mod tests {
     use super::*;
+    use alloy_rlp::{RlpDecodable, RlpEncodable};
     use std::convert::TryFrom;
 
     type DefaultEnr = Enr<k256::ecdsa::SigningKey>;
+
+    // Struct for testing the case that an ENR value is an RLP encodable list.
+    #[derive(RlpEncodable, RlpDecodable, Debug, PartialEq, Eq)]
+    struct GenericListValue {
+        first_field: [u8; 4],
+        second_field: [u8; 4],
+        third_field: u64,
+    }
+
+    impl GenericListValue {
+        fn gen_random() -> Self {
+            Self {
+                first_field: rand::random(),
+                second_field: rand::random(),
+                third_field: rand::random(),
+            }
+        }
+    }
+
+    // Struct for testing the case that an ENR value is a recursive RLP encodable list (just to
+    // depth 2).
+    #[derive(RlpEncodable, RlpDecodable, Debug, PartialEq, Eq)]
+    struct DoubleListValue {
+        first_field: [u8; 4],
+        second_field: GenericListValue,
+    }
+
+    impl DoubleListValue {
+        fn gen_random() -> Self {
+            Self {
+                first_field: rand::random(),
+                second_field: GenericListValue::gen_random(),
+            }
+        }
+    }
 
     #[cfg(feature = "k256")]
     #[test]
@@ -1225,6 +1253,78 @@ mod tests {
         assert_eq!(enr.node_id().raw().to_vec(), expected_node_id);
 
         assert!(enr.verify());
+    }
+
+    #[test]
+    fn test_encode_decode_list_value() {
+        let key = k256::ecdsa::SigningKey::random(&mut rand::rngs::OsRng);
+        let ip = Ipv4Addr::new(127, 0, 0, 1);
+        let tcp = 3000;
+        let list_value = GenericListValue::gen_random();
+
+        let enr = Enr::builder()
+            .ip4(ip)
+            .tcp4(tcp)
+            .add_value("list_value", &list_value)
+            .build(&key)
+            .unwrap();
+
+        let mut encoded_enr = BytesMut::new();
+        enr.encode(&mut encoded_enr);
+
+        let decoded_enr =
+            Enr::<k256::ecdsa::SigningKey>::decode(&mut encoded_enr.to_vec().as_slice()).unwrap();
+
+        assert_eq!(decoded_enr.id(), Some("v4".into()));
+        assert_eq!(decoded_enr.ip4(), Some(ip));
+        assert_eq!(decoded_enr.tcp4(), Some(tcp));
+        assert_eq!(
+            decoded_enr
+                .get_decodable::<GenericListValue>("list_value")
+                .unwrap()
+                .unwrap(),
+            list_value
+        );
+        // Must compare encoding as the public key itself can be different
+        assert_eq!(decoded_enr.public_key().encode(), key.public().encode());
+        decoded_enr.public_key().encode_uncompressed();
+        assert!(decoded_enr.verify());
+    }
+
+    #[test]
+    fn test_encode_decode_double_list_value() {
+        let key = k256::ecdsa::SigningKey::random(&mut rand::rngs::OsRng);
+        let ip = Ipv4Addr::new(127, 0, 0, 1);
+        let tcp = 3000;
+        let list_value = DoubleListValue::gen_random();
+
+        let enr = Enr::builder()
+            .ip4(ip)
+            .tcp4(tcp)
+            .add_value("list_value", &list_value)
+            .build(&key)
+            .unwrap();
+
+        let mut encoded_enr = BytesMut::new();
+        enr.encode(&mut encoded_enr);
+
+        let decoded_enr =
+            Enr::<k256::ecdsa::SigningKey>::decode(&mut encoded_enr.to_vec().as_slice()).unwrap();
+
+        assert_eq!(decoded_enr.id(), Some("v4".into()));
+        assert_eq!(decoded_enr.ip4(), Some(ip));
+        assert_eq!(decoded_enr.tcp4(), Some(tcp));
+        assert_eq!(
+            decoded_enr
+                .get_decodable::<DoubleListValue>("list_value")
+                .unwrap()
+                .unwrap(),
+            list_value
+        );
+        // Must compare encoding as the public key itself can be different
+        assert_eq!(decoded_enr.public_key().encode(), key.public().encode());
+        decoded_enr.public_key().encode_uncompressed();
+        assert!(decoded_enr.verify());
     }
 
     // the values in the content are rlp lists
@@ -1520,6 +1620,36 @@ mod tests {
     }
 
     #[test]
+    fn test_add_content_value_decoding() {
+        #[derive(PartialEq, Eq, Debug, alloy_rlp::RlpEncodable, alloy_rlp::RlpDecodable)]
+        struct Proto {
+            name: String,
+            version: u64,
+        }
+
+        let mut rng = rand::thread_rng();
+        let key = k256::ecdsa::SigningKey::random(&mut rng);
+        let proto = Proto {
+            name: "test".to_string(),
+            version: 1,
+        };
+
+        let enr = Enr::builder()
+            .add_value("proto", &proto)
+            .build(&key)
+            .unwrap();
+
+        let encoded_enr = alloy_rlp::encode(enr.clone());
+        let decoded_enr = Enr::<k256::ecdsa::SigningKey>::decode(&mut &encoded_enr[..]).unwrap();
+
+        let decoded_proto = decoded_enr
+            .get_decodable::<Proto>("proto")
+            .unwrap()
+            .unwrap();
+        assert_eq!(decoded_proto, proto);
+    }
+
+    #[test]
     fn test_add_key() {
         let mut rng = rand::thread_rng();
         let key = k256::ecdsa::SigningKey::random(&mut rng);
@@ -1626,7 +1756,7 @@ mod tests {
         let mut enr = Enr::builder().tcp4(tcp).build(&key).unwrap();
 
         assert_eq!(enr.tcp4(), Some(tcp));
-        assert_eq!(enr.get("topics").as_ref().map(AsRef::as_ref), None);
+        assert_eq!(enr.get_decodable::<BytesMut>("topics"), None);
 
         let topics: &[u8] = &out;
 
@@ -1639,7 +1769,7 @@ mod tests {
         assert_eq!(inserted[0], None);
 
         assert_eq!(enr.tcp4(), None);
-        assert_eq!(enr.get("topics").as_ref().map(AsRef::as_ref), Some(topics));
+        assert_eq!(enr.get_decodable("topics"), Some(Ok(out)));
 
         // Compare the encoding as the key itself can be different
         assert_eq!(enr.public_key().encode(), key.public().encode());
