@@ -18,7 +18,7 @@ use k256::{
 };
 use rand::rngs::OsRng;
 use sha3::{Digest, Keccak256};
-use std::{collections::BTreeMap, convert::TryFrom};
+use std::collections::BTreeMap;
 
 /// The ENR key that stores the public key in the ENR record.
 pub const ENR_KEY: &str = "secp256k1";

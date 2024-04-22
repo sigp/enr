@@ -140,7 +140,6 @@ mod serde_hex_prfx {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
 
     #[test]
     fn test_eq_node_raw_node() {
@@ -194,6 +193,8 @@ mod tests {
     #[cfg(feature = "serde")]
     #[test]
     fn test_serde_as_hashmap_key() {
+        use std::collections::HashMap;
+
         let mut responses: HashMap<NodeId, u8> = HashMap::default();
         responses.insert(NodeId::random(), 1);
         let _ = serde_json::json!(responses);

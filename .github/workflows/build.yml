@@ -7,49 +7,81 @@ on:
   pull_request:
 
 jobs:
-  code-check:
+  audit:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - name: Get latest version of stable Rust
-      uses: moonrepo/setup-rust@v1
-      with:
-          channel: stable
-          cache-target: release
-          components: rustfmt, clippy
-          bins: cargo-audit
-    - name: Check formatting with cargofmt
-      run: cargo fmt -- --check
-    - name: Check for lint warnings
-      run: cargo clippy --all-features -- -D warnings
-    - name: Run cargo audit to identify known security vulnerabilities reported to the RustSec Advisory Database
-      run: cargo audit
-  release-tests-ubuntu:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@cargo-audit
+      - name:
+          Run cargo audit to identify known security vulnerabilities reported to the RustSec
+          Advisory Database
+        run: cargo audit
+
+  test:
+    name: test ${{ matrix.flags }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        flags: ["--no-default-features", "", "--features ed25519", "--features rust-secp256k1"]
     steps:
-      - uses: actions/checkout@v3
-      - name: Get latest version of stable Rust
-        uses: moonrepo/setup-rust@v1
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
         with:
-            channel: stable
-            cache-target: release
-            bins: cargo-nextest
-      - name: Run tests in release
-        run: cargo nextest run --all --release --tests
-      - name: Run tests in release ed25519
-        run: cargo nextest run --all --release --features "ed25519" --tests
-      - name: Run tests in release secp256k1
-        run: cargo nextest run --all --release --features "secp256k1" --tests
-      - name: Run tests in release rust-secp256k1
-        run: cargo nextest run --all --release --features "rust-secp256k1" --tests
-      - name: Run tests in release all features
-        run: cargo nextest run --all --release --all-features
-  check-rustdoc-links:
-    name: Check rustdoc intra-doc links
+          cache-on-failure: true
+      - name: test
+        run: cargo test ${{ matrix.flags }}
+
+  feature-checks:
     runs-on: ubuntu-latest
-    container:
-      image: rust
+    timeout-minutes: 30
     steps:
-    - uses: actions/checkout@v3
-    - name: Check rustdoc links
-      run: RUSTDOCFLAGS="--deny broken_intra_doc_links" cargo doc --verbose --workspace --no-deps --document-private-items
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@cargo-hack
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - name: cargo hack
+        run: cargo hack check --feature-powerset --depth 2
+
+  clippy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - run: cargo clippy --workspace --all-targets --all-features
+        env:
+          RUSTFLAGS: -Dwarnings
+
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+      - run: cargo doc --workspace --all-features --no-deps --document-private-items
+        env:
+          RUSTDOCFLAGS: "--cfg docsrs -D warnings"
+
+  fmt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - run: cargo fmt --all --check
