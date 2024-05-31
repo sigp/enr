@@ -1041,12 +1041,19 @@ impl<K: EnrKey> Decodable for Enr<K> {
                 _ => {
                     let other_header = Header::decode(payload)?;
                     let value = &payload[..other_header.payload_length];
-                    // Preserve the valid encoding
                     payload.advance(other_header.payload_length);
-                    let mut out = Vec::<u8>::new();
-                    other_header.encode(&mut out);
-                    out.extend_from_slice(value);
-                    out
+
+                    // Encode the header for list values, for non-list objects, we remove the
+                    // header for compatibility with commonly used key entries (i.e its the
+                    // current convention).
+                    if other_header.list {
+                        let mut out = Vec::<u8>::new();
+                        other_header.encode(&mut out);
+                        out.extend_from_slice(value);
+                        out
+                    } else {
+                        alloy_rlp::encode(value)
+                    }
                 }
             };
             content.insert(key.to_vec(), Bytes::from(value));
