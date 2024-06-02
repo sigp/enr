@@ -343,6 +343,34 @@ impl<K: EnrKey> Enr<K> {
         None
     }
 
+    /// Returns (EIP-7636)[https://eips.ethereum.org/EIPS/eip-7636] entry if it is defined.
+    #[must_use]
+    pub fn client_info(&self) -> Option<(String, String, Option<String>)> {
+        if let Some(Ok(client_list)) = self.get_decodable::<Vec<Bytes>>("client") {
+            match client_list.len() {
+                2 => {
+                    let client_name =
+                        String::from_utf8_lossy(client_list[0].as_ref()).to_string();
+                    let client_version =
+                        String::from_utf8_lossy(client_list[1].as_ref()).to_string();
+                    return Some((client_name, client_version, None));
+                }
+                3 => {
+                    let client_name =
+                        String::from_utf8_lossy(client_list[0].as_ref()).to_string();
+                    let client_version =
+                        String::from_utf8_lossy(client_list[1].as_ref()).to_string();
+                    let client_additional =
+                        String::from_utf8_lossy(client_list[2].as_ref()).to_string();
+                    return Some((client_name, client_version, Some(client_additional)));
+                }
+                _ => {}
+            }
+        }
+
+        None
+    }
+
     /// The TCP port of ENR record if it is defined.
     #[must_use]
     pub fn tcp4(&self) -> Option<u16> {
