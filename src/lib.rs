@@ -349,17 +349,19 @@ impl<K: EnrKey> Enr<K> {
         if let Some(Ok(client_list)) = self.get_decodable::<Vec<Bytes>>("client") {
             match client_list.len() {
                 2 => {
-                    let client_name =
-                        String::from_utf8_lossy(client_list[0].as_ref()).to_string();
+                    let client_name = String::from_utf8_lossy(client_list[0].as_ref()).to_string();
+
                     let client_version =
                         String::from_utf8_lossy(client_list[1].as_ref()).to_string();
+
                     return Some((client_name, client_version, None));
                 }
                 3 => {
-                    let client_name =
-                        String::from_utf8_lossy(client_list[0].as_ref()).to_string();
+                    let client_name = String::from_utf8_lossy(client_list[0].as_ref()).to_string();
+
                     let client_version =
                         String::from_utf8_lossy(client_list[1].as_ref()).to_string();
+
                     let client_additional =
                         String::from_utf8_lossy(client_list[2].as_ref()).to_string();
                     return Some((client_name, client_version, Some(client_additional)));
@@ -649,8 +651,13 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Sets the [EIP-7636](https://eips.ethereum.org/EIPS/eip-7636) `client` field in the record.
-    pub fn set_client_info(&mut self, name: String, version: String, build: Option<String>, key: &K) -> Result<(), Error> {
-
+    pub fn set_client_info(
+        &mut self,
+        name: String,
+        version: String,
+        build: Option<String>,
+        key: &K,
+    ) -> Result<(), Error> {
         if build.is_none() {
             self.insert("client", &vec![name, version], key)?;
         } else {
@@ -2006,11 +2013,18 @@ mod tests {
     fn test_set_client_eip7636() {
         let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
         let mut enr = Enr::empty(&key).unwrap();
-        
-        enr.set_client_info("Test".to_string(), "v1.0.0".to_string(), Some("Test".to_string()), &key).unwrap();
+
+        enr.set_client_info(
+            "Test".to_string(),
+            "v1.0.0".to_string(),
+            Some("Test".to_string()),
+            &key,
+        )
+        .unwrap();
         assert!(enr.verify());
 
-        enr.set_client_info("Test".to_string(), "v1.0.0".to_string(), None, &key).unwrap();
+        enr.set_client_info("Test".to_string(), "v1.0.0".to_string(), None, &key)
+            .unwrap();
         assert!(enr.verify());
     }
 
@@ -2025,12 +2039,12 @@ mod tests {
         assert_eq!(info.1, "1.9.53");
         assert_eq!(info.2.unwrap(), "7fcb567");
 
-
         let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
         let mut enr = Enr::empty(&key).unwrap();
-        
-        enr.set_client_info("Test".to_string(), "v1.0.0".to_string(), None, &key).unwrap();
-        
+
+        enr.set_client_info("Test".to_string(), "v1.0.0".to_string(), None, &key)
+            .unwrap();
+
         let info = enr.client_info().unwrap();
         assert_eq!(info.0, "Test");
         assert_eq!(info.1, "v1.0.0");
@@ -2043,7 +2057,11 @@ mod tests {
         let enr = Enr::builder()
             .ip4(Ipv4Addr::new(127, 0, 0, 1))
             .tcp4(30303)
-            .client_info("Test".to_string(), "v1.0.0".to_string(), Some("Test".to_string()))
+            .client_info(
+                "Test".to_string(),
+                "v1.0.0".to_string(),
+                Some("Test".to_string()),
+            )
             .build(&key)
             .unwrap();
 
@@ -2064,6 +2082,4 @@ mod tests {
         assert_eq!(info.1, "v1.0.0");
         assert_eq!(info.2, None);
     }
-
-
 }
