@@ -1968,4 +1968,17 @@ mod tests {
         record.set_seq(30, &key).unwrap();
         assert_eq!(record.seq(), 30);
     }
+
+    /// Tests a common ENR which uses RLP encoded values without the header
+    #[test]
+    fn test_common_rlp_convention() {
+        const COMMON_VALID_ENR: &str = concat!(
+            "-LW4QCAyOCtqvQjd8AgpqbaCgfjy8oN8cBBRT5jtzarkGJQWZx1eN70EM0QafVCugLa-Bv493DPNzflagqfTOsWSF78Ih2F0d",
+            "G5ldHOIAGAAAAAAAACEZXRoMpBqlaGpBAAAAP__________gmlkgnY0hHF1aWOCIymJc2VjcDI1NmsxoQPg_HgqXzwRIK39Oy",
+            "lGdC30YUFwsfXvATnGUvEZ6MtBQIhzeW5jbmV0cwCDdGNwgiMo"
+        );
+
+        // Expect this to be able to be decoded
+        let _decoded: DefaultEnr = COMMON_VALID_ENR.parse().unwrap();
+    }
 }
