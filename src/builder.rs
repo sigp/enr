@@ -4,7 +4,7 @@ use bytes::{Bytes, BytesMut};
 use std::{
     collections::BTreeMap,
     marker::PhantomData,
-    net::{IpAddr, Ipv4Addr, Ipv6Addr}, vec,
+    net::{IpAddr, Ipv4Addr, Ipv6Addr},
 };
 
 /// The base builder for generating ENR records with arbitrary signing algorithms.
