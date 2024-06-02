@@ -2001,4 +2001,69 @@ mod tests {
         record.set_seq(30, &key).unwrap();
         assert_eq!(record.seq(), 30);
     }
+
+    #[test]
+    fn test_set_client_eip7636() {
+        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+        let mut enr = Enr::empty(&key).unwrap();
+        
+        enr.set_client_info("Test".to_string(), "v1.0.0".to_string(), Some("Test".to_string()), &key).unwrap();
+        assert!(enr.verify());
+
+        enr.set_client_info("Test".to_string(), "v1.0.0".to_string(), None, &key).unwrap();
+        assert!(enr.verify());
+    }
+
+    #[test]
+    fn test_get_eip7636() {
+        let example_eip = "enr:-MO4QBn4OF-y-dqULg4WOIlc8gQAt-arldNFe0_YQ4HNX28jDtg41xjDyKfCXGfZaPN97I-MCfogeK91TyqmWTpb0_AChmNsaWVudNqKTmV0aGVybWluZIYxLjkuNTOHN2ZjYjU2N4JpZIJ2NIJpcIR_AAABg2lwNpAAAAAAAAAAAAAAAAAAAAABiXNlY3AyNTZrMaECn-TTdCwfZP4XgJyq8Lxoj-SgEoIFgDLVBEUqQk4HnAqDdWRwgiMshHVkcDaCIyw";
+        let enr = example_eip.parse::<DefaultEnr>().unwrap();
+
+        let info = enr.client_info().unwrap();
+
+        assert_eq!(info.0, "Nethermind");
+        assert_eq!(info.1, "1.9.53");
+        assert_eq!(info.2.unwrap(), "7fcb567");
+
+
+        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+        let mut enr = Enr::empty(&key).unwrap();
+        
+        enr.set_client_info("Test".to_string(), "v1.0.0".to_string(), None, &key).unwrap();
+        
+        let info = enr.client_info().unwrap();
+        assert_eq!(info.0, "Test");
+        assert_eq!(info.1, "v1.0.0");
+        assert_eq!(info.2, None);
+    }
+
+    #[test]
+    fn test_builder_eip7636() {
+        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+        let enr = Enr::builder()
+            .ip4(Ipv4Addr::new(127, 0, 0, 1))
+            .tcp4(30303)
+            .client_info("Test".to_string(), "v1.0.0".to_string(), Some("Test".to_string()))
+            .build(&key)
+            .unwrap();
+
+        let info = enr.client_info().unwrap();
+        assert_eq!(info.0, "Test");
+        assert_eq!(info.1, "v1.0.0");
+        assert_eq!(info.2.unwrap(), "Test");
+
+        let enr = Enr::builder()
+            .ip4(Ipv4Addr::new(127, 0, 0, 1))
+            .tcp4(30303)
+            .client_info("Test".to_string(), "v1.0.0".to_string(), None)
+            .build(&key)
+            .unwrap();
+
+        let info = enr.client_info().unwrap();
+        assert_eq!(info.0, "Test");
+        assert_eq!(info.1, "v1.0.0");
+        assert_eq!(info.2, None);
+    }
+
+
 }
