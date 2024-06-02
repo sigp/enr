@@ -648,6 +648,18 @@ impl<K: EnrKey> Enr<K> {
         Ok(None)
     }
 
+    /// Sets the [EIP-7636](https://eips.ethereum.org/EIPS/eip-7636) `client` field in the record.
+    pub fn set_client_info(&mut self, name: String, version: String, build: Option<String>, key: &K) -> Result<(), Error> {
+
+        if build.is_none() {
+            self.insert("client", &vec![name, version], key)?;
+        } else {
+            self.insert("client", &vec![name, version, build.unwrap()], key)?;
+        }
+
+        Ok(())
+    }
+
     /// Sets the IP and UDP port in a single update with a single increment in sequence number.
     pub fn set_udp_socket(&mut self, socket: SocketAddr, key: &K) -> Result<(), Error> {
         self.set_socket(socket, key, false)
