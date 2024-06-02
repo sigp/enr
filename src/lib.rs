@@ -343,7 +343,7 @@ impl<K: EnrKey> Enr<K> {
         None
     }
 
-    /// Returns (EIP-7636)[https://eips.ethereum.org/EIPS/eip-7636] entry if it is defined.
+    /// Returns [EIP-7636](https://eips.ethereum.org/EIPS/eip-7636) entry if it is defined.
     #[must_use]
     pub fn client_info(&self) -> Option<(String, String, Option<String>)> {
         if let Some(Ok(client_list)) = self.get_decodable::<Vec<Bytes>>("client") {

@@ -110,7 +110,7 @@ impl<K: EnrKey> Builder<K> {
         self
     }
 
-    /// Adds a (EIP-7636)[https://eips.ethereum.org/EIPS/eip-7636] `client` field to the `ENRBuilder`.
+    /// Adds a [EIP-7636](https://eips.ethereum.org/EIPS/eip-7636) `client` field to the `ENRBuilder`.
     pub fn client_info(&mut self, name: String, version: String, build: Option<String>) -> &mut Self {
 
         if build.is_none() {
