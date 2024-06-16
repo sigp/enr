@@ -1044,7 +1044,7 @@ impl<K: EnrKey> Decodable for Enr<K> {
                     payload.advance(other_header.payload_length);
 
                     // Encode the header for list values, for non-list objects, we remove the
-                    // header for compatibility with commonly used key entries (i.e its the
+                    // header for compatibility with commonly used key entries (i.e it's the
                     // current convention).
                     if other_header.list {
                         let mut out = Vec::<u8>::new();
