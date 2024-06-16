@@ -1041,12 +1041,19 @@ impl<K: EnrKey> Decodable for Enr<K> {
                 _ => {
                     let other_header = Header::decode(payload)?;
                     let value = &payload[..other_header.payload_length];
-                    // Preserve the valid encoding
                     payload.advance(other_header.payload_length);
-                    let mut out = Vec::<u8>::new();
-                    other_header.encode(&mut out);
-                    out.extend_from_slice(value);
-                    out
+
+                    // Encode the header for list values, for non-list objects, we remove the
+                    // header for compatibility with commonly used key entries (i.e it's the
+                    // current convention).
+                    if other_header.list {
+                        let mut out = Vec::<u8>::new();
+                        other_header.encode(&mut out);
+                        out.extend_from_slice(value);
+                        out
+                    } else {
+                        alloy_rlp::encode(value)
+                    }
                 }
             };
             content.insert(key.to_vec(), Bytes::from(value));
@@ -1960,5 +1967,18 @@ mod tests {
 
         record.set_seq(30, &key).unwrap();
         assert_eq!(record.seq(), 30);
+    }
+
+    /// Tests a common ENR which uses RLP encoded values without the header
+    #[test]
+    fn test_common_rlp_convention() {
+        const COMMON_VALID_ENR: &str = concat!(
+            "-LW4QCAyOCtqvQjd8AgpqbaCgfjy8oN8cBBRT5jtzarkGJQWZx1eN70EM0QafVCugLa-Bv493DPNzflagqfTOsWSF78Ih2F0d",
+            "G5ldHOIAGAAAAAAAACEZXRoMpBqlaGpBAAAAP__________gmlkgnY0hHF1aWOCIymJc2VjcDI1NmsxoQPg_HgqXzwRIK39Oy",
+            "lGdC30YUFwsfXvATnGUvEZ6MtBQIhzeW5jbmV0cwCDdGNwgiMo"
+        );
+
+        // Expect this to be able to be decoded
+        let _decoded: DefaultEnr = COMMON_VALID_ENR.parse().unwrap();
     }
 }
