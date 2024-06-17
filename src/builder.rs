@@ -110,6 +110,22 @@ impl<K: EnrKey> Builder<K> {
         self
     }
 
+    /// Adds a [EIP-7636](https://eips.ethereum.org/EIPS/eip-7636) `client` field to the `ENRBuilder`.
+    pub fn client_info(
+        &mut self,
+        name: String,
+        version: String,
+        build: Option<String>,
+    ) -> &mut Self {
+        if build.is_none() {
+            self.add_value("client", &vec![name, version]);
+        } else {
+            self.add_value("client", &vec![name, version, build.unwrap()]);
+        }
+
+        self
+    }
+
     /// Generates the rlp-encoded form of the ENR specified by the builder config.
     fn rlp_content(&self) -> BytesMut {
         let mut list = Vec::<u8>::with_capacity(MAX_ENR_SIZE);
