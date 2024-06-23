@@ -132,10 +132,9 @@
 //!
 //! ```rust
 //! # #[cfg(feature = "ed25519")] {
-//! use enr::{k256::ecdsa, Enr, ed25519_dalek as ed25519, CombinedKey};
+//! use enr::{ed25519_dalek as ed25519, k256::ecdsa, CombinedKey, Enr};
 //! use std::net::Ipv4Addr;
 //! use rand::thread_rng;
-//! use rand::Rng;
 //!
 //! // generate a random secp256k1 key
 //! let mut rng = thread_rng();
@@ -155,9 +154,9 @@
 //!
 //! // decode base64 strings of varying key types
 //! // decode the secp256k1 with default Enr
-//! let decoded_enr_secp256k1: Enr<k256::ecdsa::SigningKey> = base64_string_secp256k1.parse().unwrap();
+//! let decoded_enr_secp256k1: Enr<ecdsa::SigningKey> = base64_string_secp256k1.parse().unwrap();
 //! // decode ed25519 ENRs
-//! let decoded_enr_ed25519: Enr<ed25519_dalek::SigningKey> = base64_string_ed25519.parse().unwrap();
+//! let decoded_enr_ed25519: Enr<ed25519::SigningKey> = base64_string_ed25519.parse().unwrap();
 //!
 //! // use the combined key to be able to decode either
 //! let decoded_enr: Enr<CombinedKey> = base64_string_secp256k1.parse().unwrap();
