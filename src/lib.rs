@@ -833,7 +833,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets a new public key for the record.
     pub fn set_public_key(&mut self, public_key: &K::PublicKey, key: &K) -> Result<(), Error> {
-        self.insert(&public_key.enr_key(), &public_key.encode().as_ref(), key)
+        self.insert(public_key.enr_key(), &public_key.encode().as_ref(), key)
             .map(|_| {})
     }
 
