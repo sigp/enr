@@ -222,6 +222,15 @@ type PreviousRlpEncodedValues = Vec<Option<Bytes>>;
 
 const MAX_ENR_SIZE: usize = 300;
 
+const ID_ENR_KEY: &[u8] = b"id";
+const ENR_VERSION: &[u8] = b"v4";
+pub const IP_ENR_KEY: &[u8] = b"ip";
+pub const IP6_ENR_KEY: &[u8] = b"ip6";
+pub const TCP_ENR_KEY: &[u8] = b"tcp";
+pub const TCP6_ENR_KEY: &[u8] = b"tcp6";
+pub const UDP_ENR_KEY: &[u8] = b"udp";
+pub const UDP6_ENR_KEY: &[u8] = b"udp6";
+
 /// The ENR, allowing for arbitrary signing algorithms.
 ///
 /// This struct will always have a valid signature, known public key type, sequence number and `NodeId`. All other parameters are variable/optional.
@@ -305,7 +314,7 @@ impl<K: EnrKey> Enr<K> {
     /// Returns the IPv4 address of the ENR record if it is defined.
     #[must_use]
     pub fn ip4(&self) -> Option<Ipv4Addr> {
-        if let Some(Ok(ip_bytes)) = self.get_decodable::<Bytes>("ip") {
+        if let Some(Ok(ip_bytes)) = self.get_decodable::<Bytes>(IP_ENR_KEY) {
             return match ip_bytes.as_ref().len() {
                 4 => {
                     let mut ip = [0_u8; 4];
@@ -321,7 +330,7 @@ impl<K: EnrKey> Enr<K> {
     /// Returns the IPv6 address of the ENR record if it is defined.
     #[must_use]
     pub fn ip6(&self) -> Option<Ipv6Addr> {
-        if let Some(Ok(ip_bytes)) = self.get_decodable::<Bytes>("ip6") {
+        if let Some(Ok(ip_bytes)) = self.get_decodable::<Bytes>(IP6_ENR_KEY) {
             return match ip_bytes.as_ref().len() {
                 16 => {
                     let mut ip = [0_u8; 16];
@@ -346,25 +355,25 @@ impl<K: EnrKey> Enr<K> {
     /// The TCP port of ENR record if it is defined.
     #[must_use]
     pub fn tcp4(&self) -> Option<u16> {
-        self.get_decodable("tcp").and_then(Result::ok)
+        self.get_decodable(TCP_ENR_KEY).and_then(Result::ok)
     }
 
     /// The IPv6-specific TCP port of ENR record if it is defined.
     #[must_use]
     pub fn tcp6(&self) -> Option<u16> {
-        self.get_decodable("tcp6").and_then(Result::ok)
+        self.get_decodable(TCP6_ENR_KEY).and_then(Result::ok)
     }
 
     /// The UDP port of ENR record if it is defined.
     #[must_use]
     pub fn udp4(&self) -> Option<u16> {
-        self.get_decodable("udp").and_then(Result::ok)
+        self.get_decodable(UDP_ENR_KEY).and_then(Result::ok)
     }
 
     /// The IPv6-specific UDP port of ENR record if it is defined.
     #[must_use]
     pub fn udp6(&self) -> Option<u16> {
-        self.get_decodable("udp6").and_then(Result::ok)
+        self.get_decodable(UDP6_ENR_KEY).and_then(Result::ok)
     }
 
     /// Provides a socket (based on the UDP port), if the IPv4 and UDP fields are specified.
@@ -564,7 +573,7 @@ impl<K: EnrKey> Enr<K> {
     pub fn set_ip(&mut self, ip: IpAddr, key: &K) -> Result<Option<IpAddr>, Error> {
         match ip {
             IpAddr::V4(addr) => {
-                let prev_value = self.insert("ip", &addr.octets().as_ref(), key)?;
+                let prev_value = self.insert(IP_ENR_KEY, &addr.octets().as_ref(), key)?;
                 if let Some(bytes) = prev_value {
                     if bytes.len() == 4 {
                         let mut v = [0_u8; 4];
@@ -574,7 +583,7 @@ impl<K: EnrKey> Enr<K> {
                 }
             }
             IpAddr::V6(addr) => {
-                let prev_value = self.insert("ip6", &addr.octets().as_ref(), key)?;
+                let prev_value = self.insert(IP6_ENR_KEY, &addr.octets().as_ref(), key)?;
                 if let Some(bytes) = prev_value {
                     if bytes.len() == 16 {
                         let mut v = [0_u8; 16];
@@ -590,34 +599,54 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets the `udp` field of the ENR. Returns any pre-existing UDP port in the record.
     pub fn set_udp4(&mut self, udp: u16, key: &K) -> Result<Option<u16>, Error> {
-        if let Some(udp_bytes) = self.insert("udp", &udp, key)? {
+        if let Some(udp_bytes) = self.insert(UDP_ENR_KEY, &udp, key)? {
             return Ok(u16::decode(&mut udp_bytes.as_ref()).ok());
         }
         Ok(None)
+    }
+
+    /// Unsets the udp field on the ENR
+    pub fn remove_udp4(&mut self, key: &K) -> Result<(), Error> {
+        self.remove_key(UDP_ENR_KEY, key)
     }
 
     /// Sets the `udp6` field of the ENR. Returns any pre-existing UDP port in the record.
     pub fn set_udp6(&mut self, udp: u16, key: &K) -> Result<Option<u16>, Error> {
-        if let Some(udp_bytes) = self.insert("udp6", &udp, key)? {
+        if let Some(udp_bytes) = self.insert(UDP6_ENR_KEY, &udp, key)? {
             return Ok(u16::decode(&mut udp_bytes.as_ref()).ok());
         }
         Ok(None)
     }
 
+    /// Unsets the udp6 field on the ENR
+    pub fn remove_udp6(&mut self, key: &K) -> Result<(), Error> {
+        self.remove_key(UDP6_ENR_KEY, key)
+    }
+
     /// Sets the `tcp` field of the ENR. Returns any pre-existing tcp port in the record.
     pub fn set_tcp4(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, Error> {
-        if let Some(tcp_bytes) = self.insert("tcp", &tcp, key)? {
+        if let Some(tcp_bytes) = self.insert(TCP_ENR_KEY, &tcp, key)? {
             return Ok(u16::decode(&mut tcp_bytes.as_ref()).ok());
         }
         Ok(None)
     }
 
+    /// Unsets the `tcp` field on the ENR
+    pub fn remove_tcp(&mut self, key: &K) -> Result<(), Error> {
+        self.remove_key(TCP_ENR_KEY, key)
+    }
+
     /// Sets the `tcp6` field of the ENR. Returns any pre-existing tcp6 port in the record.
     pub fn set_tcp6(&mut self, tcp: u16, key: &K) -> Result<Option<u16>, Error> {
-        if let Some(tcp_bytes) = self.insert("tcp6", &tcp, key)? {
+        if let Some(tcp_bytes) = self.insert(TCP6_ENR_KEY, &tcp, key)? {
             return Ok(u16::decode(&mut tcp_bytes.as_ref()).ok());
         }
         Ok(None)
+    }
+
+    /// Unsets the `tcp6` field on the ENR
+    pub fn remove_tcp6(&mut self, key: &K) -> Result<(), Error> {
+        self.remove_key(TCP6_ENR_KEY, key)
     }
 
     /// Sets the IP and UDP port in a single update with a single increment in sequence number.
@@ -625,17 +654,49 @@ impl<K: EnrKey> Enr<K> {
         self.set_socket(socket, key, false)
     }
 
+    /// Unsets the `ip` and `udp` fields on the ENR.
+    pub fn remove_udp_socket(&mut self, key: &K) -> Result<(), Error> {
+        let keys_to_remove = [IP_ENR_KEY, UDP_ENR_KEY].iter();
+        let keys_to_insert = std::iter::empty::<(Vec<u8>, &[u8])>();
+        self.remove_insert(keys_to_remove, keys_to_insert, key)
+            .map(|_| ())
+    }
+
+    /// Unsets the `ip6` and `udp6` fields on the ENR.
+    pub fn remove_udp6_socket(&mut self, key: &K) -> Result<(), Error> {
+        let keys_to_remove = [IP6_ENR_KEY, UDP6_ENR_KEY].iter();
+        let keys_to_insert = std::iter::empty::<(Vec<u8>, &[u8])>();
+        self.remove_insert(keys_to_remove, keys_to_insert, key)
+            .map(|_| ())
+    }
+
     /// Sets the IP and TCP port in a single update with a single increment in sequence number.
     pub fn set_tcp_socket(&mut self, socket: SocketAddr, key: &K) -> Result<(), Error> {
         self.set_socket(socket, key, true)
     }
 
+    /// Unsets the `ip` and `tcp` fields on the ENR.
+    pub fn remove_tcp_socket(&mut self, key: &K) -> Result<(), Error> {
+        let keys_to_remove = [IP_ENR_KEY, TCP_ENR_KEY].iter();
+        let keys_to_insert = std::iter::empty::<(Vec<u8>, &[u8])>();
+        self.remove_insert(keys_to_remove, keys_to_insert, key)
+            .map(|_| ())
+    }
+
+    /// Unsets the `ip6` and `tcp6` fields on the ENR.
+    pub fn remove_tcp6_socket(&mut self, key: &K) -> Result<(), Error> {
+        let keys_to_remove = [IP6_ENR_KEY, TCP6_ENR_KEY].iter();
+        let keys_to_insert = std::iter::empty::<(Vec<u8>, &[u8])>();
+        self.remove_insert(keys_to_remove, keys_to_insert, key)
+            .map(|_| ())
+    }
+
     /// Helper function for `set_tcp_socket()` and `set_udp_socket`.
     fn set_socket(&mut self, socket: SocketAddr, key: &K, is_tcp: bool) -> Result<(), Error> {
         let (port_string, port_v6_string): (Key, Key) = if is_tcp {
-            ("tcp".into(), "tcp6".into())
+            (TCP_ENR_KEY.into(), TCP6_ENR_KEY.into())
         } else {
-            ("udp".into(), "udp6".into())
+            (UDP_ENR_KEY.into(), UDP6_ENR_KEY.into())
         };
 
         let (prev_ip, prev_port) = match socket.ip() {
@@ -645,7 +706,7 @@ impl<K: EnrKey> Enr<K> {
                 let mut port = BytesMut::new();
                 socket.port().encode(&mut port);
                 (
-                    self.content.insert("ip".into(), ip.freeze()),
+                    self.content.insert(IP_ENR_KEY.into(), ip.freeze()),
                     self.content.insert(port_string.clone(), port.freeze()),
                 )
             }
@@ -655,7 +716,7 @@ impl<K: EnrKey> Enr<K> {
                 let mut port = BytesMut::new();
                 socket.port().encode(&mut port);
                 (
-                    self.content.insert("ip6".into(), ip6.freeze()),
+                    self.content.insert(IP6_ENR_KEY.into(), ip6.freeze()),
                     self.content.insert(port_v6_string.clone(), port.freeze()),
                 )
             }
@@ -679,9 +740,9 @@ impl<K: EnrKey> Enr<K> {
             match socket.ip() {
                 IpAddr::V4(_) => {
                     if let Some(ip) = prev_ip {
-                        self.content.insert("ip".into(), ip);
+                        self.content.insert(IP_ENR_KEY.into(), ip);
                     } else {
-                        self.content.remove(b"ip".as_ref());
+                        self.content.remove(IP_ENR_KEY);
                     }
                     if let Some(udp) = prev_port {
                         self.content.insert(port_string, udp);
@@ -691,9 +752,9 @@ impl<K: EnrKey> Enr<K> {
                 }
                 IpAddr::V6(_) => {
                     if let Some(ip) = prev_ip {
-                        self.content.insert("ip6".into(), ip);
+                        self.content.insert(IP6_ENR_KEY.into(), ip);
                     } else {
-                        self.content.remove(b"ip6".as_ref());
+                        self.content.remove(IP6_ENR_KEY);
                     }
                     if let Some(udp) = prev_port {
                         self.content.insert(port_v6_string, udp);
@@ -717,6 +778,30 @@ impl<K: EnrKey> Enr<K> {
         // update the node id
         self.node_id = NodeId::from(key.public());
 
+        Ok(())
+    }
+
+    /// Removes a key from the ENR.
+    pub fn remove_key(&mut self, content_key: impl AsRef<[u8]>, enr_key: &K) -> Result<(), Error> {
+        self.content.remove(content_key.as_ref());
+
+        // add the new public key
+        let public_key = enr_key.public();
+        let mut pubkey = BytesMut::new();
+        public_key.encode().as_ref().encode(&mut pubkey);
+        self.content.insert(public_key.enr_key(), pubkey.freeze());
+
+        // increment the sequence number
+        self.seq = self
+            .seq
+            .checked_add(1)
+            .ok_or(Error::SequenceNumberTooHigh)?;
+
+        // sign the record
+        self.sign(enr_key)?;
+
+        // update the node id
+        self.node_id = NodeId::from(enr_key.public());
         Ok(())
     }
 
@@ -748,7 +833,7 @@ impl<K: EnrKey> Enr<K> {
         let mut inserted = Vec::new();
         for (key, value) in insert_key_values {
             // currently only support "v4" identity schemes
-            if key.as_ref() == b"id" && value != b"v4" {
+            if key.as_ref() == ID_ENR_KEY && value != ENR_VERSION {
                 *self = enr_backup;
                 return Err(Error::UnsupportedIdentityScheme);
             }
@@ -837,7 +922,7 @@ impl<K: EnrKey> Enr<K> {
     /// Compute the enr's signature with the given key.
     fn compute_signature(&self, signing_key: &K) -> Result<Vec<u8>, Error> {
         match self.id() {
-            Some(ref id) if id == "v4" => signing_key
+            Some(ref id) if id.as_bytes() == ENR_VERSION => signing_key
                 .sign_v4(&self.rlp_content())
                 .map_err(|_| Error::SigningError),
             // other identity schemes are unsupported
@@ -904,9 +989,17 @@ impl<K: EnrKey> std::fmt::Debug for Enr<K> {
                             .iter()
                             .filter(|(key, _)| {
                                 // skip all pairs already covered as fields
-                                !["id", "ip", "ip6", "udp", "udp6", "tcp", "tcp6"]
-                                    .iter()
-                                    .any(|k| k.as_bytes() == key.as_slice())
+                                ![
+                                    ID_ENR_KEY,
+                                    IP_ENR_KEY,
+                                    IP6_ENR_KEY,
+                                    UDP_ENR_KEY,
+                                    UDP6_ENR_KEY,
+                                    TCP_ENR_KEY,
+                                    TCP6_ENR_KEY,
+                                ]
+                                .iter()
+                                .any(|&k| k == key.as_slice())
                             })
                             .map(|(key, val)| (String::from_utf8_lossy(key), hex::encode(val))),
                     )
@@ -1022,15 +1115,15 @@ impl<K: EnrKey> Decodable for Enr<K> {
                     }
                     alloy_rlp::encode(id)
                 }
-                b"tcp" | b"tcp6" | b"udp" | b"udp6" => {
+                TCP_ENR_KEY | TCP6_ENR_KEY | UDP_ENR_KEY | UDP6_ENR_KEY => {
                     let port = u16::decode(payload)?;
                     alloy_rlp::encode(port)
                 }
-                b"ip" => {
+                IP_ENR_KEY => {
                     let ip = Ipv4Addr::decode(payload)?;
                     alloy_rlp::encode(ip)
                 }
-                b"ip6" => {
+                IP6_ENR_KEY => {
                     let ip6 = Ipv6Addr::decode(payload)?;
                     alloy_rlp::encode(ip6)
                 }
@@ -1109,12 +1202,12 @@ pub(crate) fn digest(b: &[u8]) -> [u8; 32] {
 }
 
 const fn is_keyof_u16(key: &[u8]) -> bool {
-    matches!(key, b"tcp" | b"tcp6" | b"udp" | b"udp6")
+    matches!(key, TCP_ENR_KEY | TCP6_ENR_KEY | UDP_ENR_KEY | UDP6_ENR_KEY)
 }
 
 fn check_spec_reserved_keys(key: &[u8], mut value: &[u8]) -> Result<(), Error> {
     match key {
-        b"tcp" | b"tcp6" | b"udp" | b"udp6" => {
+        TCP_ENR_KEY | TCP6_ENR_KEY | UDP_ENR_KEY | UDP6_ENR_KEY => {
             u16::decode(&mut value)?;
         }
         b"id" => {
@@ -1123,10 +1216,10 @@ fn check_spec_reserved_keys(key: &[u8], mut value: &[u8]) -> Result<(), Error> {
                 return Err(Error::UnsupportedIdentityScheme);
             }
         }
-        b"ip" => {
+        IP_ENR_KEY => {
             Ipv4Addr::decode(&mut value)?;
         }
-        b"ip6" => {
+        IP6_ENR_KEY => {
             Ipv6Addr::decode(&mut value)?;
         }
         b"secp256k1" => {
@@ -1769,7 +1862,11 @@ mod tests {
         let topics: &[u8] = &out;
 
         let (removed, inserted) = enr
-            .remove_insert([b"tcp"].iter(), vec![(b"topics", topics)].into_iter(), &key)
+            .remove_insert(
+                [TCP_ENR_KEY].iter(),
+                vec![(b"topics", topics)].into_iter(),
+                &key,
+            )
             .unwrap();
         let mut buffer = Vec::<u8>::new();
         tcp.encode(&mut buffer);
@@ -1833,7 +1930,7 @@ mod tests {
         for tcp in LOW_INT_PORTS {
             let mut enr = Enr::empty(&key).unwrap();
 
-            let res = enr.insert(b"tcp", &tcp.to_be_bytes().as_ref(), &key);
+            let res = enr.insert(TCP_ENR_KEY, &tcp.to_be_bytes().as_ref(), &key);
             if u8::try_from(tcp).is_ok() {
                 assert_eq!(res.unwrap_err().to_string(), "invalid rlp data");
             } else {
@@ -1852,7 +1949,7 @@ mod tests {
 
             let res = enr.remove_insert(
                 [b"none"].iter(),
-                vec![(b"tcp".as_slice(), tcp.to_be_bytes().as_slice())].into_iter(),
+                vec![(TCP_ENR_KEY, tcp.to_be_bytes().as_slice())].into_iter(),
                 &key,
             );
             if u8::try_from(tcp).is_ok() {
@@ -1911,7 +2008,7 @@ mod tests {
         let mut buffer = Vec::<u8>::new();
         tcp.encode(&mut buffer);
         assert!(enr.verify());
-        assert_eq!(enr.get_raw_rlp("tcp").unwrap(), buffer);
+        assert_eq!(enr.get_raw_rlp(TCP_ENR_KEY).unwrap(), buffer);
         assert_eq!(enr.tcp4(), Some(tcp));
     }
 
