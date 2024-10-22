@@ -48,7 +48,7 @@ impl<K: EnrKey> Builder<K> {
 
     /// Adds an arbitrary key-value to the `ENRBuilder`.
     pub fn add_value<T: Encodable>(&mut self, key: impl AsRef<[u8]>, value: &T) -> &mut Self {
-        let mut out = BytesMut::new();
+        let mut out = BytesMut::with_capacity(value.length());
         value.encode(&mut out);
         self.add_value_rlp(key, out.freeze())
     }
@@ -114,6 +114,22 @@ impl<K: EnrKey> Builder<K> {
         self
     }
 
+    /// Adds a [EIP-7636](https://eips.ethereum.org/EIPS/eip-7636) `client` field to the `ENRBuilder`.
+    pub fn client_info(
+        &mut self,
+        name: String,
+        version: String,
+        build: Option<String>,
+    ) -> &mut Self {
+        if build.is_none() {
+            self.add_value("client", &vec![name, version]);
+        } else {
+            self.add_value("client", &vec![name, version, build.unwrap()]);
+        }
+
+        self
+    }
+
     /// Generates the rlp-encoded form of the ENR specified by the builder config.
     fn rlp_content(&self) -> BytesMut {
         let mut list = Vec::<u8>::with_capacity(MAX_ENR_SIZE);
@@ -128,7 +144,7 @@ impl<K: EnrKey> Builder<K> {
             list: true,
             payload_length: list.len(),
         };
-        let mut out = BytesMut::new();
+        let mut out = BytesMut::with_capacity(header.length() + list.len());
         header.encode(&mut out);
         out.extend_from_slice(&list);
         out
@@ -165,7 +181,7 @@ impl<K: EnrKey> Builder<K> {
             Header::decode(&mut value.as_ref())?;
         }
 
-        let mut id_bytes = BytesMut::with_capacity(3);
+        let mut id_bytes = BytesMut::with_capacity(self.id.length());
         self.id.as_bytes().encode(&mut id_bytes);
         self.add_value_rlp(ID_ENR_KEY, id_bytes.freeze());
 

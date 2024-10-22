@@ -132,10 +132,9 @@
 //!
 //! ```rust
 //! # #[cfg(feature = "ed25519")] {
-//! use enr::{k256::ecdsa, Enr, ed25519_dalek as ed25519, CombinedKey};
+//! use enr::{ed25519_dalek as ed25519, k256::ecdsa, CombinedKey, Enr};
 //! use std::net::Ipv4Addr;
 //! use rand::thread_rng;
-//! use rand::Rng;
 //!
 //! // generate a random secp256k1 key
 //! let mut rng = thread_rng();
@@ -155,9 +154,9 @@
 //!
 //! // decode base64 strings of varying key types
 //! // decode the secp256k1 with default Enr
-//! let decoded_enr_secp256k1: Enr<k256::ecdsa::SigningKey> = base64_string_secp256k1.parse().unwrap();
+//! let decoded_enr_secp256k1: Enr<ecdsa::SigningKey> = base64_string_secp256k1.parse().unwrap();
 //! // decode ed25519 ENRs
-//! let decoded_enr_ed25519: Enr<ed25519_dalek::SigningKey> = base64_string_ed25519.parse().unwrap();
+//! let decoded_enr_ed25519: Enr<ed25519::SigningKey> = base64_string_ed25519.parse().unwrap();
 //!
 //! // use the combined key to be able to decode either
 //! let decoded_enr: Enr<CombinedKey> = base64_string_secp256k1.parse().unwrap();
@@ -349,6 +348,36 @@ impl<K: EnrKey> Enr<K> {
         if let Some(Ok(id_bytes)) = self.get_decodable::<Bytes>("id") {
             return Some(String::from_utf8_lossy(id_bytes.as_ref()).to_string());
         }
+        None
+    }
+
+    /// Returns [EIP-7636](https://eips.ethereum.org/EIPS/eip-7636) entry if it is defined.
+    #[must_use]
+    pub fn client_info(&self) -> Option<(String, String, Option<String>)> {
+        if let Some(Ok(client_list)) = self.get_decodable::<Vec<Bytes>>("client") {
+            match client_list.len() {
+                2 => {
+                    let client_name = String::from_utf8_lossy(client_list[0].as_ref()).to_string();
+
+                    let client_version =
+                        String::from_utf8_lossy(client_list[1].as_ref()).to_string();
+
+                    return Some((client_name, client_version, None));
+                }
+                3 => {
+                    let client_name = String::from_utf8_lossy(client_list[0].as_ref()).to_string();
+
+                    let client_version =
+                        String::from_utf8_lossy(client_list[1].as_ref()).to_string();
+
+                    let client_additional =
+                        String::from_utf8_lossy(client_list[2].as_ref()).to_string();
+                    return Some((client_name, client_version, Some(client_additional)));
+                }
+                _ => {}
+            }
+        }
+
         None
     }
 
@@ -649,6 +678,23 @@ impl<K: EnrKey> Enr<K> {
         self.remove_key(TCP6_ENR_KEY, key)
     }
 
+    /// Sets the [EIP-7636](https://eips.ethereum.org/EIPS/eip-7636) `client` field in the record.
+    pub fn set_client_info(
+        &mut self,
+        name: String,
+        version: String,
+        build: Option<String>,
+        key: &K,
+    ) -> Result<(), Error> {
+        if build.is_none() {
+            self.insert("client", &vec![name, version], key)?;
+        } else {
+            self.insert("client", &vec![name, version, build.unwrap()], key)?;
+        }
+
+        Ok(())
+    }
+
     /// Sets the IP and UDP port in a single update with a single increment in sequence number.
     pub fn set_udp_socket(&mut self, socket: SocketAddr, key: &K) -> Result<(), Error> {
         self.set_socket(socket, key, false)
@@ -872,7 +918,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Sets a new public key for the record.
     pub fn set_public_key(&mut self, public_key: &K::PublicKey, key: &K) -> Result<(), Error> {
-        self.insert(&public_key.enr_key(), &public_key.encode().as_ref(), key)
+        self.insert(public_key.enr_key(), &public_key.encode().as_ref(), key)
             .map(|_| {})
     }
 
@@ -1134,12 +1180,19 @@ impl<K: EnrKey> Decodable for Enr<K> {
                 _ => {
                     let other_header = Header::decode(payload)?;
                     let value = &payload[..other_header.payload_length];
-                    // Preserve the valid encoding
                     payload.advance(other_header.payload_length);
-                    let mut out = Vec::<u8>::new();
-                    other_header.encode(&mut out);
-                    out.extend_from_slice(value);
-                    out
+
+                    // Encode the header for list values, for non-list objects, we remove the
+                    // header for compatibility with commonly used key entries (i.e it's the
+                    // current convention).
+                    if other_header.list {
+                        let mut out = Vec::<u8>::new();
+                        other_header.encode(&mut out);
+                        out.extend_from_slice(value);
+                        out
+                    } else {
+                        alloy_rlp::encode(value)
+                    }
                 }
             };
             content.insert(key.to_vec(), Bytes::from(value));
@@ -2057,5 +2110,91 @@ mod tests {
 
         record.set_seq(30, &key).unwrap();
         assert_eq!(record.seq(), 30);
+    }
+
+    #[test]
+    fn test_set_client_eip7636() {
+        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+        let mut enr = Enr::empty(&key).unwrap();
+
+        enr.set_client_info(
+            "Test".to_string(),
+            "v1.0.0".to_string(),
+            Some("Test".to_string()),
+            &key,
+        )
+        .unwrap();
+        assert!(enr.verify());
+
+        enr.set_client_info("Test".to_string(), "v1.0.0".to_string(), None, &key)
+            .unwrap();
+        assert!(enr.verify());
+    }
+
+    #[test]
+    fn test_get_eip7636() {
+        let example_eip = "enr:-MO4QBn4OF-y-dqULg4WOIlc8gQAt-arldNFe0_YQ4HNX28jDtg41xjDyKfCXGfZaPN97I-MCfogeK91TyqmWTpb0_AChmNsaWVudNqKTmV0aGVybWluZIYxLjkuNTOHN2ZjYjU2N4JpZIJ2NIJpcIR_AAABg2lwNpAAAAAAAAAAAAAAAAAAAAABiXNlY3AyNTZrMaECn-TTdCwfZP4XgJyq8Lxoj-SgEoIFgDLVBEUqQk4HnAqDdWRwgiMshHVkcDaCIyw";
+        let enr = example_eip.parse::<DefaultEnr>().unwrap();
+
+        let info = enr.client_info().unwrap();
+
+        assert_eq!(info.0, "Nethermind");
+        assert_eq!(info.1, "1.9.53");
+        assert_eq!(info.2.unwrap(), "7fcb567");
+
+        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+        let mut enr = Enr::empty(&key).unwrap();
+
+        enr.set_client_info("Test".to_string(), "v1.0.0".to_string(), None, &key)
+            .unwrap();
+
+        let info = enr.client_info().unwrap();
+        assert_eq!(info.0, "Test");
+        assert_eq!(info.1, "v1.0.0");
+        assert_eq!(info.2, None);
+    }
+
+    #[test]
+    fn test_builder_eip7636() {
+        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+        let enr = Enr::builder()
+            .ip4(Ipv4Addr::new(127, 0, 0, 1))
+            .tcp4(30303)
+            .client_info(
+                "Test".to_string(),
+                "v1.0.0".to_string(),
+                Some("Test".to_string()),
+            )
+            .build(&key)
+            .unwrap();
+
+        let info = enr.client_info().unwrap();
+        assert_eq!(info.0, "Test");
+        assert_eq!(info.1, "v1.0.0");
+        assert_eq!(info.2.unwrap(), "Test");
+
+        let enr = Enr::builder()
+            .ip4(Ipv4Addr::new(127, 0, 0, 1))
+            .tcp4(30303)
+            .client_info("Test".to_string(), "v1.0.0".to_string(), None)
+            .build(&key)
+            .unwrap();
+
+        let info = enr.client_info().unwrap();
+        assert_eq!(info.0, "Test");
+        assert_eq!(info.1, "v1.0.0");
+        assert_eq!(info.2, None);
+    }
+    /// Tests a common ENR which uses RLP encoded values without the header
+    #[test]
+    fn test_common_rlp_convention() {
+        const COMMON_VALID_ENR: &str = concat!(
+            "-LW4QCAyOCtqvQjd8AgpqbaCgfjy8oN8cBBRT5jtzarkGJQWZx1eN70EM0QafVCugLa-Bv493DPNzflagqfTOsWSF78Ih2F0d",
+            "G5ldHOIAGAAAAAAAACEZXRoMpBqlaGpBAAAAP__________gmlkgnY0hHF1aWOCIymJc2VjcDI1NmsxoQPg_HgqXzwRIK39Oy",
+            "lGdC30YUFwsfXvATnGUvEZ6MtBQIhzeW5jbmV0cwCDdGNwgiMo"
+        );
+
+        // Expect this to be able to be decoded
+        let _decoded: DefaultEnr = COMMON_VALID_ENR.parse().unwrap();
     }
 }
