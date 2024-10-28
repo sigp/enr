@@ -673,7 +673,7 @@ impl<K: EnrKey> Enr<K> {
         Ok(None)
     }
 
-    /// Unsets the `tcp6` field on the ENR
+    /// Unsets the `tcp6` field on the ENR.
     pub fn remove_tcp6(&mut self, key: &K) -> Result<(), Error> {
         self.remove_key(TCP6_ENR_KEY, key)
     }
