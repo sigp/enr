@@ -31,7 +31,7 @@ impl<K: EnrKey> Default for Builder<K> {
     /// Constructs a minimal [`Builder`] for the v4 identity scheme.
     fn default() -> Self {
         Self {
-            id: String::from_utf8(ENR_VERSION.into()).expect("A valid constant"),
+            id: String::from_utf8_unchecked(ENR_VERSION.into()),
             seq: 1,
             content: BTreeMap::new(),
             phantom: PhantomData,
