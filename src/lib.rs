@@ -831,7 +831,7 @@ impl<K: EnrKey> Enr<K> {
     pub fn remove_key(&mut self, content_key: impl AsRef<[u8]>, enr_key: &K) -> Result<(), Error> {
         self.content.remove(content_key.as_ref());
 
-        // add the new public key
+        // add the new public key.
         let public_key = enr_key.public();
         let mut pubkey = BytesMut::new();
         public_key.encode().as_ref().encode(&mut pubkey);
