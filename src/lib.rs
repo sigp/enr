@@ -739,6 +739,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Helper function for `set_tcp_socket()` and `set_udp_socket`.
     fn set_socket(&mut self, socket: SocketAddr, key: &K, is_tcp: bool) -> Result<(), Error> {
+        let enr_backup = self.clone();
         let (port_string, port_v6_string): (Key, Key) = if is_tcp {
             (TCP_ENR_KEY.into(), TCP6_ENR_KEY.into())
         } else {
@@ -813,10 +814,13 @@ impl<K: EnrKey> Enr<K> {
         }
 
         // increment the sequence number
-        self.seq = self
-            .seq
-            .checked_add(1)
-            .ok_or(Error::SequenceNumberTooHigh)?;
+        match self.seq.checked_add(1) {
+            Some(seq_no) => self.seq = seq_no,
+            None => {
+                *self = enr_backup;
+                return Err(Error::SequenceNumberTooHigh);
+            }
+        }
 
         // sign the record
         self.sign(key)?;
@@ -829,6 +833,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Removes a key from the ENR.
     pub fn remove_key(&mut self, content_key: impl AsRef<[u8]>, enr_key: &K) -> Result<(), Error> {
+        let enr_backup = self.clone();
         self.content.remove(content_key.as_ref());
 
         // add the new public key.
@@ -838,10 +843,13 @@ impl<K: EnrKey> Enr<K> {
         self.content.insert(public_key.enr_key(), pubkey.freeze());
 
         // increment the sequence number
-        self.seq = self
-            .seq
-            .checked_add(1)
-            .ok_or(Error::SequenceNumberTooHigh)?;
+        match self.seq.checked_add(1) {
+            Some(seq_no) => self.seq = seq_no,
+            None => {
+                *self = enr_backup;
+                return Err(Error::SequenceNumberTooHigh);
+            }
+        }
 
         // sign the record
         self.sign(enr_key)?;
@@ -888,17 +896,23 @@ impl<K: EnrKey> Enr<K> {
             let value = out.freeze();
             // Prevent inserting invalid RLP integers
             if is_keyof_u16(key.as_ref()) {
-                u16::decode(&mut value.as_ref())?;
+                if let Err(err) = u16::decode(&mut value.as_ref()) {
+                    *self = enr_backup;
+                    return Err(err.into());
+                }
             }
 
             inserted.push(self.content.insert(key.as_ref().to_vec(), value));
         }
 
         // increment the sequence number
-        self.seq = self
-            .seq
-            .checked_add(1)
-            .ok_or(Error::SequenceNumberTooHigh)?;
+        match self.seq.checked_add(1) {
+            Some(seq_no) => self.seq = seq_no,
+            None => {
+                *self = enr_backup;
+                return Err(Error::SequenceNumberTooHigh);
+            }
+        }
 
         // sign the record
         self.sign(enr_key)?;
