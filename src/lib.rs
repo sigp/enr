@@ -647,7 +647,7 @@ impl<K: EnrKey> Enr<K> {
         Ok(None)
     }
 
-    /// Unsets the udp6 field on the ENR
+    /// Unsets the udp6 field on the ENR.
     pub fn remove_udp6(&mut self, key: &K) -> Result<(), Error> {
         self.remove_key(UDP6_ENR_KEY, key)
     }
