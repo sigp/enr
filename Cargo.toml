@@ -29,7 +29,7 @@ secp256k1 = { version = "0.30", optional = true, default-features = false, featu
 
 [dev-dependencies]
 alloy-rlp = { version = "0.3", features = ["derive"] }
-secp256k1 = { version = "0.30" }
+secp256k1 = { version = "0.30", features = ["rand"] }
 serde_json = "1.0"
 
 [features]
