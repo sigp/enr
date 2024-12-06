@@ -172,6 +172,7 @@
 //! [`insert`]: struct.Enr.html#method.insert
 //! [`get`]: struct.Enr.html#method.get
 
+#![cfg_attr(not(feature = "std"), no_std)]
 #![warn(clippy::all, rustdoc::all)]
 #![allow(
     clippy::map_err_ignore,
@@ -180,28 +181,34 @@
     clippy::option_if_let_else
 )]
 
+extern crate alloc;
+
 mod builder;
 mod error;
 mod keys;
 mod node_id;
 use alloy_rlp::{Decodable, Encodable, Error as DecoderError, Header};
 use bytes::{Buf, Bytes, BytesMut};
-use std::{
-    collections::BTreeMap,
+use core::{
     hash::{Hash, Hasher},
     net::{SocketAddrV4, SocketAddrV6},
 };
 
+use alloc::collections::BTreeMap;
+use alloc::format;
+use alloc::string::String;
+use alloc::string::ToString;
+use alloc::vec;
+use alloc::vec::Vec;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
-#[cfg(feature = "serde")]
-use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
-use sha3::{Digest, Keccak256};
-use std::{
+use core::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
     str::FromStr,
 };
-
 pub use error::Error;
+#[cfg(feature = "serde")]
+use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
+use sha3::{Digest, Keccak256};
 
 #[cfg(feature = "k256")]
 pub use keys::k256;
@@ -211,9 +218,9 @@ pub use keys::secp256k1;
 pub use keys::{ed25519_dalek, CombinedKey, CombinedPublicKey};
 
 pub use builder::Builder;
+use core::marker::PhantomData;
 pub use keys::{EnrKey, EnrKeyUnambiguous, EnrPublicKey};
 pub use node_id::NodeId;
-use std::marker::PhantomData;
 
 /// The "key" in an ENR record can be arbitrary bytes.
 type Key = Vec<u8>;
@@ -703,7 +710,7 @@ impl<K: EnrKey> Enr<K> {
     /// Unsets the `ip` and `udp` fields on the ENR.
     pub fn remove_udp_socket(&mut self, key: &K) -> Result<(), Error> {
         let keys_to_remove = [IP_ENR_KEY, UDP_ENR_KEY].iter();
-        let keys_to_insert = std::iter::empty::<(Vec<u8>, &[u8])>();
+        let keys_to_insert = core::iter::empty::<(Vec<u8>, &[u8])>();
         self.remove_insert(keys_to_remove, keys_to_insert, key)
             .map(|_| ())
     }
@@ -711,7 +718,7 @@ impl<K: EnrKey> Enr<K> {
     /// Unsets the `ip6` and `udp6` fields on the ENR.
     pub fn remove_udp6_socket(&mut self, key: &K) -> Result<(), Error> {
         let keys_to_remove = [IP6_ENR_KEY, UDP6_ENR_KEY].iter();
-        let keys_to_insert = std::iter::empty::<(Vec<u8>, &[u8])>();
+        let keys_to_insert = core::iter::empty::<(Vec<u8>, &[u8])>();
         self.remove_insert(keys_to_remove, keys_to_insert, key)
             .map(|_| ())
     }
@@ -724,7 +731,7 @@ impl<K: EnrKey> Enr<K> {
     /// Unsets the `ip` and `tcp` fields on the ENR.
     pub fn remove_tcp_socket(&mut self, key: &K) -> Result<(), Error> {
         let keys_to_remove = [IP_ENR_KEY, TCP_ENR_KEY].iter();
-        let keys_to_insert = std::iter::empty::<(Vec<u8>, &[u8])>();
+        let keys_to_insert = core::iter::empty::<(Vec<u8>, &[u8])>();
         self.remove_insert(keys_to_remove, keys_to_insert, key)
             .map(|_| ())
     }
@@ -732,7 +739,7 @@ impl<K: EnrKey> Enr<K> {
     /// Unsets the `ip6` and `tcp6` fields on the ENR.
     pub fn remove_tcp6_socket(&mut self, key: &K) -> Result<(), Error> {
         let keys_to_remove = [IP6_ENR_KEY, TCP6_ENR_KEY].iter();
-        let keys_to_insert = std::iter::empty::<(Vec<u8>, &[u8])>();
+        let keys_to_insert = core::iter::empty::<(Vec<u8>, &[u8])>();
         self.remove_insert(keys_to_remove, keys_to_insert, key)
             .map(|_| ())
     }
@@ -970,7 +977,7 @@ impl<K: EnrKey> Enr<K> {
     /// The previous signature is returned.
     fn sign(&mut self, key: &K) -> Result<Vec<u8>, Error> {
         let new_signature = self.compute_signature(key)?;
-        Ok(std::mem::replace(&mut self.signature, new_signature))
+        Ok(core::mem::replace(&mut self.signature, new_signature))
     }
 }
 
@@ -988,7 +995,7 @@ impl<K: EnrKey> Clone for Enr<K> {
     }
 }
 
-impl<K: EnrKey> std::cmp::Eq for Enr<K> {}
+impl<K: EnrKey> core::cmp::Eq for Enr<K> {}
 
 impl<K: EnrKey> PartialEq for Enr<K> {
     fn eq(&self, other: &Self) -> bool {
@@ -1006,19 +1013,19 @@ impl<K: EnrKey> Hash for Enr<K> {
     }
 }
 
-impl<K: EnrKey> std::fmt::Display for Enr<K> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl<K: EnrKey> core::fmt::Display for Enr<K> {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(f, "{}", self.to_base64())
     }
 }
 
 #[allow(clippy::missing_fields_in_debug)]
-impl<K: EnrKey> std::fmt::Debug for Enr<K> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl<K: EnrKey> core::fmt::Debug for Enr<K> {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         struct OtherPairs<'a>(&'a BTreeMap<Key, Bytes>);
 
-        impl<'a> std::fmt::Debug for OtherPairs<'a> {
-            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        impl<'a> core::fmt::Debug for OtherPairs<'a> {
+            fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
                 f.debug_list()
                     .entries(
                         self.0
@@ -2061,7 +2068,7 @@ mod tests {
         let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
 
         let mut huge_enr = Enr::empty(&key).unwrap();
-        let large_vec: Vec<u8> = std::iter::repeat(0).take(MAX_ENR_SIZE).collect();
+        let large_vec: Vec<u8> = core::iter::repeat(0).take(MAX_ENR_SIZE).collect();
         let large_vec_encoded = alloy_rlp::encode(large_vec);
 
         huge_enr
