@@ -29,12 +29,13 @@ impl NodeId {
         }
 
         let mut raw: RawNodeId = [0_u8; 32];
-        raw[..std::cmp::min(32, raw_input.len())].copy_from_slice(raw_input);
+        raw[..core::cmp::min(32, raw_input.len())].copy_from_slice(raw_input);
 
         Ok(Self { raw })
     }
 
     /// Generates a random `NodeId`.
+    #[cfg(feature = "rand")]
     #[must_use]
     pub fn random() -> Self {
         Self {
@@ -86,8 +87,8 @@ impl From<RawNodeId> for NodeId {
     }
 }
 
-impl std::fmt::Display for NodeId {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl core::fmt::Display for NodeId {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         let hex_encode = hex::encode(self.raw);
         write!(
             f,
@@ -98,8 +99,8 @@ impl std::fmt::Display for NodeId {
     }
 }
 
-impl std::fmt::Debug for NodeId {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl core::fmt::Debug for NodeId {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(f, "0x{}", hex::encode(self.raw))
     }
 }
@@ -121,7 +122,7 @@ mod serde_hex_prfx {
     where
         D: serde::Deserializer<'de>,
         T: hex::FromHex,
-        <T as hex::FromHex>::Error: std::fmt::Display,
+        <T as hex::FromHex>::Error: core::fmt::Display,
     {
         /// Helper struct to obtain a owned string when necessary (using [`serde_json`], for
         /// example) or a borrowed string with the appropriate lifetime (most the time).
