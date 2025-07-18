@@ -353,6 +353,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Returns [EIP-7636](https://eips.ethereum.org/EIPS/eip-7636) entry if it is defined.
     #[must_use]
+    #[deprecated(note="EIP-7636 has been withdrawn, as such, this may be removed soon.")]
     pub fn client_info(&self) -> Option<(String, String, Option<String>)> {
         if let Some(Ok(client_list)) = self.get_decodable::<Vec<Bytes>>("client") {
             match client_list.len() {
@@ -678,7 +679,8 @@ impl<K: EnrKey> Enr<K> {
         self.remove_key(TCP6_ENR_KEY, key)
     }
 
-    /// Sets the [EIP-7636](https://eips.ethereum.org/EIPS/eip-7636) `client` field in the record.
+    /// Sets the [EIP-7636](https://eips.ethereum.org/EIPS/eip-7636) `client` field in the record. 
+    #[deprecated(note="EIP-7636 has been withdrawn, as such, this may be removed soon.")]
     pub fn set_client_info(
         &mut self,
         name: String,
@@ -2102,79 +2104,79 @@ mod tests {
         assert_eq!(record.seq(), 30);
     }
 
-    #[test]
-    fn test_set_client_eip7636() {
-        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
-        let mut enr = Enr::empty(&key).unwrap();
-
-        enr.set_client_info(
-            "Test".to_string(),
-            "v1.0.0".to_string(),
-            Some("Test".to_string()),
-            &key,
-        )
-        .unwrap();
-        assert!(enr.verify());
-
-        enr.set_client_info("Test".to_string(), "v1.0.0".to_string(), None, &key)
-            .unwrap();
-        assert!(enr.verify());
-    }
-
-    #[test]
-    fn test_get_eip7636() {
-        let example_eip = "enr:-MO4QBn4OF-y-dqULg4WOIlc8gQAt-arldNFe0_YQ4HNX28jDtg41xjDyKfCXGfZaPN97I-MCfogeK91TyqmWTpb0_AChmNsaWVudNqKTmV0aGVybWluZIYxLjkuNTOHN2ZjYjU2N4JpZIJ2NIJpcIR_AAABg2lwNpAAAAAAAAAAAAAAAAAAAAABiXNlY3AyNTZrMaECn-TTdCwfZP4XgJyq8Lxoj-SgEoIFgDLVBEUqQk4HnAqDdWRwgiMshHVkcDaCIyw";
-        let enr = example_eip.parse::<DefaultEnr>().unwrap();
-
-        let info = enr.client_info().unwrap();
-
-        assert_eq!(info.0, "Nethermind");
-        assert_eq!(info.1, "1.9.53");
-        assert_eq!(info.2.unwrap(), "7fcb567");
-
-        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
-        let mut enr = Enr::empty(&key).unwrap();
-
-        enr.set_client_info("Test".to_string(), "v1.0.0".to_string(), None, &key)
-            .unwrap();
-
-        let info = enr.client_info().unwrap();
-        assert_eq!(info.0, "Test");
-        assert_eq!(info.1, "v1.0.0");
-        assert_eq!(info.2, None);
-    }
-
-    #[test]
-    fn test_builder_eip7636() {
-        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
-        let enr = Enr::builder()
-            .ip4(Ipv4Addr::new(127, 0, 0, 1))
-            .tcp4(30303)
-            .client_info(
-                "Test".to_string(),
-                "v1.0.0".to_string(),
-                Some("Test".to_string()),
-            )
-            .build(&key)
-            .unwrap();
-
-        let info = enr.client_info().unwrap();
-        assert_eq!(info.0, "Test");
-        assert_eq!(info.1, "v1.0.0");
-        assert_eq!(info.2.unwrap(), "Test");
-
-        let enr = Enr::builder()
-            .ip4(Ipv4Addr::new(127, 0, 0, 1))
-            .tcp4(30303)
-            .client_info("Test".to_string(), "v1.0.0".to_string(), None)
-            .build(&key)
-            .unwrap();
-
-        let info = enr.client_info().unwrap();
-        assert_eq!(info.0, "Test");
-        assert_eq!(info.1, "v1.0.0");
-        assert_eq!(info.2, None);
-    }
+    // #[test]
+    // fn test_set_client_eip7636() {
+    //     let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+    //     let mut enr = Enr::empty(&key).unwrap();
+    //
+    //     enr.set_client_info(
+    //         "Test".to_string(),
+    //         "v1.0.0".to_string(),
+    //         Some("Test".to_string()),
+    //         &key,
+    //     )
+    //     .unwrap();
+    //     assert!(enr.verify());
+    //
+    //     enr.set_client_info("Test".to_string(), "v1.0.0".to_string(), None, &key)
+    //         .unwrap();
+    //     assert!(enr.verify());
+    // }
+    //
+    // #[test]
+    // fn test_get_eip7636() {
+    //     let example_eip = "enr:-MO4QBn4OF-y-dqULg4WOIlc8gQAt-arldNFe0_YQ4HNX28jDtg41xjDyKfCXGfZaPN97I-MCfogeK91TyqmWTpb0_AChmNsaWVudNqKTmV0aGVybWluZIYxLjkuNTOHN2ZjYjU2N4JpZIJ2NIJpcIR_AAABg2lwNpAAAAAAAAAAAAAAAAAAAAABiXNlY3AyNTZrMaECn-TTdCwfZP4XgJyq8Lxoj-SgEoIFgDLVBEUqQk4HnAqDdWRwgiMshHVkcDaCIyw";
+    //     let enr = example_eip.parse::<DefaultEnr>().unwrap();
+    //
+    //     let info = enr.client_info().unwrap();
+    //
+    //     assert_eq!(info.0, "Nethermind");
+    //     assert_eq!(info.1, "1.9.53");
+    //     assert_eq!(info.2.unwrap(), "7fcb567");
+    //
+    //     let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+    //     let mut enr = Enr::empty(&key).unwrap();
+    //
+    //     enr.set_client_info("Test".to_string(), "v1.0.0".to_string(), None, &key)
+    //         .unwrap();
+    //
+    //     let info = enr.client_info().unwrap();
+    //     assert_eq!(info.0, "Test");
+    //     assert_eq!(info.1, "v1.0.0");
+    //     assert_eq!(info.2, None);
+    // }
+    //
+    // #[test]
+    // fn test_builder_eip7636() {
+    //     let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+    //     let enr = Enr::builder()
+    //         .ip4(Ipv4Addr::new(127, 0, 0, 1))
+    //         .tcp4(30303)
+    //         .client_info(
+    //             "Test".to_string(),
+    //             "v1.0.0".to_string(),
+    //             Some("Test".to_string()),
+    //         )
+    //         .build(&key)
+    //         .unwrap();
+    //
+    //     let info = enr.client_info().unwrap();
+    //     assert_eq!(info.0, "Test");
+    //     assert_eq!(info.1, "v1.0.0");
+    //     assert_eq!(info.2.unwrap(), "Test");
+    //
+    //     let enr = Enr::builder()
+    //         .ip4(Ipv4Addr::new(127, 0, 0, 1))
+    //         .tcp4(30303)
+    //         .client_info("Test".to_string(), "v1.0.0".to_string(), None)
+    //         .build(&key)
+    //         .unwrap();
+    //
+    //     let info = enr.client_info().unwrap();
+    //     assert_eq!(info.0, "Test");
+    //     assert_eq!(info.1, "v1.0.0");
+    //     assert_eq!(info.2, None);
+    // }
     /// Tests a common ENR which uses RLP encoded values without the header
     #[test]
     fn test_common_rlp_convention() {
