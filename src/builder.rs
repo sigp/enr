@@ -115,7 +115,7 @@ impl<K: EnrKey> Builder<K> {
     }
 
     /// Adds a [EIP-7636](https://eips.ethereum.org/EIPS/eip-7636) `client` field to the `ENRBuilder`.
-    #[deprecated(note="EIP-7636 has been withdrawn, as such, this may be removed soon.")]
+    #[deprecated(note = "EIP-7636 has been withdrawn, as such, this may be removed soon.")]
     pub fn client_info(
         &mut self,
         name: String,
