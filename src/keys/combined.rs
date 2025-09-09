@@ -67,14 +67,14 @@ impl CombinedKey {
     /// Generates a new secp256k1 key.
     #[must_use]
     pub fn generate_secp256k1() -> Self {
-        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+        let key = k256::ecdsa::SigningKey::random(&mut rand::rng());
         Self::Secp256k1(key)
     }
 
     /// Generates a new ed25510 key.
     #[must_use]
     pub fn generate_ed25519() -> Self {
-        Self::Ed25519(ed25519::SigningKey::generate(&mut rand::thread_rng()))
+        Self::Ed25519(ed25519::SigningKey::generate(&mut rand::rng()))
     }
 
     /// Imports a secp256k1 from raw bytes in any format.
