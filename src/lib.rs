@@ -1401,7 +1401,7 @@ mod tests {
 
     #[test]
     fn test_encode_decode_list_value() {
-        let key = k256::ecdsa::SigningKey::random(&mut rand::rngs::OsRng);
+        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
         let ip = Ipv4Addr::new(127, 0, 0, 1);
         let tcp = 3000;
         let list_value = GenericListValue::gen_random();
@@ -1437,7 +1437,7 @@ mod tests {
 
     #[test]
     fn test_encode_decode_double_list_value() {
-        let key = k256::ecdsa::SigningKey::random(&mut rand::rngs::OsRng);
+        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
         let ip = Ipv4Addr::new(127, 0, 0, 1);
         let tcp = 3000;
         let list_value = DoubleListValue::gen_random();
@@ -1697,7 +1697,7 @@ mod tests {
     #[cfg(feature = "k256")]
     #[test]
     fn test_encode_decode_k256() {
-        let key = k256::ecdsa::SigningKey::random(&mut rand::rngs::OsRng);
+        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
         let ip = Ipv4Addr::new(127, 0, 0, 1);
         let tcp = 3000;
 
