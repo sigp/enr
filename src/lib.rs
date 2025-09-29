@@ -1036,8 +1036,7 @@ impl<K: EnrKey> std::fmt::Debug for Enr<K> {
                                     TCP_ENR_KEY,
                                     TCP6_ENR_KEY,
                                 ]
-                                .iter()
-                                .any(|&k| k == key.as_slice())
+                                .contains(&key.as_slice())
                             })
                             .map(|(key, val)| (String::from_utf8_lossy(key), hex::encode(val))),
                     )
@@ -2063,7 +2062,7 @@ mod tests {
         let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
 
         let mut huge_enr = Enr::empty(&key).unwrap();
-        let large_vec: Vec<u8> = std::iter::repeat(0).take(MAX_ENR_SIZE).collect();
+        let large_vec: Vec<u8> = std::iter::repeat_n(0, MAX_ENR_SIZE).collect();
         let large_vec_encoded = alloy_rlp::encode(large_vec);
 
         huge_enr
