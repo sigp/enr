@@ -23,14 +23,16 @@ pub use k256;
 #[cfg(feature = "rust-secp256k1")]
 pub use secp256k1;
 
+use crate::alloc::string::ToString;
 use crate::Key;
+use alloc::boxed::Box;
+use alloc::collections::BTreeMap;
+use alloc::string::String;
+use alloc::vec::Vec;
 use alloy_rlp::Error as DecoderError;
 use bytes::Bytes;
-use std::{
-    collections::BTreeMap,
-    error::Error,
-    fmt::{self, Debug, Display},
-};
+use core::error::Error;
+use core::fmt::{self, Debug, Display};
 
 /// The trait required for a key to sign and modify an ENR record.
 pub trait EnrKey: Send + Sync + Unpin + 'static {

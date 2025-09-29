@@ -12,14 +12,14 @@ license = "MIT"
 exclude = [".gitignore", ".github/*"]
 
 [dependencies]
-alloy-rlp = "0.3.9"
-base64 = "0.22"
-bytes = "1"
-hex = "0.4"
-log = "0.4"
-rand = "0.8"
-zeroize = "1.8"
-sha3 = "0.10"
+alloy-rlp = { version = "0.3.9", default-features = false }
+base64 = { version ="0.22", default-features = false }
+bytes = { version = "1", default-features = false }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
+log = { version = "0.4", default-features = false }
+rand = { version = "0.8", optional = true }
+zeroize = { version = "1.8", default-features = false }
+sha3 = { version = "0.10", default-features = false }
 k256 = { version = "0.13", features = ["ecdsa"], optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 ed25519-dalek = { version = "2.1", optional = true, features = ["rand_core"] }
@@ -28,17 +28,30 @@ secp256k1 = { version = "0.30", optional = true, default-features = false, featu
 ] }
 
 [dev-dependencies]
+rand = "0.8"
 alloy-rlp = { version = "0.3", features = ["derive"] }
 secp256k1 = { version = "0.30", features = ["rand"] }
 serde_json = "1.0"
 
 [features]
-default = ["serde", "k256"]
-serde = ["dep:serde"]
-k256 = ["dep:k256"]
+default = ["std", "serde", "k256"]
+std = ["alloy-rlp/std", "bytes/std" ,"base64/std", "hex/std", "log/std", "sha3/std", "zeroize/std"]
+serde = [
+	"dep:serde",
+	"bytes/serde",
+	"ed25519-dalek?/serde",
+	"hex/serde",
+	"k256?/serde",
+	"log/serde",
+	"rand?/serde",
+	"secp256k1?/serde",
+	"zeroize/serde"
+]
+k256 = ["dep:k256", "rand"]
 ed25519 = ["dep:ed25519-dalek"]
 secp256k1 = ["rust-secp256k1"]
 rust-secp256k1 = ["dep:secp256k1"]
+rand = ["dep:rand"]
 
 [lib]
 name = "enr"

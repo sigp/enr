@@ -1,6 +1,6 @@
 //! The error type emitted for various ENR operations.
 
-use std::fmt;
+use core::fmt;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 /// An error type for handling various ENR operations.
@@ -35,8 +35,8 @@ impl fmt::Display for Error {
     }
 }
 
-impl std::error::Error for Error {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+impl core::error::Error for Error {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
             Error::ExceedsMaxSize
             | Error::SequenceNumberTooHigh

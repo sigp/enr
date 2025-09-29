@@ -3,10 +3,13 @@ use crate::{
     ENR_VERSION, ID_ENR_KEY, IP6_ENR_KEY, IP_ENR_KEY, TCP6_ENR_KEY, TCP_ENR_KEY, UDP6_ENR_KEY,
     UDP_ENR_KEY,
 };
+use alloc::collections::BTreeMap;
+use alloc::string::String;
+use alloc::vec;
+use alloc::vec::Vec;
 use alloy_rlp::{Encodable, Header};
 use bytes::{Bytes, BytesMut};
-use std::{
-    collections::BTreeMap,
+use core::{
     marker::PhantomData,
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
 };
