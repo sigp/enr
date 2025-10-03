@@ -105,8 +105,4 @@ impl RngCore for MockOsRng {
         debug_assert_eq!(dest.len(), MOCK_ECDSA_NONCE_ADDITIONAL_DATA.len());
         dest.copy_from_slice(&MOCK_ECDSA_NONCE_ADDITIONAL_DATA);
     }
-
-    fn try_fill_bytes(&mut self, _dest: &mut [u8]) -> Result<(), rand::Error> {
-        unimplemented!();
-    }
 }
