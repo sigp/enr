@@ -353,6 +353,7 @@ impl<K: EnrKey> Enr<K> {
 
     /// Returns [EIP-7636](https://eips.ethereum.org/EIPS/eip-7636) entry if it is defined.
     #[must_use]
+    #[deprecated(note = "EIP-7636 has been withdrawn, as such, this may be removed soon.")]
     pub fn client_info(&self) -> Option<(String, String, Option<String>)> {
         if let Some(Ok(client_list)) = self.get_decodable::<Vec<Bytes>>("client") {
             match client_list.len() {
@@ -679,6 +680,7 @@ impl<K: EnrKey> Enr<K> {
     }
 
     /// Sets the [EIP-7636](https://eips.ethereum.org/EIPS/eip-7636) `client` field in the record.
+    #[deprecated(note = "EIP-7636 has been withdrawn, as such, this may be removed soon.")]
     pub fn set_client_info(
         &mut self,
         name: String,
@@ -1034,8 +1036,7 @@ impl<K: EnrKey> std::fmt::Debug for Enr<K> {
                                     TCP_ENR_KEY,
                                     TCP6_ENR_KEY,
                                 ]
-                                .iter()
-                                .any(|&k| k == key.as_slice())
+                                .contains(&key.as_slice())
                             })
                             .map(|(key, val)| (String::from_utf8_lossy(key), hex::encode(val))),
                     )
@@ -2061,7 +2062,7 @@ mod tests {
         let key = k256::ecdsa::SigningKey::random(&mut rand::rng());
 
         let mut huge_enr = Enr::empty(&key).unwrap();
-        let large_vec: Vec<u8> = std::iter::repeat(0).take(MAX_ENR_SIZE).collect();
+        let large_vec: Vec<u8> = std::iter::repeat_n(0, MAX_ENR_SIZE).collect();
         let large_vec_encoded = alloy_rlp::encode(large_vec);
 
         huge_enr
@@ -2107,6 +2108,7 @@ mod tests {
         let key = k256::ecdsa::SigningKey::random(&mut rand::rng());
         let mut enr = Enr::empty(&key).unwrap();
 
+        #[allow(deprecated)]
         enr.set_client_info(
             "Test".to_string(),
             "v1.0.0".to_string(),
@@ -2116,6 +2118,7 @@ mod tests {
         .unwrap();
         assert!(enr.verify());
 
+        #[allow(deprecated)]
         enr.set_client_info("Test".to_string(), "v1.0.0".to_string(), None, &key)
             .unwrap();
         assert!(enr.verify());
@@ -2126,6 +2129,7 @@ mod tests {
         let example_eip = "enr:-MO4QBn4OF-y-dqULg4WOIlc8gQAt-arldNFe0_YQ4HNX28jDtg41xjDyKfCXGfZaPN97I-MCfogeK91TyqmWTpb0_AChmNsaWVudNqKTmV0aGVybWluZIYxLjkuNTOHN2ZjYjU2N4JpZIJ2NIJpcIR_AAABg2lwNpAAAAAAAAAAAAAAAAAAAAABiXNlY3AyNTZrMaECn-TTdCwfZP4XgJyq8Lxoj-SgEoIFgDLVBEUqQk4HnAqDdWRwgiMshHVkcDaCIyw";
         let enr = example_eip.parse::<DefaultEnr>().unwrap();
 
+        #[allow(deprecated)]
         let info = enr.client_info().unwrap();
 
         assert_eq!(info.0, "Nethermind");
@@ -2135,9 +2139,11 @@ mod tests {
         let key = k256::ecdsa::SigningKey::random(&mut rand::rng());
         let mut enr = Enr::empty(&key).unwrap();
 
+        #[allow(deprecated)]
         enr.set_client_info("Test".to_string(), "v1.0.0".to_string(), None, &key)
             .unwrap();
 
+        #[allow(deprecated)]
         let info = enr.client_info().unwrap();
         assert_eq!(info.0, "Test");
         assert_eq!(info.1, "v1.0.0");
@@ -2147,6 +2153,8 @@ mod tests {
     #[test]
     fn test_builder_eip7636() {
         let key = k256::ecdsa::SigningKey::random(&mut rand::rng());
+
+        #[allow(deprecated)]
         let enr = Enr::builder()
             .ip4(Ipv4Addr::new(127, 0, 0, 1))
             .tcp4(30303)
@@ -2158,11 +2166,13 @@ mod tests {
             .build(&key)
             .unwrap();
 
+        #[allow(deprecated)]
         let info = enr.client_info().unwrap();
         assert_eq!(info.0, "Test");
         assert_eq!(info.1, "v1.0.0");
         assert_eq!(info.2.unwrap(), "Test");
 
+        #[allow(deprecated)]
         let enr = Enr::builder()
             .ip4(Ipv4Addr::new(127, 0, 0, 1))
             .tcp4(30303)
@@ -2170,11 +2180,13 @@ mod tests {
             .build(&key)
             .unwrap();
 
+        #[allow(deprecated)]
         let info = enr.client_info().unwrap();
         assert_eq!(info.0, "Test");
         assert_eq!(info.1, "v1.0.0");
         assert_eq!(info.2, None);
     }
+
     /// Tests a common ENR which uses RLP encoded values without the header
     #[test]
     fn test_common_rlp_convention() {
