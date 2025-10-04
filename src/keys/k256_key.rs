@@ -28,9 +28,8 @@ impl EnrKey for SigningKey {
 
     fn sign_v4(&self, msg: &[u8]) -> Result<Vec<u8>, SigningError> {
         // take a keccak256 hash then sign.
-        let digest = Keccak256::new().chain_update(msg);
         let signature: Signature = self
-            .try_sign_digest_with_rng(&mut OsRng, digest)
+            .try_sign_digest_with_rng(&mut OsRng, |digest: &mut Keccak256| Ok(digest.update(msg)))
             .map_err(|_| SigningError::new("failed to sign"))?;
 
         Ok(signature.to_vec())
@@ -67,7 +66,7 @@ impl EnrPublicKey for VerifyingKey {
     fn verify_v4(&self, msg: &[u8], sig: &[u8]) -> bool {
         if let Ok(sig) = k256::ecdsa::Signature::try_from(sig) {
             return self
-                .verify_digest(Keccak256::new().chain_update(msg), &sig)
+                .verify_digest(|digest: &mut Keccak256| Ok(digest.update(msg)), &sig)
                 .is_ok();
         }
         false
