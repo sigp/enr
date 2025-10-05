@@ -27,7 +27,7 @@ impl EnrKey for secp256k1::SecretKey {
             OsRng
                 .try_fill_bytes(&mut noncedata)
                 .map_err(|error| SigningError::new(format!("Failed to fill_bytes: {error}")))?;
-            SECP256K1.sign_ecdsa_with_noncedata(&m, self, &noncedata)
+            SECP256K1.sign_ecdsa_with_noncedata(m, self, &noncedata)
         };
         Ok(signature.serialize_compact().to_vec())
     }
@@ -63,7 +63,7 @@ impl EnrPublicKey for secp256k1::PublicKey {
         let msg = digest(msg);
         if let Ok(sig) = secp256k1::ecdsa::Signature::from_compact(sig) {
             let msg = secp256k1::Message::from_digest(msg);
-            return SECP256K1.verify_ecdsa(&msg, &sig, self).is_ok();
+            return SECP256K1.verify_ecdsa(msg, &sig, self).is_ok();
         }
         false
     }
