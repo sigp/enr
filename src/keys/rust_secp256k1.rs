@@ -10,6 +10,8 @@ use std::collections::BTreeMap;
 use self::MockOsRng as OsRng;
 #[cfg(not(test))]
 use rand::rngs::OsRng;
+#[cfg(test)]
+use rand::RngCore;
 
 /// The ENR key that stores the public key in the ENR record.
 pub const ENR_KEY: &str = "secp256k1";
