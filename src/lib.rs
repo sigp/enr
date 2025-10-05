@@ -1643,7 +1643,7 @@ mod tests {
         // Must compare encoding as the public key itself can be different
         assert_eq!(
             decoded_enr.public_key().encode(),
-            key.public().encode().into()
+            Into::<[u8; 33]>::into(key.public().encode())
         );
         assert!(decoded_enr.verify());
     }
