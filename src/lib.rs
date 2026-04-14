@@ -1284,8 +1284,8 @@ fn check_spec_reserved_keys(key: &[u8], mut value: &[u8]) -> Result<(), Error> {
 #[cfg(feature = "k256")]
 mod tests {
     use super::*;
-    use k256::elliptic_curve::Generate;
     use alloy_rlp::{RlpDecodable, RlpEncodable};
+    use k256::elliptic_curve::Generate;
 
     type DefaultEnr = Enr<k256::ecdsa::SigningKey>;
 
