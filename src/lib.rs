@@ -691,10 +691,10 @@ impl<K: EnrKey> Enr<K> {
         build: Option<String>,
         key: &K,
     ) -> Result<(), Error> {
-        if build.is_none() {
-            self.insert("client", &vec![name, version], key)?;
+        if let Some(build) = build {
+            self.insert("client", &vec![name, version, build], key)?;
         } else {
-            self.insert("client", &vec![name, version, build.unwrap()], key)?;
+            self.insert("client", &vec![name, version], key)?;
         }
 
         Ok(())
