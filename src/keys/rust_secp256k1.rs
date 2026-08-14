@@ -2,14 +2,14 @@ use super::{EnrKey, EnrKeyUnambiguous, EnrPublicKey, SigningError};
 use crate::{digest, Key};
 use alloy_rlp::{Decodable, Error as DecoderError};
 use bytes::Bytes;
-use rand::RngCore;
+use rand::TryRng;
 use secp256k1::SECP256K1;
 use std::collections::BTreeMap;
 
 #[cfg(test)]
-use self::MockOsRng as OsRng;
+use self::MockOsRng as SysRng;
 #[cfg(not(test))]
-use rand::rngs::OsRng;
+use rand::rngs::SysRng;
 
 /// The ENR key that stores the public key in the ENR record.
 pub const ENR_KEY: &str = "secp256k1";
@@ -24,8 +24,10 @@ impl EnrKey for secp256k1::SecretKey {
         // serialize to an uncompressed 64 byte vector
         let signature = {
             let mut noncedata = [0; 32];
-            OsRng.fill_bytes(&mut noncedata);
-            SECP256K1.sign_ecdsa_with_noncedata(&m, self, &noncedata)
+            SysRng
+                .try_fill_bytes(&mut noncedata)
+                .map_err(|error| SigningError::new(format!("Failed to fill_bytes: {error}")))?;
+            SECP256K1.sign_ecdsa_with_noncedata(m, self, &noncedata)
         };
         Ok(signature.serialize_compact().to_vec())
     }
@@ -61,7 +63,7 @@ impl EnrPublicKey for secp256k1::PublicKey {
         let msg = digest(msg);
         if let Ok(sig) = secp256k1::ecdsa::Signature::from_compact(sig) {
             let msg = secp256k1::Message::from_digest(msg);
-            return SECP256K1.verify_ecdsa(&msg, &sig, self).is_ok();
+            return SECP256K1.verify_ecdsa(msg, &sig, self).is_ok();
         }
         false
     }
@@ -92,21 +94,20 @@ const MOCK_ECDSA_NONCE_ADDITIONAL_DATA: [u8; 32] = [
 struct MockOsRng;
 
 #[cfg(test)]
-impl RngCore for MockOsRng {
-    fn next_u32(&mut self) -> u32 {
+impl TryRng for MockOsRng {
+    type Error = core::convert::Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
         unimplemented!();
     }
 
-    fn next_u64(&mut self) -> u64 {
+    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
         unimplemented!();
     }
 
-    fn fill_bytes(&mut self, dest: &mut [u8]) {
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Self::Error> {
         debug_assert_eq!(dest.len(), MOCK_ECDSA_NONCE_ADDITIONAL_DATA.len());
         dest.copy_from_slice(&MOCK_ECDSA_NONCE_ADDITIONAL_DATA);
-    }
-
-    fn try_fill_bytes(&mut self, _dest: &mut [u8]) -> Result<(), rand::Error> {
-        unimplemented!();
+        Ok(())
     }
 }

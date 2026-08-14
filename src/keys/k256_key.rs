@@ -11,12 +11,12 @@ use k256::{
     },
     elliptic_curve::{
         point::DecompressPoint,
-        sec1::{Coordinates, ToEncodedPoint},
+        sec1::{Coordinates, ToSec1Point},
         subtle::Choice,
     },
-    AffinePoint, CompressedPoint, EncodedPoint,
+    AffinePoint, CompressedPoint,
 };
-use rand::rngs::OsRng;
+use rand::rngs::SysRng;
 use sha3::{Digest, Keccak256};
 use std::collections::BTreeMap;
 
@@ -28,9 +28,11 @@ impl EnrKey for SigningKey {
 
     fn sign_v4(&self, msg: &[u8]) -> Result<Vec<u8>, SigningError> {
         // take a keccak256 hash then sign.
-        let digest = Keccak256::new().chain_update(msg);
         let signature: Signature = self
-            .try_sign_digest_with_rng(&mut OsRng, digest)
+            .try_sign_digest_with_rng(&mut SysRng, |digest: &mut Keccak256| {
+                digest.update(msg);
+                Ok(())
+            })
             .map_err(|_| SigningError::new("failed to sign"))?;
 
         Ok(signature.to_vec())
@@ -67,7 +69,13 @@ impl EnrPublicKey for VerifyingKey {
     fn verify_v4(&self, msg: &[u8], sig: &[u8]) -> bool {
         if let Ok(sig) = k256::ecdsa::Signature::try_from(sig) {
             return self
-                .verify_digest(Keccak256::new().chain_update(msg), &sig)
+                .verify_digest(
+                    |digest: &mut Keccak256| {
+                        digest.update(msg);
+                        Ok(())
+                    },
+                    &sig,
+                )
                 .is_ok();
         }
         false
@@ -79,14 +87,14 @@ impl EnrPublicKey for VerifyingKey {
     }
 
     fn encode_uncompressed(&self) -> Self::RawUncompressed {
-        let p = EncodedPoint::from(self);
+        let p = self.to_sec1_point(false);
         let (x, y) = match p.coordinates() {
             Coordinates::Compact { .. } | Coordinates::Identity => unreachable!(),
             Coordinates::Compressed { x, y_is_odd } => (
                 x,
                 *AffinePoint::decompress(x, Choice::from(u8::from(y_is_odd)))
                     .unwrap()
-                    .to_encoded_point(false)
+                    .to_sec1_point(false)
                     .y()
                     .unwrap(),
             ),

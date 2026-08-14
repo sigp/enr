@@ -52,12 +52,13 @@
 //! ```rust
 //! # #[cfg(feature = "k256")] {
 //! use enr::{Enr, k256};
+//! use k256::elliptic_curve::Generate;
 //! use std::net::Ipv4Addr;
-//! use rand::thread_rng;
+//! use rand::rng;
 //!
 //! // generate a random secp256k1 key
-//! let mut rng = thread_rng();
-//! let key = k256::ecdsa::SigningKey::random(&mut rng);
+//! let mut rng = rng();
+//! let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rng);
 //!
 //! let ip = Ipv4Addr::new(192,168,0,1);
 //! let enr = Enr::builder().ip4(ip).tcp4(8000).build(&key).unwrap();
@@ -98,15 +99,16 @@
 //! ```rust
 //! # #[cfg(feature = "k256")] {
 //! use enr::{k256::ecdsa::SigningKey, Enr};
+//! use enr::k256::elliptic_curve::Generate;
 //! use std::net::Ipv4Addr;
-//! use rand::thread_rng;
+//! use rand::rng;
 //!
 //! // specify the type of ENR
 //! type DefaultEnr = Enr<SigningKey>;
 //!
 //! // generate a random secp256k1 key
-//! let mut rng = thread_rng();
-//! let key = SigningKey::random(&mut rng);
+//! let mut rng = rng();
+//! let key = SigningKey::generate_from_rng(&mut rng);
 //!
 //! let ip = Ipv4Addr::new(192,168,0,1);
 //! let mut enr = Enr::builder().ip4(ip).tcp4(8000).build(&key).unwrap();
@@ -133,12 +135,13 @@
 //! ```rust
 //! # #[cfg(feature = "ed25519")] {
 //! use enr::{ed25519_dalek as ed25519, k256::ecdsa, CombinedKey, Enr};
+//! use enr::k256::elliptic_curve::Generate;
 //! use std::net::Ipv4Addr;
-//! use rand::thread_rng;
+//! use rand::rng;
 //!
 //! // generate a random secp256k1 key
-//! let mut rng = thread_rng();
-//! let key = ecdsa::SigningKey::random(&mut rng);
+//! let mut rng = rng();
+//! let key = ecdsa::SigningKey::generate_from_rng(&mut rng);
 //! let ip = Ipv4Addr::new(192,168,0,1);
 //! let enr_secp256k1 = Enr::builder().ip4(ip).tcp4(8000).build(&key).unwrap();
 //!
@@ -688,10 +691,10 @@ impl<K: EnrKey> Enr<K> {
         build: Option<String>,
         key: &K,
     ) -> Result<(), Error> {
-        if build.is_none() {
-            self.insert("client", &vec![name, version], key)?;
+        if let Some(build) = build {
+            self.insert("client", &vec![name, version, build], key)?;
         } else {
-            self.insert("client", &vec![name, version, build.unwrap()], key)?;
+            self.insert("client", &vec![name, version], key)?;
         }
 
         Ok(())
@@ -1282,6 +1285,7 @@ fn check_spec_reserved_keys(key: &[u8], mut value: &[u8]) -> Result<(), Error> {
 mod tests {
     use super::*;
     use alloy_rlp::{RlpDecodable, RlpEncodable};
+    use k256::elliptic_curve::Generate;
 
     type DefaultEnr = Enr<k256::ecdsa::SigningKey>;
 
@@ -1402,7 +1406,7 @@ mod tests {
 
     #[test]
     fn test_encode_decode_list_value() {
-        let key = k256::ecdsa::SigningKey::random(&mut rand::rngs::OsRng);
+        let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rand::rng());
         let ip = Ipv4Addr::new(127, 0, 0, 1);
         let tcp = 3000;
         let list_value = GenericListValue::gen_random();
@@ -1438,7 +1442,7 @@ mod tests {
 
     #[test]
     fn test_encode_decode_double_list_value() {
-        let key = k256::ecdsa::SigningKey::random(&mut rand::rngs::OsRng);
+        let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rand::rng());
         let ip = Ipv4Addr::new(127, 0, 0, 1);
         let tcp = 3000;
         let list_value = DoubleListValue::gen_random();
@@ -1626,7 +1630,7 @@ mod tests {
     #[cfg(feature = "rust-secp256k1")]
     #[test]
     fn test_encode_decode_secp256k1() {
-        let mut rng = secp256k1::rand::thread_rng();
+        let mut rng = secp256k1::rand::rng();
         let key = secp256k1::SecretKey::new(&mut rng);
         let ip = Ipv4Addr::new(127, 0, 0, 1);
         let tcp = 3000;
@@ -1643,7 +1647,7 @@ mod tests {
         // Must compare encoding as the public key itself can be different
         assert_eq!(
             decoded_enr.public_key().encode(),
-            key.public().encode().into()
+            Into::<[u8; 33]>::into(key.public().encode())
         );
         assert!(decoded_enr.verify());
     }
@@ -1680,13 +1684,15 @@ mod tests {
         // ```
         let expected_enr_base64 = "enr:-IS4QLJYdRwxdy-AbzWC6wL9ooB6O6uvCvJsJ36rbJztiAs1JzPY0__YkgFzZwNUuNhm1BDN6c4-UVRCJP9bXNCmoDYBgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQPKY0yuDUmstAHYpMa2_oxVtw0RW_QAdpzBQA8yWM0xOIN1ZHCCdl8";
 
-        let key_data =
+        let key_data: [u8; 32] =
             hex::decode("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+                .unwrap()
+                .try_into()
                 .unwrap();
         let ip = Ipv4Addr::new(127, 0, 0, 1);
         let udp = 30303;
 
-        let key = secp256k1::SecretKey::from_slice(&key_data).unwrap();
+        let key = secp256k1::SecretKey::from_byte_array(key_data).unwrap();
         let enr = Enr::builder().ip4(ip).udp4(udp).build(&key).unwrap();
         let enr_base64 = enr.to_base64();
         assert_eq!(enr_base64, expected_enr_base64);
@@ -1698,7 +1704,7 @@ mod tests {
     #[cfg(feature = "k256")]
     #[test]
     fn test_encode_decode_k256() {
-        let key = k256::ecdsa::SigningKey::random(&mut rand::rngs::OsRng);
+        let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rand::rng());
         let ip = Ipv4Addr::new(127, 0, 0, 1);
         let tcp = 3000;
 
@@ -1722,7 +1728,7 @@ mod tests {
     #[cfg(all(feature = "ed25519", feature = "k256"))]
     #[test]
     fn test_encode_decode_ed25519() {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let key = ed25519_dalek::SigningKey::generate(&mut rng);
         let ip = Ipv4Addr::new(10, 0, 0, 1);
         let tcp = 30303;
@@ -1748,8 +1754,8 @@ mod tests {
             version: u64,
         }
 
-        let mut rng = rand::thread_rng();
-        let key = k256::ecdsa::SigningKey::random(&mut rng);
+        let mut rng = rand::rng();
+        let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rng);
         let proto = Proto {
             name: "test".to_string(),
             version: 1,
@@ -1772,8 +1778,8 @@ mod tests {
             version: u64,
         }
 
-        let mut rng = rand::thread_rng();
-        let key = k256::ecdsa::SigningKey::random(&mut rng);
+        let mut rng = rand::rng();
+        let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rng);
         let proto = Proto {
             name: "test".to_string(),
             version: 1,
@@ -1796,8 +1802,8 @@ mod tests {
 
     #[test]
     fn test_add_key() {
-        let mut rng = rand::thread_rng();
-        let key = k256::ecdsa::SigningKey::random(&mut rng);
+        let mut rng = rand::rng();
+        let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rng);
         let ip = Ipv4Addr::new(10, 0, 0, 1);
         let tcp = 30303;
 
@@ -1809,8 +1815,8 @@ mod tests {
 
     #[test]
     fn test_set_ip() {
-        let mut rng = rand::thread_rng();
-        let key = k256::ecdsa::SigningKey::random(&mut rng);
+        let mut rng = rand::rng();
+        let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rng);
         let tcp = 30303;
         let ip = Ipv4Addr::new(10, 0, 0, 1);
 
@@ -1828,8 +1834,8 @@ mod tests {
 
     #[test]
     fn ip_mutation_static_node_id() {
-        let mut rng = rand::thread_rng();
-        let key = k256::ecdsa::SigningKey::random(&mut rng);
+        let mut rng = rand::rng();
+        let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rng);
         let tcp = 30303;
         let udp = 30304;
         let ip = Ipv4Addr::new(10, 0, 0, 1);
@@ -1856,7 +1862,7 @@ mod tests {
     #[test]
     fn combined_key_can_decode_all() {
         // generate a random secp256k1 key
-        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+        let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rand::rng());
         let ip = Ipv4Addr::new(192, 168, 0, 1);
         let enr_secp256k1 = Enr::builder().ip(ip.into()).tcp4(8000).build(&key).unwrap();
 
@@ -1864,7 +1870,7 @@ mod tests {
         let base64_string_secp256k1 = enr_secp256k1.to_base64();
 
         // generate a random ed25519 key
-        let key = ed25519_dalek::SigningKey::generate(&mut rand::thread_rng());
+        let key = ed25519_dalek::SigningKey::generate(&mut rand::rng());
         let enr_ed25519 = Enr::builder().ip(ip.into()).tcp4(8000).build(&key).unwrap();
 
         // encode to base64
@@ -1892,8 +1898,8 @@ mod tests {
 
     #[test]
     fn test_remove_insert() {
-        let mut rng = rand::thread_rng();
-        let key = k256::ecdsa::SigningKey::random(&mut rng);
+        let mut rng = rand::rng();
+        let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rng);
         let tcp = 30303;
         let list = &["lighthouse", "eth_sync"];
         let out = encoded_list(list);
@@ -1934,7 +1940,7 @@ mod tests {
 
     #[test]
     fn test_low_integer_build() {
-        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+        let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rand::rng());
 
         for tcp in LOW_INT_PORTS {
             let enr = Enr::builder().tcp4(tcp).build(&key).unwrap();
@@ -1945,7 +1951,7 @@ mod tests {
 
     #[test]
     fn test_low_integer_set() {
-        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+        let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rand::rng());
 
         for tcp in LOW_INT_PORTS {
             let mut enr = Enr::empty(&key).unwrap();
@@ -1956,7 +1962,7 @@ mod tests {
 
     #[test]
     fn test_low_integer_set_socket() {
-        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+        let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rand::rng());
         let ipv4 = Ipv4Addr::new(127, 0, 0, 1);
 
         for tcp in LOW_INT_PORTS {
@@ -1969,7 +1975,7 @@ mod tests {
 
     #[test]
     fn test_low_integer_insert() {
-        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+        let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rand::rng());
 
         for tcp in LOW_INT_PORTS {
             let mut enr = Enr::empty(&key).unwrap();
@@ -1986,7 +1992,7 @@ mod tests {
 
     #[test]
     fn test_low_integer_remove_insert() {
-        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+        let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rand::rng());
 
         for tcp in LOW_INT_PORTS {
             let mut enr = Enr::empty(&key).unwrap();
@@ -2026,7 +2032,7 @@ mod tests {
 
     #[test]
     fn test_compare_content() {
-        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+        let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rand::rng());
         let ip = Ipv4Addr::new(10, 0, 0, 1);
         let tcp = 30303;
 
@@ -2059,7 +2065,7 @@ mod tests {
     #[test]
     fn test_large_enr_decoding_is_rejected() {
         // hack an enr object that is too big. This is not possible via the public API.
-        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+        let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rand::rng());
 
         let mut huge_enr = Enr::empty(&key).unwrap();
         let large_vec: Vec<u8> = std::iter::repeat_n(0, MAX_ENR_SIZE).collect();
@@ -2091,7 +2097,7 @@ mod tests {
             "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
             "eHh4eHh4eHh4eHh4eHh4"
         );
-        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+        let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rand::rng());
         let mut record = LARGE_ENR.parse::<DefaultEnr>().unwrap();
         let enr_bkp = record.clone();
         // verify that updating the sequence number when it won't fit is rejected
@@ -2105,7 +2111,7 @@ mod tests {
 
     #[test]
     fn test_set_client_eip7636() {
-        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+        let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rand::rng());
         let mut enr = Enr::empty(&key).unwrap();
 
         #[allow(deprecated)]
@@ -2136,7 +2142,7 @@ mod tests {
         assert_eq!(info.1, "1.9.53");
         assert_eq!(info.2.unwrap(), "7fcb567");
 
-        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+        let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rand::rng());
         let mut enr = Enr::empty(&key).unwrap();
 
         #[allow(deprecated)]
@@ -2152,7 +2158,7 @@ mod tests {
 
     #[test]
     fn test_builder_eip7636() {
-        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+        let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rand::rng());
 
         #[allow(deprecated)]
         let enr = Enr::builder()

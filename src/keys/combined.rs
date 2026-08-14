@@ -7,6 +7,7 @@ use super::{ed25519_dalek as ed25519, EnrKey, EnrPublicKey, SigningError};
 use crate::Key;
 use alloy_rlp::Error as DecoderError;
 use bytes::Bytes;
+use k256::elliptic_curve::Generate;
 use std::collections::BTreeMap;
 use zeroize::Zeroize;
 
@@ -67,14 +68,14 @@ impl CombinedKey {
     /// Generates a new secp256k1 key.
     #[must_use]
     pub fn generate_secp256k1() -> Self {
-        let key = k256::ecdsa::SigningKey::random(&mut rand::thread_rng());
+        let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rand::rng());
         Self::Secp256k1(key)
     }
 
     /// Generates a new ed25510 key.
     #[must_use]
     pub fn generate_ed25519() -> Self {
-        Self::Ed25519(ed25519::SigningKey::generate(&mut rand::thread_rng()))
+        Self::Ed25519(ed25519::SigningKey::generate(&mut rand::rng()))
     }
 
     /// Imports a secp256k1 from raw bytes in any format.
