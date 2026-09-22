@@ -5,16 +5,16 @@ use crate::Key;
 use alloy_rlp::{Decodable, Error as DecoderError};
 use bytes::Bytes;
 use k256::{
+    AffinePoint, CompressedPoint,
     ecdsa::{
-        signature::{DigestVerifier, RandomizedDigestSigner},
         Signature, SigningKey, VerifyingKey,
+        signature::{DigestVerifier, RandomizedDigestSigner},
     },
     elliptic_curve::{
         point::DecompressPoint,
         sec1::{Coordinates, ToSec1Point},
         subtle::Choice,
     },
-    AffinePoint, CompressedPoint,
 };
 use rand::rngs::SysRng;
 use sha3::{Digest, Keccak256};

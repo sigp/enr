@@ -1,8 +1,8 @@
-use crate::{Enr, EnrKey, EnrPublicKey, Error, Key, NodeId, MAX_ENR_SIZE};
 use crate::{
-    ENR_VERSION, ID_ENR_KEY, IP6_ENR_KEY, IP_ENR_KEY, TCP6_ENR_KEY, TCP_ENR_KEY, UDP6_ENR_KEY,
-    UDP_ENR_KEY,
+    ENR_VERSION, ID_ENR_KEY, IP_ENR_KEY, IP6_ENR_KEY, TCP_ENR_KEY, TCP6_ENR_KEY, UDP_ENR_KEY,
+    UDP6_ENR_KEY,
 };
+use crate::{Enr, EnrKey, EnrPublicKey, Error, Key, MAX_ENR_SIZE, NodeId};
 use alloy_rlp::{Encodable, Header};
 use bytes::{Bytes, BytesMut};
 use std::{

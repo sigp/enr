@@ -195,9 +195,9 @@ use std::{
     net::{SocketAddrV4, SocketAddrV6},
 };
 
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 #[cfg(feature = "serde")]
-use serde::{de::Error as _, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 use sha3::{Digest, Keccak256};
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
@@ -211,7 +211,7 @@ pub use keys::k256;
 #[cfg(feature = "rust-secp256k1")]
 pub use keys::secp256k1;
 #[cfg(all(feature = "ed25519", feature = "k256"))]
-pub use keys::{ed25519_dalek, CombinedKey, CombinedPublicKey};
+pub use keys::{CombinedKey, CombinedPublicKey, ed25519_dalek};
 
 pub use builder::Builder;
 pub use keys::{EnrKey, EnrKeyUnambiguous, EnrPublicKey};
@@ -412,10 +412,10 @@ impl<K: EnrKey> Enr<K> {
     /// Provides a socket (based on the UDP port), if the IPv4 and UDP fields are specified.
     #[must_use]
     pub fn udp4_socket(&self) -> Option<SocketAddrV4> {
-        if let Some(ip) = self.ip4() {
-            if let Some(udp) = self.udp4() {
-                return Some(SocketAddrV4::new(ip, udp));
-            }
+        if let Some(ip) = self.ip4()
+            && let Some(udp) = self.udp4()
+        {
+            return Some(SocketAddrV4::new(ip, udp));
         }
         None
     }
@@ -423,10 +423,10 @@ impl<K: EnrKey> Enr<K> {
     /// Provides a socket (based on the UDP port), if the IPv6 and UDP fields are specified.
     #[must_use]
     pub fn udp6_socket(&self) -> Option<SocketAddrV6> {
-        if let Some(ip6) = self.ip6() {
-            if let Some(udp6) = self.udp6() {
-                return Some(SocketAddrV6::new(ip6, udp6, 0, 0));
-            }
+        if let Some(ip6) = self.ip6()
+            && let Some(udp6) = self.udp6()
+        {
+            return Some(SocketAddrV6::new(ip6, udp6, 0, 0));
         }
         None
     }
@@ -434,10 +434,10 @@ impl<K: EnrKey> Enr<K> {
     /// Provides a socket (based on the TCP port), if the IP and TCP fields are specified.
     #[must_use]
     pub fn tcp4_socket(&self) -> Option<SocketAddrV4> {
-        if let Some(ip) = self.ip4() {
-            if let Some(tcp) = self.tcp4() {
-                return Some(SocketAddrV4::new(ip, tcp));
-            }
+        if let Some(ip) = self.ip4()
+            && let Some(tcp) = self.tcp4()
+        {
+            return Some(SocketAddrV4::new(ip, tcp));
         }
         None
     }
@@ -445,10 +445,10 @@ impl<K: EnrKey> Enr<K> {
     /// Provides a socket (based on the TCP port), if the IPv6 and TCP6 fields are specified.
     #[must_use]
     pub fn tcp6_socket(&self) -> Option<SocketAddrV6> {
-        if let Some(ip6) = self.ip6() {
-            if let Some(tcp6) = self.tcp6() {
-                return Some(SocketAddrV6::new(ip6, tcp6, 0, 0));
-            }
+        if let Some(ip6) = self.ip6()
+            && let Some(tcp6) = self.tcp6()
+        {
+            return Some(SocketAddrV6::new(ip6, tcp6, 0, 0));
         }
         None
     }
@@ -607,22 +607,22 @@ impl<K: EnrKey> Enr<K> {
         match ip {
             IpAddr::V4(addr) => {
                 let prev_value = self.insert(IP_ENR_KEY, &addr.octets().as_ref(), key)?;
-                if let Some(bytes) = prev_value {
-                    if bytes.len() == 4 {
-                        let mut v = [0_u8; 4];
-                        v.copy_from_slice(&bytes);
-                        return Ok(Some(IpAddr::V4(Ipv4Addr::from(v))));
-                    }
+                if let Some(bytes) = prev_value
+                    && bytes.len() == 4
+                {
+                    let mut v = [0_u8; 4];
+                    v.copy_from_slice(&bytes);
+                    return Ok(Some(IpAddr::V4(Ipv4Addr::from(v))));
                 }
             }
             IpAddr::V6(addr) => {
                 let prev_value = self.insert(IP6_ENR_KEY, &addr.octets().as_ref(), key)?;
-                if let Some(bytes) = prev_value {
-                    if bytes.len() == 16 {
-                        let mut v = [0_u8; 16];
-                        v.copy_from_slice(&bytes);
-                        return Ok(Some(IpAddr::V6(Ipv6Addr::from(v))));
-                    }
+                if let Some(bytes) = prev_value
+                    && bytes.len() == 16
+                {
+                    let mut v = [0_u8; 16];
+                    v.copy_from_slice(&bytes);
+                    return Ok(Some(IpAddr::V6(Ipv6Addr::from(v))));
                 }
             }
         }
@@ -1140,10 +1140,10 @@ impl<K: EnrKey> Decodable for Enr<K> {
         let mut prev = None;
         while !payload.is_empty() {
             let key = Header::decode_bytes(payload, false)?;
-            if let Some(prev) = prev {
-                if prev >= key {
-                    return Err(DecoderError::Custom("Unsorted keys"));
-                }
+            if let Some(prev) = prev
+                && prev >= key
+            {
+                return Err(DecoderError::Custom("Unsorted keys"));
             }
             prev = Some(key);
 
@@ -1501,8 +1501,16 @@ mod tests {
     #[test]
     fn test_read_enr_base64url_decoding_enforce_no_pad_no_extra_trailingbits() {
         let test_data = [
-            ("padded", "Invalid base64 encoding: Invalid padding", "enr:-IS4QHCYrYZbAKWCBRlAy5zzaDZXJBGkcnh4MHcBFZntXNFrdvJjX04jRzjzCBOonrkTfj499SZuOh8R33Ls8RRcy5wBgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQPKY0yuDUmstAHYpMa2_oxVtw0RW_QAdpzBQA8yWM0xOIN1ZHCCdl8="),
-            ("extra trailing bits", "Invalid base64 encoding: Invalid last symbol 0x39 ('9') at offset 178, decoded as 0b00111101.", "enr:-IS4QHCYrYZbAKWCBRlAy5zzaDZXJBGkcnh4MHcBFZntXNFrdvJjX04jRzjzCBOonrkTfj499SZuOh8R33Ls8RRcy5wBgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQPKY0yuDUmstAHYpMa2_oxVtw0RW_QAdpzBQA8yWM0xOIN1ZHCCdl9"),
+            (
+                "padded",
+                "Invalid base64 encoding: Invalid padding",
+                "enr:-IS4QHCYrYZbAKWCBRlAy5zzaDZXJBGkcnh4MHcBFZntXNFrdvJjX04jRzjzCBOonrkTfj499SZuOh8R33Ls8RRcy5wBgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQPKY0yuDUmstAHYpMa2_oxVtw0RW_QAdpzBQA8yWM0xOIN1ZHCCdl8=",
+            ),
+            (
+                "extra trailing bits",
+                "Invalid base64 encoding: Invalid last symbol 0x39 ('9') at offset 178, decoded as 0b00111101.",
+                "enr:-IS4QHCYrYZbAKWCBRlAy5zzaDZXJBGkcnh4MHcBFZntXNFrdvJjX04jRzjzCBOonrkTfj499SZuOh8R33Ls8RRcy5wBgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQPKY0yuDUmstAHYpMa2_oxVtw0RW_QAdpzBQA8yWM0xOIN1ZHCCdl9",
+            ),
         ];
         for (test_name, err, text) in test_data {
             assert_eq!(text.parse::<DefaultEnr>().unwrap_err(), err, "{test_name}",);
@@ -1527,11 +1535,13 @@ mod tests {
     #[test]
     fn test_read_enr_reject_too_large_record() {
         // 300-byte rlp encoded content, record creation should succeed.
-        let text = concat!("enr:-QEpuEDaLyrPP4gxBI9YL7QE9U1tZig_Nt8rue8bRIuYv_IMziFc8OEt3LQMwkwt6da-Z0Y8BaqkDalZbBq647UtV2ei",
-                           "AYJpZIJ2NIJpcIR_AAABiXNlY3AyNTZrMaEDymNMrg1JrLQB2KTGtv6MVbcNEVv0AHacwUAPMljNMTiDdWRwgnZferiieHh4",
-                           "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
-                           "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
-                           "eHh4eHh4eHh4eHh4eHh4");
+        let text = concat!(
+            "enr:-QEpuEDaLyrPP4gxBI9YL7QE9U1tZig_Nt8rue8bRIuYv_IMziFc8OEt3LQMwkwt6da-Z0Y8BaqkDalZbBq647UtV2ei",
+            "AYJpZIJ2NIJpcIR_AAABiXNlY3AyNTZrMaEDymNMrg1JrLQB2KTGtv6MVbcNEVv0AHacwUAPMljNMTiDdWRwgnZferiieHh4",
+            "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
+            "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
+            "eHh4eHh4eHh4eHh4eHh4"
+        );
         let mut record = text.parse::<DefaultEnr>().unwrap();
         // Ensures the size check when creating a record from string is
         // consistent with the internal ones, such as when updating a record
@@ -1543,15 +1553,18 @@ mod tests {
         assert!(record.set_udp4(record.udp4().unwrap(), &key).is_ok());
 
         // 301-byte rlp encoded content, record creation should fail.
-        let text = concat!("enr:-QEquEBxABglcZbIGKJ8RHDCp2Ft59tdf61RhV3XXf2BKTlKE2XwzNfihH-46hKkANsXaGRwH8Dp7a3lTrKiv2FMMaFY",
-                           "AYJpZIJ2NIJpcIR_AAABiXNlY3AyNTZrMaEDymNMrg1JrLQB2KTGtv6MVbcNEVv0AHacwUAPMljNMTiDdWRwgnZferijeHh4",
-                           "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
-                           "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
-                           "eHh4eHh4eHh4eHh4eHh4eA");
-        assert!(text
-            .parse::<DefaultEnr>()
-            .unwrap_err()
-            .contains("enr exceeds max size"));
+        let text = concat!(
+            "enr:-QEquEBxABglcZbIGKJ8RHDCp2Ft59tdf61RhV3XXf2BKTlKE2XwzNfihH-46hKkANsXaGRwH8Dp7a3lTrKiv2FMMaFY",
+            "AYJpZIJ2NIJpcIR_AAABiXNlY3AyNTZrMaEDymNMrg1JrLQB2KTGtv6MVbcNEVv0AHacwUAPMljNMTiDdWRwgnZferijeHh4",
+            "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
+            "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
+            "eHh4eHh4eHh4eHh4eHh4eA"
+        );
+        assert!(
+            text.parse::<DefaultEnr>()
+                .unwrap_err()
+                .contains("enr exceeds max size")
+        );
     }
 
     #[cfg(feature = "k256")]
@@ -2014,10 +2027,22 @@ mod tests {
     #[test]
     fn test_low_integer_bad_enr() {
         let vectors = vec![
-            (0, "enr:-Hy4QDMsoimQl2Qb9CuIWlNjyt0C0DmZC4QpAsJzgUHowOq2Nph9UbAtZ_qS_8fl6SU-eSWrswHiLCoMUGQfjhl_GW0BgmlkgnY0iXNlY3AyNTZrMaECMoYV0PAXMueQz19FHpBO0jGBoLYCWhfSxGf5kQgk9KqDdGNwggAA"),
-            (30, "enr:-Hy4QCCgTB9tAEJL1DFwTTtwd79xxQx2hvi5RX9vWvcdKqbpS3SDzHHBivpOgxE40HGt6P0NtCE5QKzOQ5fzBwepDfMBgmlkgnY0iXNlY3AyNTZrMaECMoYV0PAXMueQz19FHpBO0jGBoLYCWhfSxGf5kQgk9KqDdGNwggAe"),
-            (255, "enr:-Hy4QOrU9C35gZyJigIi-u19sRP42eEjVEhzO-LnKXKM5VlDMZ45vnOIa3bqm15ap8pmLjq5kmRPzjuA0RUdzSsieqcBgmlkgnY0iXNlY3AyNTZrMaECMoYV0PAXMueQz19FHpBO0jGBoLYCWhfSxGf5kQgk9KqDdGNwggD_"),
-            (30303, "enr:-Hy4QF_mn4BuM6hY4CuLH8xDQd7U8kVZe9fyNgRB1vjdToGWQsQhetRvsByoJCWGQ6kf2aiWC0le24lkp0IPIJkLSTUBgmlkgnY0iXNlY3AyNTZrMaECMoYV0PAXMueQz19FHpBO0jGBoLYCWhfSxGf5kQgk9KqDdGNwgnZf"),
+            (
+                0,
+                "enr:-Hy4QDMsoimQl2Qb9CuIWlNjyt0C0DmZC4QpAsJzgUHowOq2Nph9UbAtZ_qS_8fl6SU-eSWrswHiLCoMUGQfjhl_GW0BgmlkgnY0iXNlY3AyNTZrMaECMoYV0PAXMueQz19FHpBO0jGBoLYCWhfSxGf5kQgk9KqDdGNwggAA",
+            ),
+            (
+                30,
+                "enr:-Hy4QCCgTB9tAEJL1DFwTTtwd79xxQx2hvi5RX9vWvcdKqbpS3SDzHHBivpOgxE40HGt6P0NtCE5QKzOQ5fzBwepDfMBgmlkgnY0iXNlY3AyNTZrMaECMoYV0PAXMueQz19FHpBO0jGBoLYCWhfSxGf5kQgk9KqDdGNwggAe",
+            ),
+            (
+                255,
+                "enr:-Hy4QOrU9C35gZyJigIi-u19sRP42eEjVEhzO-LnKXKM5VlDMZ45vnOIa3bqm15ap8pmLjq5kmRPzjuA0RUdzSsieqcBgmlkgnY0iXNlY3AyNTZrMaECMoYV0PAXMueQz19FHpBO0jGBoLYCWhfSxGf5kQgk9KqDdGNwggD_",
+            ),
+            (
+                30303,
+                "enr:-Hy4QF_mn4BuM6hY4CuLH8xDQd7U8kVZe9fyNgRB1vjdToGWQsQhetRvsByoJCWGQ6kf2aiWC0le24lkp0IPIJkLSTUBgmlkgnY0iXNlY3AyNTZrMaECMoYV0PAXMueQz19FHpBO0jGBoLYCWhfSxGf5kQgk9KqDdGNwgnZf",
+            ),
         ];
 
         for (tcp, enr_str) in vectors {
@@ -2090,7 +2115,7 @@ mod tests {
     #[test]
     fn test_set_seq() {
         // 300 byte ENR (max size)
-        const LARGE_ENR : &str = concat!(
+        const LARGE_ENR: &str = concat!(
             "enr:-QEpuEDaLyrPP4gxBI9YL7QE9U1tZig_Nt8rue8bRIuYv_IMziFc8OEt3LQMwkwt6da-Z0Y8BaqkDalZbBq647UtV2ei",
             "AYJpZIJ2NIJpcIR_AAABiXNlY3AyNTZrMaEDymNMrg1JrLQB2KTGtv6MVbcNEVv0AHacwUAPMljNMTiDdWRwgnZferiieHh4",
             "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",

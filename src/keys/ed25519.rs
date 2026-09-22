@@ -1,6 +1,6 @@
 use super::{
-    ed25519_dalek::{self as ed25519, Signer as _, Verifier as _},
     EnrKey, EnrKeyUnambiguous, EnrPublicKey, SigningError,
+    ed25519_dalek::{self as ed25519, Signer as _, Verifier as _},
 };
 use crate::Key;
 use alloy_rlp::{Decodable, Error as DecoderError};

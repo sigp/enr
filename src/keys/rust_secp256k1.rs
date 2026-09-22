@@ -1,5 +1,5 @@
 use super::{EnrKey, EnrKeyUnambiguous, EnrPublicKey, SigningError};
-use crate::{digest, Key};
+use crate::{Key, digest};
 use alloy_rlp::{Decodable, Error as DecoderError};
 use bytes::Bytes;
 use rand::TryRng;
