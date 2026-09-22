@@ -122,10 +122,10 @@ impl<K: EnrKey> Builder<K> {
         version: String,
         build: Option<String>,
     ) -> &mut Self {
-        if build.is_none() {
-            self.add_value("client", &vec![name, version]);
+        if let Some(build) = build {
+            self.add_value("client", &vec![name, version, build]);
         } else {
-            self.add_value("client", &vec![name, version, build.unwrap()]);
+            self.add_value("client", &vec![name, version]);
         }
 
         self

@@ -59,12 +59,13 @@ enr = { version = "*", features = ["serde", "ed25519", "rust-secp256k1"] }
 
 ```rust
 use enr::{Enr, k256};
+use k256::elliptic_curve::Generate;
 use std::net::Ipv4Addr;
-use rand::thread_rng;
+use rand::rng;
 
 // generate a random secp256k1 key
-let mut rng = thread_rng();
-let key = k256::ecdsa::SigningKey::random(&mut rng);
+let mut rng = rng();
+let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rng);
 
 let ip = Ipv4Addr::new(192,168,0,1);
 let enr = Enr::builder().ip4(ip).tcp4(8000).build(&key).unwrap();
@@ -102,15 +103,16 @@ can be added using `insert` and retrieved with `get`.
 
 ```rust
 use enr::{k256::ecdsa::SigningKey, Enr};
+use enr::k256::elliptic_curve::Generate;
 use std::net::Ipv4Addr;
-use rand::thread_rng;
+use rand::rng;
 
 // specify the type of ENR
 type DefaultEnr = Enr<SigningKey>;
 
 // generate a random secp256k1 key
-let mut rng = thread_rng();
-let key = SigningKey::random(&mut rng);
+let mut rng = rng();
+let key = SigningKey::generate_from_rng(&mut rng);
 
 let ip = Ipv4Addr::new(192,168,0,1);
 let mut enr = Enr::builder().ip4(ip).tcp4(8000).build(&key).unwrap();
@@ -135,12 +137,13 @@ assert_eq!(decoded_enr.get("custom_key").as_ref().map(AsRef::as_ref), Some(vec![
 
 ```rust
 use enr::{ed25519_dalek as ed25519, k256::ecdsa, CombinedKey, Enr};
+use enr::k256::elliptic_curve::Generate;
 use std::net::Ipv4Addr;
-use rand::thread_rng;
+use rand::rng;
 
 // generate a random secp256k1 key
-let mut rng = thread_rng();
-let key = ecdsa::SigningKey::random(&mut rng);
+let mut rng = rng();
+let key = ecdsa::SigningKey::generate_from_rng(&mut rng);
 let ip = Ipv4Addr::new(192, 168, 0, 1);
 let enr_secp256k1 = Enr::builder().ip4(ip).tcp4(8000).build(&key).unwrap();
 
