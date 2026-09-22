@@ -3,7 +3,7 @@
 //!
 //! Currently only `secp256k1` and `ed25519` key types are supported.
 
-use super::{ed25519_dalek as ed25519, EnrKey, EnrPublicKey, SigningError};
+use super::{EnrKey, EnrPublicKey, SigningError, ed25519_dalek as ed25519};
 use crate::Key;
 use alloy_rlp::Error as DecoderError;
 use bytes::Bytes;
@@ -43,8 +43,8 @@ impl EnrKey for CombinedKey {
     /// they are supported.
     fn sign_v4(&self, msg: &[u8]) -> Result<Vec<u8>, SigningError> {
         match self {
-            Self::Secp256k1(ref key) => key.sign_v4(msg),
-            Self::Ed25519(ref key) => key.sign_v4(msg),
+            Self::Secp256k1(key) => key.sign_v4(msg),
+            Self::Ed25519(key) => key.sign_v4(msg),
         }
     }
 

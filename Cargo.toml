@@ -1,7 +1,7 @@
 [package]
 name = "enr"
 authors = ["Age Manning <Age@AgeManning.com>"]
-edition = "2021"
+edition = "2024"
 version = "0.13.0"
 description = "Rust implementation of Ethereum Node Record (ENR) EIP778"
 readme = "./README.md"
