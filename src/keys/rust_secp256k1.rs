@@ -3,7 +3,6 @@ use crate::{digest, Key};
 use alloy_rlp::{Decodable, Error as DecoderError};
 use bytes::Bytes;
 use rand::TryRng;
-use secp256k1::SECP256K1;
 use std::collections::BTreeMap;
 
 #[cfg(test)]
@@ -27,13 +26,13 @@ impl EnrKey for secp256k1::SecretKey {
             SysRng
                 .try_fill_bytes(&mut noncedata)
                 .map_err(|error| SigningError::new(format!("Failed to fill_bytes: {error}")))?;
-            SECP256K1.sign_ecdsa_with_noncedata(m, self, &noncedata)
+            secp256k1::ecdsa::sign_with_noncedata(m, self, &noncedata)
         };
         Ok(signature.serialize_compact().to_vec())
     }
 
     fn public(&self) -> Self::PublicKey {
-        Self::PublicKey::from_secret_key(SECP256K1, self)
+        Self::PublicKey::from_secret_key(self)
     }
 
     fn enr_to_public(content: &BTreeMap<Key, Bytes>) -> Result<Self::PublicKey, DecoderError> {
@@ -63,7 +62,7 @@ impl EnrPublicKey for secp256k1::PublicKey {
         let msg = digest(msg);
         if let Ok(sig) = secp256k1::ecdsa::Signature::from_compact(sig) {
             let msg = secp256k1::Message::from_digest(msg);
-            return SECP256K1.verify_ecdsa(msg, &sig, self).is_ok();
+            return secp256k1::ecdsa::verify(&sig, msg, self).is_ok();
         }
         false
     }

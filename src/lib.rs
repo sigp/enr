@@ -1078,7 +1078,7 @@ impl<K: EnrKey> FromStr for Enr<K> {
         }
         let bytes = URL_SAFE_NO_PAD
             .decode(decode_string)
-            .map_err(|e| format!("Invalid base64 encoding: {e:?}"))?;
+            .map_err(|e| format!("Invalid base64 encoding: {e}"))?;
         Self::decode(&mut bytes.as_ref()).map_err(|e| format!("Invalid ENR: {e:?}"))
     }
 }
@@ -1501,8 +1501,8 @@ mod tests {
     #[test]
     fn test_read_enr_base64url_decoding_enforce_no_pad_no_extra_trailingbits() {
         let test_data = [
-            ("padded", "Invalid base64 encoding: InvalidPadding", "enr:-IS4QHCYrYZbAKWCBRlAy5zzaDZXJBGkcnh4MHcBFZntXNFrdvJjX04jRzjzCBOonrkTfj499SZuOh8R33Ls8RRcy5wBgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQPKY0yuDUmstAHYpMa2_oxVtw0RW_QAdpzBQA8yWM0xOIN1ZHCCdl8="),
-            ("extra trailing bits", "Invalid base64 encoding: InvalidLastSymbol(178, 57)", "enr:-IS4QHCYrYZbAKWCBRlAy5zzaDZXJBGkcnh4MHcBFZntXNFrdvJjX04jRzjzCBOonrkTfj499SZuOh8R33Ls8RRcy5wBgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQPKY0yuDUmstAHYpMa2_oxVtw0RW_QAdpzBQA8yWM0xOIN1ZHCCdl9"),
+            ("padded", "Invalid base64 encoding: Invalid padding", "enr:-IS4QHCYrYZbAKWCBRlAy5zzaDZXJBGkcnh4MHcBFZntXNFrdvJjX04jRzjzCBOonrkTfj499SZuOh8R33Ls8RRcy5wBgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQPKY0yuDUmstAHYpMa2_oxVtw0RW_QAdpzBQA8yWM0xOIN1ZHCCdl8="),
+            ("extra trailing bits", "Invalid base64 encoding: Invalid last symbol 0x39 ('9') at offset 178, decoded as 0b00111101.", "enr:-IS4QHCYrYZbAKWCBRlAy5zzaDZXJBGkcnh4MHcBFZntXNFrdvJjX04jRzjzCBOonrkTfj499SZuOh8R33Ls8RRcy5wBgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQPKY0yuDUmstAHYpMa2_oxVtw0RW_QAdpzBQA8yWM0xOIN1ZHCCdl9"),
         ];
         for (test_name, err, text) in test_data {
             assert_eq!(text.parse::<DefaultEnr>().unwrap_err(), err, "{test_name}",);
@@ -1692,7 +1692,7 @@ mod tests {
         let ip = Ipv4Addr::new(127, 0, 0, 1);
         let udp = 30303;
 
-        let key = secp256k1::SecretKey::from_byte_array(key_data).unwrap();
+        let key = secp256k1::SecretKey::from_secret_bytes(key_data).unwrap();
         let enr = Enr::builder().ip4(ip).udp4(udp).build(&key).unwrap();
         let enr_base64 = enr.to_base64();
         assert_eq!(enr_base64, expected_enr_base64);
