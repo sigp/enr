@@ -977,6 +977,119 @@ impl<K: EnrKey> Enr<K> {
         let new_signature = self.compute_signature(key)?;
         Ok(std::mem::replace(&mut self.signature, new_signature))
     }
+
+    /// Decodes an RLP-encoded ENR from `buf`, verifying its signature.
+    ///
+    /// On success `buf` is advanced past the record.
+    ///
+    /// # Errors
+    ///
+    /// - [`Error::ExceedsMaxSize`] if `buf` is longer than the maximum ENR size.
+    /// - [`Error::UnsupportedIdentityScheme`] if the record's `id` is not `v4`. The record
+    ///   may still be valid under a scheme this crate does not know.
+    /// - [`Error::InvalidRlpData`] for any other RLP format error.
+    pub fn decode(buf: &mut &[u8]) -> Result<Self, Error> {
+        if buf.len() > MAX_ENR_SIZE {
+            return Err(Error::ExceedsMaxSize);
+        }
+
+        let payload = &mut Header::decode_bytes(buf, true)?;
+
+        if payload.is_empty() {
+            return Err(Error::InvalidRlpData(DecoderError::Custom(
+                "Payload is empty",
+            )));
+        }
+        let signature = Header::decode_bytes(payload, false)?;
+
+        if payload.is_empty() {
+            return Err(Error::InvalidRlpData(DecoderError::Custom(
+                "Seq is missing",
+            )));
+        }
+        let seq = u64::decode(payload)?;
+
+        let mut content = BTreeMap::new();
+        let mut prev = None;
+        while !payload.is_empty() {
+            let key = Header::decode_bytes(payload, false)?;
+            if let Some(prev) = prev
+                && prev >= key
+            {
+                return Err(Error::InvalidRlpData(DecoderError::Custom("Unsorted keys")));
+            }
+            prev = Some(key);
+
+            let value = match key {
+                b"id" => {
+                    let id = Header::decode_bytes(payload, false)?;
+                    if id != b"v4" {
+                        return Err(Error::UnsupportedIdentityScheme);
+                    }
+                    alloy_rlp::encode(id)
+                }
+                TCP_ENR_KEY | TCP6_ENR_KEY | UDP_ENR_KEY | UDP6_ENR_KEY => {
+                    let port = u16::decode(payload)?;
+                    alloy_rlp::encode(port)
+                }
+                IP_ENR_KEY => {
+                    let ip = Ipv4Addr::decode(payload)?;
+                    alloy_rlp::encode(ip)
+                }
+                IP6_ENR_KEY => {
+                    let ip6 = Ipv6Addr::decode(payload)?;
+                    alloy_rlp::encode(ip6)
+                }
+                b"secp256k1" | b"ed25519" => {
+                    let keys = Header::decode_bytes(payload, false)?;
+                    alloy_rlp::encode(keys)
+                }
+                _ => {
+                    let other_header = Header::decode(payload)?;
+                    let value = &payload[..other_header.payload_length];
+                    payload.advance(other_header.payload_length);
+
+                    // Encode the header for list values, for non-list objects, we remove the
+                    // header for compatibility with commonly used key entries (i.e it's the
+                    // current convention).
+                    if other_header.list {
+                        let mut out = Vec::<u8>::new();
+                        other_header.encode(&mut out);
+                        out.extend_from_slice(value);
+                        out
+                    } else {
+                        alloy_rlp::encode(value)
+                    }
+                }
+            };
+            content.insert(key.to_vec(), Bytes::from(value));
+        }
+
+        // verify we know the signature type
+        let public_key = K::enr_to_public(&content)?;
+
+        // calculate the node id
+        let node_id = NodeId::from(public_key);
+
+        let enr = Self {
+            seq,
+            node_id,
+            signature: signature.to_vec(),
+            content,
+            phantom: PhantomData,
+        };
+
+        // verify the signature before returning
+        // if the public key is of an unknown type, this will fail.
+        // An ENR record will always have a valid public-key and therefore node-id
+        if !enr.verify() {
+            return Err(Error::InvalidRlpData(DecoderError::Custom(
+                "Invalid Signature",
+            )));
+        }
+
+        Ok(enr)
+    }
 }
 
 // traits //
@@ -1115,105 +1228,6 @@ impl<K: EnrKey> Encodable for Enr<K> {
         };
         header.encode(out);
         out.put_slice(&stream);
-    }
-}
-
-impl<K: EnrKey> Decodable for Enr<K> {
-    fn decode(buf: &mut &[u8]) -> Result<Self, DecoderError> {
-        if buf.len() > MAX_ENR_SIZE {
-            return Err(DecoderError::Custom("enr exceeds max size"));
-        }
-
-        let payload = &mut Header::decode_bytes(buf, true)?;
-
-        if payload.is_empty() {
-            return Err(DecoderError::Custom("Payload is empty"));
-        }
-        let signature = Header::decode_bytes(payload, false)?;
-
-        if payload.is_empty() {
-            return Err(DecoderError::Custom("Seq is missing"));
-        }
-        let seq = u64::decode(payload)?;
-
-        let mut content = BTreeMap::new();
-        let mut prev = None;
-        while !payload.is_empty() {
-            let key = Header::decode_bytes(payload, false)?;
-            if let Some(prev) = prev
-                && prev >= key
-            {
-                return Err(DecoderError::Custom("Unsorted keys"));
-            }
-            prev = Some(key);
-
-            let value = match key {
-                b"id" => {
-                    let id = Header::decode_bytes(payload, false)?;
-                    if id != b"v4" {
-                        return Err(DecoderError::Custom("Unsupported identity scheme"));
-                    }
-                    alloy_rlp::encode(id)
-                }
-                TCP_ENR_KEY | TCP6_ENR_KEY | UDP_ENR_KEY | UDP6_ENR_KEY => {
-                    let port = u16::decode(payload)?;
-                    alloy_rlp::encode(port)
-                }
-                IP_ENR_KEY => {
-                    let ip = Ipv4Addr::decode(payload)?;
-                    alloy_rlp::encode(ip)
-                }
-                IP6_ENR_KEY => {
-                    let ip6 = Ipv6Addr::decode(payload)?;
-                    alloy_rlp::encode(ip6)
-                }
-                b"secp256k1" | b"ed25519" => {
-                    let keys = Header::decode_bytes(payload, false)?;
-                    alloy_rlp::encode(keys)
-                }
-                _ => {
-                    let other_header = Header::decode(payload)?;
-                    let value = &payload[..other_header.payload_length];
-                    payload.advance(other_header.payload_length);
-
-                    // Encode the header for list values, for non-list objects, we remove the
-                    // header for compatibility with commonly used key entries (i.e it's the
-                    // current convention).
-                    if other_header.list {
-                        let mut out = Vec::<u8>::new();
-                        other_header.encode(&mut out);
-                        out.extend_from_slice(value);
-                        out
-                    } else {
-                        alloy_rlp::encode(value)
-                    }
-                }
-            };
-            content.insert(key.to_vec(), Bytes::from(value));
-        }
-
-        // verify we know the signature type
-        let public_key = K::enr_to_public(&content)?;
-
-        // calculate the node id
-        let node_id = NodeId::from(public_key);
-
-        let enr = Self {
-            seq,
-            node_id,
-            signature: signature.to_vec(),
-            content,
-            phantom: PhantomData,
-        };
-
-        // verify the signature before returning
-        // if the public key is of an unknown type, this will fail.
-        // An ENR record will always have a valid public-key and therefore node-id
-        if !enr.verify() {
-            return Err(DecoderError::Custom("Invalid Signature"));
-        }
-
-        Ok(enr)
     }
 }
 
@@ -1560,10 +1574,9 @@ mod tests {
             "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
             "eHh4eHh4eHh4eHh4eHh4eA"
         );
-        assert!(
-            text.parse::<DefaultEnr>()
-                .unwrap_err()
-                .contains("enr exceeds max size")
+        assert_eq!(
+            text.parse::<DefaultEnr>().unwrap_err(),
+            "Invalid ENR: ExceedsMaxSize"
         );
     }
 
@@ -1636,7 +1649,7 @@ mod tests {
         let text = "enr:-Ia4QHCYrYZbAKWCBRlAy5zzaDZXJBGkcnh4MHcBFZntXNFrdvJjX04jRzjzCBOonrkTfj499SZuOh8R33Ls8RRcy5yCAAGCaWSCdjSCaXCEfwAAAYlzZWNwMjU2azGhA8pjTK4NSay0Adikxrb-jFW3DRFb9AB2nMFADzJYzTE4g3VkcIJ2Xw";
         assert_eq!(
             text.parse::<DefaultEnr>().unwrap_err(),
-            "Invalid ENR: LeadingZero"
+            "Invalid ENR: InvalidRlpData(LeadingZero)"
         );
     }
 
@@ -2048,7 +2061,10 @@ mod tests {
         for (tcp, enr_str) in vectors {
             let res = DefaultEnr::from_str(enr_str);
             if u8::try_from(tcp).is_ok() {
-                assert_eq!(res.unwrap_err().to_string(), "Invalid ENR: LeadingZero");
+                assert_eq!(
+                    res.unwrap_err().to_string(),
+                    "Invalid ENR: InvalidRlpData(LeadingZero)"
+                );
             } else {
                 assert_tcp4(&res.unwrap(), tcp);
             }
@@ -2107,8 +2123,73 @@ mod tests {
         assert!(encoded.len() > MAX_ENR_SIZE);
         assert_eq!(
             DefaultEnr::decode(&mut encoded.as_ref()).unwrap_err(),
-            DecoderError::Custom("enr exceeds max size")
+            Error::ExceedsMaxSize
         )
+    }
+
+    /// Tests that decoding a record with an unknown identity scheme is reported as
+    /// [`Error::UnsupportedIdentityScheme`].
+    #[test]
+    fn test_unsupported_identity_scheme_decoding() {
+        // hack an enr object with a non-v4 id. This is not possible via the public API.
+        let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rand::rng());
+
+        let mut enr = Enr::empty(&key).unwrap();
+        enr.content
+            .insert(b"id".to_vec(), alloy_rlp::encode(&b"v5"[..]).into());
+
+        let encoded = alloy_rlp::encode(&enr);
+        assert_eq!(
+            DefaultEnr::decode(&mut encoded.as_ref()).unwrap_err(),
+            Error::UnsupportedIdentityScheme
+        );
+    }
+
+    /// Tests that structurally malformed records are rejected with
+    /// [`Error::InvalidRlpData`] carrying the reason.
+    #[test]
+    fn test_malformed_record_decoding() {
+        // Every item is encoded as a byte string. Seq is `0x01`, which is the same
+        // RLP for the integer 1 and for the single byte 0x01.
+        fn rlp_list(items: &[&[u8]]) -> Vec<u8> {
+            let mut out = Vec::new();
+            alloy_rlp::encode_list::<&[u8], [u8]>(items, &mut out);
+            out
+        }
+
+        let cases: [(&str, Vec<u8>); 3] = [
+            ("Payload is empty", rlp_list(&[])),
+            // the signature must be followed by seq, but the list ends there
+            ("Seq is missing", rlp_list(&[b"test_signature"])),
+            // keys must be in ascending order, but "zz" comes before "aa"
+            (
+                "Unsorted keys",
+                rlp_list(&[b"test_signature", b"\x01", b"zz", b"\x01", b"aa", b"\x01"]),
+            ),
+        ];
+        for (reason, encoded) in cases {
+            assert_eq!(
+                DefaultEnr::decode(&mut encoded.as_slice()).unwrap_err(),
+                Error::InvalidRlpData(DecoderError::Custom(reason)),
+                "{reason}"
+            );
+        }
+    }
+
+    /// Tests that a record whose signature does not verify is rejected.
+    #[test]
+    fn test_invalid_signature_decoding() {
+        let key = k256::ecdsa::SigningKey::generate_from_rng(&mut rand::rng());
+        let mut enr = Enr::empty(&key).unwrap();
+        assert!(enr.verify());
+
+        // flip a bit of the signature without re-signing
+        enr.signature[0] ^= 1;
+        let encoded = alloy_rlp::encode(&enr);
+        assert_eq!(
+            DefaultEnr::decode(&mut encoded.as_ref()).unwrap_err(),
+            Error::InvalidRlpData(DecoderError::Custom("Invalid Signature"))
+        );
     }
 
     /// Tests [`Enr::set_seq`] in both a failure and success case.
